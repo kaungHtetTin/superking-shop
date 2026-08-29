@@ -1,0 +1,1 @@
+const e=n=>{if(n==null)return"";if(Array.isArray(n))return n.map(e).filter(Boolean).join(", ");if(typeof n=="object"){const t=Object.values(n).map(e).filter(Boolean);return t.length>0?t.join(", "):JSON.stringify(n)}return String(n)};export{e as f};

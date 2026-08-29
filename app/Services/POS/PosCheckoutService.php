@@ -1,0 +1,226 @@
+<?php
+
+namespace App\Services\POS;
+
+use App\Models\FinancialEntry;
+use App\Models\InventoryBalance;
+use App\Models\Location;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\ProductUnit;
+use App\Models\User;
+use App\Services\AuditLogService;
+use App\Services\Inventory\InventoryService;
+use App\Services\LoyaltyService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class PosCheckoutService
+{
+    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService)
+    {
+    }
+
+    public function checkout(array $payload, User $cashier): Order
+    {
+        return DB::transaction(function () use ($payload, $cashier) {
+            $location = Location::query()->where('is_active', true)->findOrFail((int) $payload['location_id']);
+            if (! $cashier->canAccessLocation($location)) {
+                throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
+            }
+
+            $lines = collect($payload['items']);
+            $unitIds = $lines->pluck('product_unit_id')
+                ->merge($lines->pluck('foc_product_unit_id')->filter())
+                ->unique();
+            $units = ProductUnit::query()
+                ->whereIn('id', $unitIds)
+                ->where('is_active', true)
+                ->with(['prices', 'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true)])
+                ->get()
+                ->keyBy('id');
+            $subtotal = 0.0;
+            $items = [];
+
+            foreach ($lines as $line) {
+                $unit = $units->get((int) $line['product_unit_id']);
+                if (! $unit || ! $unit->product) {
+                    throw ValidationException::withMessages(['items' => 'One or more POS items are unavailable.']);
+                }
+                $quantity = round((float) $line['quantity'], 4);
+                if ($quantity <= 0) {
+                    throw ValidationException::withMessages(['items' => 'Every POS quantity must be greater than zero.']);
+                }
+                $priceType = strtolower((string) ($line['price_type'] ?? 'retail'));
+                $price = $unit->priceFor($priceType);
+                if (! $price) {
+                    throw ValidationException::withMessages(['items' => "{$unit->product->name} has no {$priceType} price for {$unit->name}."]);
+                }
+                $focQuantity = round((float) ($line['foc_quantity'] ?? 0), 4);
+                if ($focQuantity < 0) {
+                    throw ValidationException::withMessages(['items' => 'FOC quantity cannot be negative.']);
+                }
+                $focUnit = null;
+                $focBaseQuantity = 0.0;
+                if ($focQuantity > 0) {
+                    if (! $cashier->hasAdminPermission('pos.discount')) {
+                        throw ValidationException::withMessages(['items' => 'You cannot add free-of-charge quantities.']);
+                    }
+                    $focUnit = $units->get((int) ($line['foc_product_unit_id'] ?? 0));
+                    if (! $focUnit || ! $focUnit->product || (int) $focUnit->product_id !== (int) $unit->product_id) {
+                        throw ValidationException::withMessages(['items' => "FOC unit for {$unit->product->name} must belong to the same product."]);
+                    }
+                    $focBaseQuantity = $focUnit->toBaseQuantity($focQuantity);
+                }
+                $unitPrice = round((float) $price->price, 2);
+                $lineTotal = round($unitPrice * $quantity, 2);
+                $baseQuantity = $unit->toBaseQuantity($quantity);
+                $subtotal += $lineTotal;
+                $items[] = compact('unit', 'quantity', 'baseQuantity', 'priceType', 'unitPrice', 'lineTotal', 'focUnit', 'focQuantity', 'focBaseQuantity');
+            }
+
+            $requiredByProduct = collect($items)->groupBy(fn ($item) => $item['unit']->product_id)
+                ->map(fn ($rows) => $rows->sum(fn ($item) => $item['baseQuantity'] + $item['focBaseQuantity']));
+            foreach ($requiredByProduct as $productId => $required) {
+                $balance = InventoryBalance::query()->where('location_id', $location->id)->where('product_id', $productId)->lockForUpdate()->first();
+                if (! $balance || $balance->available_qty + 0.00005 < $required) {
+                    $product = collect($items)
+                        ->first(fn ($item) => (int) $item['unit']->product_id === (int) $productId)['unit']
+                        ->product;
+                    throw ValidationException::withMessages(['items' => "Not enough warehouse stock for {$product->name} ({$product->product_code})."]);
+                }
+            }
+
+            $discount = $this->discountAmount($payload, $subtotal, $cashier);
+            $final = round(max(0, $subtotal - $discount), 2);
+            $tenderType = $payload['tender_type'] ?? 'cash';
+            $order = Order::create([
+                'user_id' => $payload['customer_id'] ?? null,
+                'order_number' => $this->number('POS'),
+                'receipt_number' => $this->number('RCT'),
+                'sales_channel' => 'pos',
+                'location_id' => $location->id,
+                'register_id' => null,
+                'shift_id' => null,
+                'served_by' => $cashier->id,
+                'total_amount' => round($subtotal, 2),
+                'discount_amount' => $discount,
+                'admin_discount_type' => $payload['discount_type'] ?? null,
+                'admin_discount_value' => round((float) ($payload['discount_value'] ?? 0), 2),
+                'admin_discount_amount' => $discount,
+                'tax_amount' => 0,
+                'shipping_fee' => 0,
+                'final_amount' => $final,
+                'status' => 'delivered',
+                'payment_status' => 'paid',
+                'payment_method' => $tenderType,
+                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $final, 'change_due' => 0],
+                'receiver_name' => $payload['customer_name'] ?? 'Walk-in customer',
+                'receiver_phone' => $payload['customer_phone'] ?? null,
+                'order_notes' => $payload['notes'] ?? null,
+                'status_updated_at' => now(),
+            ]);
+
+            foreach ($items as $item) {
+                $unit = $item['unit'];
+                $orderItem = $order->items()->create([
+                    'product_id' => $unit->product_id,
+                    'product_unit_id' => $unit->id,
+                    'foc_product_unit_id' => $item['focUnit']?->id,
+                    'quantity' => $item['quantity'],
+                    'foc_quantity' => $item['focQuantity'],
+                    'base_quantity' => $item['baseQuantity'],
+                    'foc_base_quantity' => $item['focBaseQuantity'],
+                    'conversion_factor' => $unit->conversion_factor,
+                    'unit_name' => $unit->name,
+                    'price_type' => $item['priceType'],
+                    'unit_price' => $item['unitPrice'],
+                    'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 2),
+                    'foc_cost_price' => round((float) $unit->product->original_price * $item['focBaseQuantity'], 2),
+                    'total_price' => $item['lineTotal'],
+                ]);
+                $this->inventoryService->completeSale($location, $unit->product, $item['baseQuantity'], 0, $cashier, "pos:order:{$order->id}:item:{$orderItem->id}:paid", $order, $unit, $item['quantity']);
+                if ($item['focUnit'] && $item['focQuantity'] > 0) {
+                    $this->inventoryService->completeSale($location, $unit->product, $item['focBaseQuantity'], 0, $cashier, "pos:order:{$order->id}:item:{$orderItem->id}:foc", $order, $item['focUnit'], $item['focQuantity']);
+                }
+            }
+
+            Payment::create([
+                'order_id' => $order->id,
+                'register_id' => null,
+                'shift_id' => null,
+                'received_by' => $cashier->id,
+                'transaction_id' => $this->paymentTransactionId(),
+                'amount' => $final,
+                'amount_tendered' => $final,
+                'change_due' => 0,
+                'method' => $tenderType,
+                'tender_type' => $tenderType,
+                'status' => 'paid',
+                'payment_details' => $payload['payment_details'] ?? [],
+            ]);
+            FinancialEntry::create([
+                'recorded_by' => $cashier->id,
+                'type' => 'income',
+                'category' => FinancialEntry::CATEGORY_POS_SALE,
+                'title' => "POS sale {$order->receipt_number}",
+                'amount' => $final,
+                'entry_date' => now()->toDateString(),
+                'payment_method' => $tenderType,
+                'reference' => $order->receipt_number,
+                'status' => 'approved',
+                'notes' => "Auto-created from POS sale in {$location->name}.",
+            ]);
+            $this->auditLogService->record('pos.sale.completed', $order, [
+                'receipt_number' => $order->receipt_number,
+                'location_id' => $location->id,
+                'total' => $final,
+                'foc_line_count' => collect($items)->where('focQuantity', '>', 0)->count(),
+                'foc_base_quantity' => round((float) collect($items)->sum('focBaseQuantity'), 4),
+            ]);
+            $this->loyaltyService->awardForPaidOrder($order->fresh('user'));
+
+            return $order->fresh(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'server', 'user']);
+        }, 3);
+    }
+
+    private function discountAmount(array $payload, float $subtotal, User $cashier): float
+    {
+        $type = $payload['discount_type'] ?? null;
+        $value = round((float) ($payload['discount_value'] ?? 0), 2);
+        if (! $type || $value <= 0) {
+            return 0.0;
+        }
+        if (! $cashier->hasAdminPermission('pos.discount')) {
+            throw ValidationException::withMessages(['discount_value' => 'You cannot apply POS discounts.']);
+        }
+        if (! in_array($type, ['percent', 'amount'], true)) {
+            throw ValidationException::withMessages(['discount_type' => 'Choose a valid discount mode.']);
+        }
+        $amount = $type === 'percent' ? round($subtotal * ($value / 100), 2) : $value;
+        if ($amount > $subtotal) {
+            throw ValidationException::withMessages(['discount_value' => 'Discount cannot exceed subtotal.']);
+        }
+
+        return $amount;
+    }
+
+    private function number(string $prefix): string
+    {
+        do {
+            $number = $prefix.'-'.now()->format('ymd').'-'.strtoupper(Str::random(6));
+        } while (Order::query()->where('order_number', $number)->orWhere('receipt_number', $number)->exists());
+
+        return $number;
+    }
+
+    private function paymentTransactionId(): string
+    {
+        do {
+            $id = 'PAY-'.now()->format('ymd').'-'.strtoupper(Str::random(8));
+        } while (Payment::query()->where('transaction_id', $id)->exists());
+
+        return $id;
+    }
+}

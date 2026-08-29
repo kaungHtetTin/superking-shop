@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Musical store app icon">
+  <defs>
+    <linearGradient id="bg" x1="78" y1="42" x2="432" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#241b18"/>
+      <stop offset=".54" stop-color="#9c3f2c"/>
+      <stop offset="1" stop-color="#c28a2e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="176" fill="#fffdf8" opacity=".12"/>
+  <path fill="#fffdf8" d="M300 111v219c0 43-39 76-86 76-42 0-74-24-74-56 0-36 39-62 86-62 14 0 27 2 38 7V161l124-30v55l-88 21v123h-36V111h36Z"/>
+  <path fill="#f4c267" d="M146 187h80v28h-80v-28Zm0 50h80v28h-80v-28Zm0 50h58v28h-58v-28Z" opacity=".95"/>
+</svg>

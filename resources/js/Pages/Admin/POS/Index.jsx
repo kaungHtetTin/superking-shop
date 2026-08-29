@@ -1,0 +1,1623 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Head, Link, usePage } from '@/spa/router';
+import LanguageSwitcher from '@/Components/LanguageSwitcher';
+import { usePhraseTranslation, useTranslation } from '@/Utils/i18n';
+import { routeWithBase, storageUrl } from '@/Utils/url';
+import {
+    Alert,
+    Autocomplete,
+    Box,
+    Button,
+    Chip,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    FormControlLabel,
+    IconButton,
+    InputAdornment,
+    MenuItem,
+    Paper,
+    Radio,
+    RadioGroup,
+    Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    ToggleButton,
+    ToggleButtonGroup,
+    Typography,
+    useMediaQuery,
+} from '@mui/material';
+import {
+    Add as AddIcon,
+    ChevronLeft as ChevronLeftIcon,
+    ChevronRight as ChevronRightIcon,
+    Close as CloseIcon,
+    Delete as DeleteIcon,
+    ExpandLess as ExpandLessIcon,
+    ExpandMore as ExpandMoreIcon,
+    ImageOutlined as ImagePlaceholderIcon,
+    MoneyOff as FocIcon,
+    PointOfSale as CheckoutIcon,
+    Print as PrintIcon,
+    QrCodeScanner as ScanIcon,
+    Remove as RemoveIcon,
+    Search as SearchIcon,
+} from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
+import { formatMoney } from '@/Utils/pricing';
+
+const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const money = formatMoney;
+const POS_RESULT_PAGE_SIZE = 24;
+const POS_TABLE_ROW_HEIGHT = 44;
+const POS_RESULT_OVERSCAN_ROWS = 6;
+const calculateLineTotal = (line) => Number(line.quantity || 0) * Number(line.unit_price || 0);
+const calculateLineBaseUsage = (line) => {
+    const paidBase = Number(line.quantity || 0) * Number(line.conversion_factor || 1);
+    const focUnit = (line.unit_options || []).find((unit) => Number(unit.id) === Number(line.foc_product_unit_id));
+    const focBase = Number(line.foc_quantity || 0) * Number(focUnit?.conversion_factor || 1);
+
+    return paidBase + focBase;
+};
+const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
+    line.available_base_qty || (Number(line.available_qty || 0) * Number(line.conversion_factor || 1)),
+) + 0.00005;
+
+export default function PosIndex({ locations = [], categories = [], priceTypes = ['retail'], can = {} }) {
+    const { app_base, app_url, flash = {}, errors: pageErrors = {} } = usePage().props;
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const t = useTranslation();
+    const tp = usePhraseTranslation();
+    const firstLocation = locations[0];
+    const [locationId, setLocationId] = useState(firstLocation?.id || '');
+    const [categoryId, setCategoryId] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [resultMeta, setResultMeta] = useState({ page: 1, per_page: POS_RESULT_PAGE_SIZE, has_more: false, next_page: null, mode: 'popular' });
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [productResultsElement, setProductResultsElement] = useState(null);
+    const [productScrollTop, setProductScrollTop] = useState(0);
+    const [productViewportHeight, setProductViewportHeight] = useState(520);
+    const [scanError, setScanError] = useState('');
+    const [mobileAppBarExpanded, setMobileAppBarExpanded] = useState(false);
+    const [cart, setCart] = useState([]);
+    const [customerOptions, setCustomerOptions] = useState([]);
+    const [customerSearchInput, setCustomerSearchInput] = useState('');
+    const [customerLoading, setCustomerLoading] = useState(false);
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [salePriceType, setSalePriceType] = useState('retail');
+    const [discountType, setDiscountType] = useState('');
+    const [discountValue, setDiscountValue] = useState('');
+    const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+    const [mobileStep, setMobileStep] = useState('products');
+    const [tenderType, setTenderType] = useState('cash');
+    const [busy, setBusy] = useState(false);
+    const [message, setMessage] = useState('');
+    const [errors, setErrors] = useState({});
+    const [receipt, setReceipt] = useState(null);
+    const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+    const searchInputRef = useRef(null);
+    const categoryScrollRef = useRef(null);
+    const checkoutIntentRef = useRef('complete');
+    const productScrollFrameRef = useRef(null);
+    const productLoadMoreSentinelRef = useRef(null);
+    const productLoadMoreLockRef = useRef(false);
+
+    const location = locations.find((item) => Number(item.id) === Number(locationId));
+    const paymentMethods = ['cash', 'card', 'mobile'];
+    const api = async (url, options = {}) => {
+        setErrors({});
+        try {
+            const response = await window.axios({ url: routeWithBase(url, app_base), ...options });
+            return response.data;
+        } catch (error) {
+            const nextErrors = error.response?.data?.errors || { request: error.response?.data?.message || tp('Request failed.') };
+            setErrors(nextErrors);
+            throw error;
+        }
+    };
+
+    const fetchSearch = useCallback(async (options = {}) => {
+        const { autoAddFirst = false, clearInputAfterSearch = false, append = false, page = 1 } = options;
+        if (!locationId) return;
+
+        setScanError('');
+        setSearchLoading(true);
+        try {
+            const data = await api('/admin/pos/products/search', {
+                method: 'get',
+                params: { location_id: locationId, category_id: categoryId || undefined, q: searchQuery.trim(), page, per_page: resultMeta.per_page },
+            });
+            const products = Array.isArray(data) ? data : data.data || [];
+            const meta = Array.isArray(data)
+                ? { page, per_page: resultMeta.per_page, has_more: false, next_page: null, mode: searchQuery.trim() ? 'search' : 'popular' }
+                : data.meta;
+            setResultMeta(meta);
+            setSearchResults((prev) => {
+                if (!append) return products;
+                const existingIds = new Set(prev.map((item) => item.id));
+                return [...prev, ...products.filter((item) => !existingIds.has(item.id))];
+            });
+            if (autoAddFirst && products[0]) {
+                addProductToCart(products[0]);
+            }
+        } finally {
+            setSearchLoading(false);
+            if (clearInputAfterSearch) {
+                setSearchQuery('');
+                window.setTimeout(() => searchInputRef.current?.focus(), 0);
+            }
+        }
+    }, [app_base, categoryId, locationId, resultMeta.per_page, searchQuery]);
+
+    const loadMoreProducts = useCallback(async () => {
+        if (productLoadMoreLockRef.current || searchLoading || !resultMeta.has_more) return;
+
+        productLoadMoreLockRef.current = true;
+        try {
+            await fetchSearch({
+                append: true,
+                page: resultMeta.next_page || resultMeta.page + 1,
+            });
+        } catch {
+            // The shared request helper already exposes the error in the POS alert area.
+        } finally {
+            productLoadMoreLockRef.current = false;
+        }
+    }, [fetchSearch, resultMeta.has_more, resultMeta.next_page, resultMeta.page, searchLoading]);
+
+    const fetchCustomers = useCallback(async (query) => {
+        setCustomerLoading(true);
+        try {
+            const data = await api('/admin/pos/customers/search', {
+                method: 'get',
+                params: { q: query.trim() },
+            });
+            setCustomerOptions(Array.isArray(data) ? data : []);
+        } catch {
+            setCustomerOptions([]);
+        } finally {
+            setCustomerLoading(false);
+        }
+    }, [app_base]);
+
+    useEffect(() => {
+        const updateNetworkState = () => setIsOnline(navigator.onLine);
+        window.addEventListener('online', updateNetworkState);
+        window.addEventListener('offline', updateNetworkState);
+        return () => {
+            window.removeEventListener('online', updateNetworkState);
+            window.removeEventListener('offline', updateNetworkState);
+        };
+    }, []);
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            fetchSearch();
+        }, 180);
+        return () => window.clearTimeout(timer);
+    }, [fetchSearch]);
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            fetchCustomers(customerSearchInput);
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [customerSearchInput, fetchCustomers]);
+
+    useEffect(() => {
+        window.setTimeout(() => searchInputRef.current?.focus(), 150);
+    }, []);
+
+    useEffect(() => {
+        if (!productResultsElement) return undefined;
+
+        const updateMetrics = () => {
+            setProductScrollTop(productResultsElement.scrollTop);
+            setProductViewportHeight(productResultsElement.clientHeight || 520);
+
+            const remainingScroll = productResultsElement.scrollHeight
+                - productResultsElement.scrollTop
+                - productResultsElement.clientHeight;
+            const preloadDistance = Math.max(220, productResultsElement.clientHeight * 0.35);
+            const hasInternalScroll = productResultsElement.scrollHeight > productResultsElement.clientHeight + 1;
+            if (hasInternalScroll && remainingScroll <= preloadDistance) {
+                loadMoreProducts();
+            }
+        };
+        const onScroll = () => {
+            if (productScrollFrameRef.current) return;
+            productScrollFrameRef.current = window.requestAnimationFrame(() => {
+                productScrollFrameRef.current = null;
+                updateMetrics();
+            });
+        };
+
+        updateMetrics();
+        productResultsElement.addEventListener('scroll', onScroll, { passive: true });
+
+        let resizeObserver = null;
+        if (typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(updateMetrics);
+            resizeObserver.observe(productResultsElement);
+        }
+
+        return () => {
+            productResultsElement.removeEventListener('scroll', onScroll);
+            resizeObserver?.disconnect();
+            if (productScrollFrameRef.current) {
+                window.cancelAnimationFrame(productScrollFrameRef.current);
+                productScrollFrameRef.current = null;
+            }
+        };
+    }, [loadMoreProducts, productResultsElement]);
+
+    useEffect(() => {
+        if (
+            !productResultsElement
+            || !productLoadMoreSentinelRef.current
+            || !resultMeta.has_more
+            || typeof IntersectionObserver === 'undefined'
+        ) return undefined;
+
+        const hasInternalScroll = productResultsElement.scrollHeight > productResultsElement.clientHeight + 1;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting) loadMoreProducts();
+        }, {
+            root: hasInternalScroll ? productResultsElement : null,
+            rootMargin: '300px 0px',
+            threshold: 0,
+        });
+
+        observer.observe(productLoadMoreSentinelRef.current);
+        return () => observer.disconnect();
+    }, [loadMoreProducts, productResultsElement, resultMeta.has_more, searchResults.length]);
+
+    useEffect(() => {
+        productResultsElement?.scrollTo({ top: 0 });
+        setProductScrollTop(0);
+    }, [categoryId, locationId, searchQuery, productResultsElement]);
+
+    useEffect(() => {
+        if (isMobile && cart.length === 0 && mobileStep !== 'products') {
+            setMobileStep('products');
+        }
+    }, [cart.length, isMobile, mobileStep]);
+
+    useEffect(() => {
+        setCart([]);
+        setSearchResults([]);
+        setResultMeta((prev) => ({ ...prev, page: 1, has_more: false, next_page: null, mode: 'popular' }));
+        setSearchQuery('');
+    }, [locationId]);
+
+    const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
+
+    const resolveProductPrice = (product, priceType = salePriceType) => {
+        const prices = product?.prices || [];
+        const selected = prices.find((price) => price.price_type === priceType) || prices.find((price) => price.price_type === 'retail');
+        return Number(selected?.price || product?.price || 0);
+    };
+
+    const resolvePriceFromList = (prices, priceType, fallback = 0) => Number(
+        (prices || []).find((price) => price.price_type === priceType)?.price
+        ?? (prices || []).find((price) => price.price_type === 'retail')?.price
+        ?? fallback,
+    );
+
+    const addProductToCart = (product) => {
+        if (Number(product?.available_qty || 0) <= 0) {
+            setScanError(`${getProductDisplayName(product)}: ${tp('Out of stock')}`);
+            return;
+        }
+
+        setCart((prev) => {
+            const appliedPriceType = product.prices?.some((price) => price.price_type === salePriceType) ? salePriceType : 'retail';
+            const existingIndex = prev.findIndex((line) => line.product_unit_id === product.id && line.price_type === appliedPriceType);
+            if (existingIndex >= 0) {
+                const updated = [...prev];
+                const line = updated[existingIndex];
+                updated[existingIndex] = {
+                    ...line,
+                    quantity: Math.min(Number(line.quantity || 0) + 1, Number(line.available_qty || 1)),
+                };
+                return updated;
+            }
+
+            return [
+                ...prev,
+                {
+                    id: makeId(),
+                    product_unit_id: product.id,
+                    product_id: product.product_id,
+                    product_code: product.product_code,
+                    barcode: product.barcode,
+                    product_name: product.product_name,
+                    name: getProductDisplayName(product),
+                    unit_name: product.unit_name,
+                    unit_code: product.unit_code,
+                    image_path: product.image_path,
+                    available_qty: Number(product.available_qty || 0),
+                    available_base_qty: Number(product.available_base_qty || 0),
+                    conversion_factor: Number(product.conversion_factor || 1),
+                    prices: product.prices || [],
+                    unit_options: product.unit_options || [],
+                    price_type: appliedPriceType,
+                    unit_price: resolveProductPrice(product, appliedPriceType),
+                    quantity: 1,
+                    foc_quantity: 0,
+                    foc_product_unit_id: product.id,
+                },
+            ];
+        });
+    };
+
+    const updateCartLine = (id, patch) => {
+        setCart((prev) => prev.map((line) => {
+            if (line.id !== id) return line;
+            const updated = { ...line, ...patch };
+            updated.quantity = Math.max(1, Math.min(Number(updated.quantity || 1), Number(line.available_qty || 1)));
+            updated.unit_price = Math.max(0, Number(updated.unit_price || 0));
+            return updated;
+        }));
+    };
+
+    const adjustCartQuantity = (id, delta) => {
+        setCart((prev) => prev.map((line) => {
+            if (line.id !== id) return line;
+            const current = Number(line.quantity || 1);
+            const max = Math.max(1, Number(line.available_qty || 1));
+            return {
+                ...line,
+                quantity: Math.max(1, Math.min(current + delta, max)),
+            };
+        }));
+    };
+
+    const changeCartUnit = (id, productUnitId) => {
+        setCart((prev) => prev.map((line) => {
+            if (line.id !== id) return line;
+            const unit = (line.unit_options || []).find((option) => Number(option.id) === Number(productUnitId));
+            if (!unit || Number(unit.available_qty || 0) <= 0) return line;
+            const nextPriceType = (unit.prices || []).some((price) => price.price_type === line.price_type)
+                ? line.price_type
+                : ((unit.prices || []).some((price) => price.price_type === salePriceType) ? salePriceType : 'retail');
+
+            return {
+                ...line,
+                product_unit_id: unit.id,
+                unit_name: unit.name,
+                unit_code: unit.code,
+                name: [line.product_name, unit.name].filter(Boolean).join(' · '),
+                available_qty: Number(unit.available_qty || 0),
+                conversion_factor: Number(unit.conversion_factor || 1),
+                prices: unit.prices || [],
+                price_type: nextPriceType,
+                unit_price: resolvePriceFromList(unit.prices, nextPriceType, line.unit_price),
+                quantity: Math.max(1, Math.min(Number(line.quantity || 1), Number(unit.available_qty || 1))),
+            };
+        }));
+    };
+
+    const changeCartPriceType = (id, priceType) => {
+        setCart((prev) => prev.map((line) => line.id === id ? {
+            ...line,
+            price_type: priceType,
+            unit_price: resolvePriceFromList(line.prices, priceType, line.unit_price),
+        } : line));
+    };
+
+    const changeCartFocUnit = (id, productUnitId) => {
+        if (!can.discount) return;
+        setCart((prev) => prev.map((line) => {
+            if (line.id !== id) return line;
+            const unit = (line.unit_options || []).find((option) => Number(option.id) === Number(productUnitId));
+            return unit ? { ...line, foc_product_unit_id: unit.id } : line;
+        }));
+    };
+
+    const changeCartFocQuantity = (id, quantity, normalize = false) => {
+        if (!can.discount) return;
+        const parsedQuantity = Number(quantity);
+        const nextQuantity = quantity === '' && !normalize
+            ? ''
+            : Math.max(0, Number.isFinite(parsedQuantity) ? parsedQuantity : 0);
+        setCart((prev) => prev.map((line) => line.id === id ? { ...line, foc_quantity: nextQuantity } : line));
+    };
+
+    const renderCartLineOptions = (line, exceedsStock = false) => {
+        const focUnit = (line.unit_options || []).find((unit) => Number(unit.id) === Number(line.foc_product_unit_id));
+
+        return (
+            <>
+                <Box className="pos-console__line-options">
+                    <Box className="pos-console__band-label pos-console__sale-label">
+                        <Typography component="span">{tp('Sale')}</Typography>
+                        <Typography component="small">{tp('Charged')}</Typography>
+                    </Box>
+                    <Box className={`pos-console__quantity-entry ${exceedsStock ? 'has-error' : ''}`}>
+                        <IconButton
+                            size="small"
+                            tabIndex={-1}
+                            aria-label={`${tp('Decrease quantity for')} ${line.name}`}
+                            disabled={Number(line.quantity || 1) <= 1}
+                            onClick={() => adjustCartQuantity(line.id, -1)}
+                        >
+                            <RemoveIcon fontSize="small" />
+                        </IconButton>
+                        <TextField
+                            size="small"
+                            type="number"
+                            value={line.quantity}
+                            onChange={(event) => updateCartLine(line.id, { quantity: event.target.value })}
+                            onFocus={(event) => event.target.select()}
+                            onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+                            inputProps={{ min: 1, max: line.available_qty, step: 0.0001, inputMode: 'decimal', 'aria-label': tp('Sale quantity') }}
+                        />
+                        <IconButton
+                            size="small"
+                            tabIndex={-1}
+                            aria-label={`${tp('Increase quantity for')} ${line.name}`}
+                            disabled={Number(line.quantity || 1) >= Number(line.available_qty || 0)}
+                            onClick={() => adjustCartQuantity(line.id, 1)}
+                        >
+                            <AddIcon fontSize="small" />
+                        </IconButton>
+                    </Box>
+                    <TextField
+                        select
+                        size="small"
+                        label={tp('Selling unit')}
+                        value={line.product_unit_id}
+                        onChange={(event) => changeCartUnit(line.id, event.target.value)}
+                    >
+                        {(line.unit_options || []).map((unit) => (
+                            <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
+                                {unit.name} ({unit.available_qty} {tp('available')})
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                    <TextField
+                        select
+                        size="small"
+                        label={tp('Selling price')}
+                        value={line.price_type}
+                        onChange={(event) => changeCartPriceType(line.id, event.target.value)}
+                    >
+                        {(line.prices || []).map((price) => (
+                            <MenuItem key={price.price_type} value={price.price_type}>
+                                {tp(price.price_type.replaceAll('_', ' '))} - {money(price.price)}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                </Box>
+                {can.discount && (
+                    <Box component="details" className={`pos-console__foc-panel ${Number(line.foc_quantity || 0) > 0 ? 'has-foc' : ''}`}>
+                        <Box component="summary" className="pos-console__foc-panel-toggle">
+                            <Box className="pos-console__foc-label">
+                                <FocIcon fontSize="small" />
+                                <Box>
+                                    <Typography component="span">{tp('FOC')}</Typography>
+                                    <Typography component="small">{tp('Same product')}</Typography>
+                                </Box>
+                            </Box>
+                            <Typography className="pos-console__foc-collapsed-summary" component="span">
+                                {Number(line.foc_quantity || 0) > 0
+                                    ? `${line.foc_quantity} ${focUnit?.name || line.unit_name} ${tp('free')}`
+                                    : tp('Add free quantity')}
+                            </Typography>
+                            <ExpandMoreIcon className="pos-console__foc-chevron" fontSize="small" />
+                        </Box>
+                        <Box className="pos-console__foc-fields">
+                            <TextField
+                                className="pos-console__foc-quantity"
+                                size="small"
+                                type="number"
+                                label={tp('FOC quantity')}
+                                value={line.foc_quantity ?? 0}
+                                onChange={(event) => changeCartFocQuantity(line.id, event.target.value)}
+                                onBlur={() => changeCartFocQuantity(line.id, line.foc_quantity, true)}
+                                onFocus={(event) => event.target.select()}
+                                onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+                                inputProps={{ min: 0, step: 0.0001, inputMode: 'decimal' }}
+                            />
+                            <TextField
+                                className="pos-console__foc-unit"
+                                select
+                                size="small"
+                                label={tp('FOC unit')}
+                                value={line.foc_product_unit_id || line.product_unit_id}
+                                onChange={(event) => changeCartFocUnit(line.id, event.target.value)}
+                            >
+                                {(line.unit_options || []).map((unit) => (
+                                    <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
+                                        {unit.name} ({unit.code})
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                            <Button
+                                className="pos-console__foc-clear"
+                                size="small"
+                                variant="text"
+                                disabled={Number(line.foc_quantity || 0) <= 0}
+                                onClick={() => changeCartFocQuantity(line.id, 0)}
+                            >
+                                {tp('Clear')}
+                            </Button>
+                        </Box>
+                    </Box>
+                )}
+            </>
+        );
+    };
+
+    const removeCartLine = (id) => {
+        setCart((items) => items.filter((item) => item.id !== id));
+    };
+
+    const changeSalePriceType = (next) => {
+        if (!next || next === salePriceType) return;
+        setSalePriceType(next);
+        setCart((prev) => prev.map((line) => ({
+            ...line,
+            price_type: line.prices?.some((price) => price.price_type === next) ? next : 'retail',
+            unit_price: Number((line.prices || []).find((price) => price.price_type === next)?.price ?? (line.prices || []).find((price) => price.price_type === 'retail')?.price ?? line.unit_price),
+        })));
+    };
+
+    const totals = useMemo(() => {
+        const subtotal = cart.reduce((sum, item) => sum + calculateLineTotal(item), 0);
+        const discountRaw = discountType === 'percent'
+            ? subtotal * (Number(discountValue || 0) / 100)
+            : Number(discountValue || 0);
+        const discount = Math.min(Math.max(discountRaw, 0), subtotal);
+        const grandTotal = Math.max(0, subtotal - discount);
+
+        return { subtotal, discount, grandTotal };
+    }, [cart, discountType, discountValue]);
+
+    const hasStockIssue = useMemo(() => {
+        const usageByProduct = new Map();
+        cart.forEach((line) => {
+            const key = line.product_id || line.product_code;
+            const current = usageByProduct.get(key) || { used: 0, available: Number(line.available_base_qty || 0) };
+            current.used += calculateLineBaseUsage(line);
+            current.available = Math.max(current.available, Number(line.available_base_qty || 0));
+            usageByProduct.set(key, current);
+        });
+
+        return [...usageByProduct.values()].some((stock) => stock.used > stock.available + 0.00005);
+    }, [cart]);
+    const hasAlternatePriceItems = useMemo(() => cart.some((line) => line.price_type !== 'retail'), [cart]);
+    const focLineCount = useMemo(() => cart.filter((line) => Number(line.foc_quantity || 0) > 0).length, [cart]);
+    const availablePriceTypes = useMemo(() => [...new Set(['retail', ...priceTypes, ...searchResults.flatMap((product) => (product.prices || []).map((price) => price.price_type)), ...cart.flatMap((line) => (line.prices || []).map((price) => price.price_type))])], [cart, priceTypes, searchResults]);
+    const resultHeading = resultMeta.mode === 'popular' && !searchQuery.trim() ? tp('POPULAR PRODUCTS') : tp('RESULTS');
+    const virtualRowCount = searchResults.length;
+    const virtualStartRow = Math.max(0, Math.floor(productScrollTop / POS_TABLE_ROW_HEIGHT) - POS_RESULT_OVERSCAN_ROWS);
+    const virtualEndRow = Math.min(
+        virtualRowCount,
+        Math.ceil((productScrollTop + productViewportHeight) / POS_TABLE_ROW_HEIGHT) + POS_RESULT_OVERSCAN_ROWS,
+    );
+    const virtualTopSpacer = virtualStartRow * POS_TABLE_ROW_HEIGHT;
+    const virtualBottomSpacer = Math.max(0, (virtualRowCount - virtualEndRow) * POS_TABLE_ROW_HEIGHT);
+    const visibleTableProducts = searchResults.slice(virtualStartRow, virtualEndRow);
+
+    const scrollCategories = (direction) => {
+        categoryScrollRef.current?.scrollBy({
+            left: direction * 260,
+            behavior: 'smooth',
+        });
+    };
+
+    const openPaymentDialog = () => {
+        if (!locationId) {
+            setScanError(tp('Select a warehouse before selling.'));
+            if (isMobile) setMobileStep('products');
+            return;
+        }
+        if (hasStockIssue) {
+            setScanError(tp('Cart quantity exceeds available warehouse stock.'));
+            if (isMobile) setMobileStep('cart');
+            return;
+        }
+        if (cart.length) {
+            if (isMobile) {
+                setMobileStep('checkout');
+            } else {
+                setPaymentDialogOpen(true);
+            }
+        }
+    };
+
+    const checkout = async (event) => {
+        event.preventDefault();
+        if (!locationId || !cart.length) return;
+
+        setBusy(true);
+        try {
+            const data = await api('/admin/pos/checkout', {
+                method: 'post',
+                data: {
+                    location_id: locationId,
+                    customer_id: selectedCustomer?.id || null,
+                    customer_name: selectedCustomer?.name || 'Walk-in customer',
+                    customer_phone: selectedCustomer?.phone || null,
+                    items: cart.map((item) => ({
+                        product_unit_id: item.product_unit_id,
+                        quantity: item.quantity,
+                        price_type: item.price_type,
+                        foc_quantity: Number(item.foc_quantity || 0),
+                        foc_product_unit_id: Number(item.foc_quantity || 0) > 0 ? item.foc_product_unit_id : null,
+                    })),
+                    discount_type: discountType || null,
+                    discount_value: discountValue || 0,
+                    tender_type: tenderType,
+                },
+            });
+            if (checkoutIntentRef.current === 'print' && data.receipt_url) {
+                const separator = data.receipt_url.includes('?') ? '&' : '?';
+                window.location.assign(`${data.receipt_url}${separator}print=1`);
+                return;
+            }
+            setReceipt(data);
+            setCart([]);
+            setDiscountType('');
+            setDiscountValue('');
+            setSelectedCustomer(null);
+            setPaymentDialogOpen(false);
+            setMobileStep('products');
+            setMessage(`${tp('Sale completed')}: ${data.order.receipt_number}`);
+            window.setTimeout(() => searchInputRef.current?.focus(), 100);
+        } finally {
+            checkoutIntentRef.current = 'complete';
+            setBusy(false);
+        }
+    };
+
+    const paymentFormContent = (
+        <Stack spacing={1.25} className="pos-console__payment-form">
+            <Box>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{tp('Customer')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedCustomer?.name || tp('Walk-in customer')}</Typography>
+                    </Box>
+                </Stack>
+                <Autocomplete
+                    size="small"
+                    fullWidth
+                    options={customerOptions}
+                    value={selectedCustomer}
+                    onChange={(event, value) => setSelectedCustomer(value)}
+                    inputValue={customerSearchInput}
+                    onInputChange={(event, value) => setCustomerSearchInput(value || '')}
+                    getOptionLabel={(option) => option?.name || ''}
+                    renderOption={(props, option) => (
+                        <li {...props} key={option.id || option.email || option.name}>
+                            <Stack>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">{[option.phone, option.email].filter(Boolean).join(' / ') || tp('No contact')}</Typography>
+                            </Stack>
+                        </li>
+                    )}
+                    loading={customerLoading}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id && option?.name === value?.name}
+                    renderInput={(params) => <TextField {...params} placeholder={tp('Search customer by name, phone, or email...')} size="small" />}
+                />
+            </Box>
+
+            {can.discount && (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <TextField
+                        select
+                        size="small"
+                        label={tp('Discount')}
+                        value={discountType}
+                        onChange={(event) => setDiscountType(event.target.value)}
+                        sx={{ flex: 1 }}
+                    >
+                        <MenuItem value="">{tp('No discount')}</MenuItem>
+                        <MenuItem value="amount">{tp('Amount')}</MenuItem>
+                        <MenuItem value="percent">{tp('Percent')}</MenuItem>
+                    </TextField>
+                    <TextField
+                        size="small"
+                        type="number"
+                        label={tp('Value')}
+                        value={discountValue}
+                        disabled={!discountType}
+                        onChange={(event) => setDiscountValue(event.target.value)}
+                        slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                        sx={{ flex: 1 }}
+                    />
+                </Stack>
+            )}
+
+            <Box className="pos-console__totals" sx={{ p: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                <Stack spacing={0.85}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary">{tp('Subtotal')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>{money(totals.subtotal)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary">{tp('Discount')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: totals.discount > 0 ? 'success.main' : 'inherit', textAlign: 'right' }}>-{money(totals.discount)}</Typography>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'baseline', gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{tp('Sale total')}</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.main', textAlign: 'right' }}>{money(totals.grandTotal)}</Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                        {tp('Stock will be deducted from')} {location?.name || tp('selected warehouse')}.
+                    </Typography>
+                </Stack>
+            </Box>
+
+            <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{tp('Payment Method')}</Typography>
+                <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    fullWidth
+                    value={tenderType}
+                    onChange={(event, next) => next && setTenderType(next)}
+                >
+                    {paymentMethods.map((method) => (
+                        <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{tp(method)}</ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+            </Box>
+        </Stack>
+    );
+
+    const completeSaleButtons = (
+        <>
+            <Button
+                type="submit"
+                variant="outlined"
+                startIcon={<PrintIcon />}
+                disabled={busy || cart.length === 0 || !locationId || hasStockIssue}
+                onClick={() => {
+                    checkoutIntentRef.current = 'print';
+                }}
+                sx={{
+                    width: { xs: '100%', sm: 'auto' },
+                    minWidth: 0,
+                    minHeight: { xs: 48, sm: 36 },
+                    px: { xs: 1, sm: 2 },
+                    whiteSpace: 'normal',
+                    lineHeight: 1.2,
+                    '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+                }}
+            >
+                {tp('Complete & Print')}
+            </Button>
+            <Button
+                type="submit"
+                variant="contained"
+                startIcon={<CheckoutIcon />}
+                disabled={busy || cart.length === 0 || !locationId || hasStockIssue}
+                onClick={() => {
+                    checkoutIntentRef.current = 'complete';
+                }}
+                sx={{
+                    width: { xs: '100%', sm: 'auto' },
+                    minWidth: 0,
+                    minHeight: { xs: 48, sm: 36 },
+                    px: { xs: 1, sm: 2 },
+                    whiteSpace: 'normal',
+                    lineHeight: 1.2,
+                    '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+                }}
+            >
+                {tp('Complete Sale')}
+            </Button>
+        </>
+    );
+
+    return (
+        <Box
+            className="app-root pos-console"
+            style={{
+                '--color-primary': theme.palette.primary.main,
+                '--color-primary-dark': theme.palette.primary.dark,
+                '--color-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                '--pos-primary': theme.palette.primary.main,
+                '--pos-primary-strong': theme.palette.primary.dark,
+                '--pos-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                '--pos-bg': alpha(theme.palette.primary.main, 0.055),
+            }}
+            sx={{
+                minHeight: '100vh',
+                background: (theme) => `
+                    radial-gradient(circle at 12% 0%, ${alpha(theme.palette.primary.main, 0.16)} 0, transparent 28%),
+                    linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.9)} 0%, ${alpha(theme.palette.primary.main, 0.07)} 48%, ${theme.palette.background.paper} 100%)
+                `,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: { xs: 'auto', md: 'hidden' },
+            }}
+        >
+            <Head title={tp('POS')} />
+
+            <Box
+                component="header"
+                className={`admin-topbar glass pos-console__titlebar ${mobileAppBarExpanded ? 'is-mobile-expanded' : 'is-mobile-collapsed'}`}
+                sx={{
+                    minHeight: 52,
+                    px: { xs: 1.5, md: 2 },
+                    py: 0.75,
+                    bgcolor: 'background.paper',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    flexWrap: 'wrap',
+                    flexShrink: 0,
+                }}
+            >
+                <Stack className="pos-console__brand" direction="row" spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
+                    <CheckoutIcon color="primary" fontSize="small" />
+                    <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
+                            {tp('POS Interface')}
+                        </Typography>
+                    </Box>
+                </Stack>
+                <Typography className="pos-console__mobile-location-summary" variant="caption" title={location?.name || tp('Warehouse')} noWrap>
+                    {location?.name || tp('Warehouse')}
+                </Typography>
+                <Stack direction="row" spacing={0.75} className="pos-console__location" sx={{ alignItems: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                        {tp('Warehouse')}
+                    </Typography>
+                    <TextField
+                        select
+                        size="small"
+                        value={locationId}
+                        onChange={(event) => setLocationId(event.target.value)}
+                        inputProps={{ 'aria-label': tp('Warehouse') }}
+                        sx={{ width: { xs: '100%', sm: 190 }, maxWidth: '100%' }}
+                    >
+                        {locations.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}
+                    </TextField>
+                </Stack>
+                <Box className="pos-console__titlebar-spacer" sx={{ flex: 1 }} />
+                <Chip className="pos-console__online-status" size="small" color={isOnline ? 'success' : 'error'} label={isOnline ? tp('Online') : tp('Offline')} variant="outlined" />
+                <LanguageSwitcher compact className="admin-language-switcher" />
+                <Button className="pos-console__dashboard-link" size="small" variant="text" component={Link} href={routeWithBase('/admin/dashboard', app_base)}>
+                    {t('admin.items.dashboard', 'Dashboard')}
+                </Button>
+                <IconButton
+                    className="pos-console__appbar-toggle"
+                    size="small"
+                    aria-label={mobileAppBarExpanded ? tp('Collapse app bar') : tp('Expand app bar')}
+                    aria-expanded={mobileAppBarExpanded}
+                    onClick={() => setMobileAppBarExpanded((expanded) => !expanded)}
+                >
+                    {mobileAppBarExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </IconButton>
+            </Box>
+
+            <Box
+                component="main"
+                className="pos-console__body"
+                sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    p: { xs: 1, md: 1.25 },
+                    overflow: { xs: 'visible', md: 'hidden' },
+                    '& .MuiPaper-root': { borderRadius: 1, boxShadow: 'none' },
+                }}
+            >
+                {(flash?.success || flash?.error || message || Object.keys(errors).length > 0 || Object.keys(pageErrors).length > 0) && (
+                    <Stack spacing={1} sx={{ mb: 2 }}>
+                        {flash?.success && <Alert severity="success">{flash.success}</Alert>}
+                        {flash?.error && <Alert severity="error">{flash.error}</Alert>}
+                        {message && <Alert severity="success" onClose={() => setMessage('')}>{message}</Alert>}
+                        {Object.entries({ ...pageErrors, ...errors }).map(([key, value]) => (
+                            <Alert severity="error" key={key}>
+                                {Array.isArray(value) ? value.join(' ') : value}
+                            </Alert>
+                        ))}
+                    </Stack>
+                )}
+
+                <Paper
+                    className="pos-console__mobile-tabs"
+                    sx={{
+                        display: { xs: 'block', md: 'none' },
+                        mb: 1,
+                        p: 0.75,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    <ToggleButtonGroup
+                        fullWidth
+                        exclusive
+                        size="small"
+                        value={mobileStep}
+                        onChange={(event, next) => next && setMobileStep(next)}
+                    >
+                        <ToggleButton value="products" sx={{ textTransform: 'none', fontWeight: 800 }}>
+                            {tp('Products')}
+                        </ToggleButton>
+                        <ToggleButton value="cart" sx={{ textTransform: 'none', fontWeight: 800 }}>
+                            {tp('Cart')} ({cart.length})
+                        </ToggleButton>
+                        <ToggleButton value="checkout" disabled={cart.length === 0} sx={{ textTransform: 'none', fontWeight: 800 }}>
+                            {tp('Checkout')}
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+                </Paper>
+
+                <Box
+                    className="pos-console__workspace"
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 0.8fr) minmax(0, 1.2fr)' },
+                        gap: 1.25,
+                        alignItems: 'stretch',
+                        height: {
+                            xs: 'auto',
+                            md: (flash?.success || flash?.error || message || Object.keys(errors).length > 0 || Object.keys(pageErrors).length > 0)
+                                ? 'calc(100% - 56px)'
+                                : '100%',
+                        },
+                        minHeight: 0,
+                    }}
+                >
+                    <Paper className="pos-console__catalog" sx={{ p: { xs: 1.25, md: 1.35 }, width: '100%', height: { xs: 'auto', md: '100%' }, display: { xs: mobileStep === 'products' ? 'flex' : 'none', md: 'flex' }, flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', borderTop: '2px solid', borderTopColor: 'primary.main' }}>
+                        <Stack className="pos-console__catalog-header" direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Stack className="pos-console__catalog-title" direction="row" spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
+                                <ScanIcon color="primary" fontSize="small" />
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                    {tp('Product Selection')}
+                                </Typography>
+                            </Stack>
+                            <Box sx={{ flex: 1 }} />
+                            <Stack className="pos-console__price-mode" direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                <TextField
+                                    select
+                                    size="small"
+                                    label={tp('Price type')}
+                                    value={salePriceType}
+                                    onChange={(event) => changeSalePriceType(event.target.value)}
+                                >
+                                    {availablePriceTypes.map((priceType) => <MenuItem key={priceType} value={priceType}>{tp(priceType.replaceAll('_', ' '))}</MenuItem>)}
+                                </TextField>
+                            </Stack>
+                        </Stack>
+
+                        {scanError && (
+                            <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setScanError('')}>
+                                {scanError}
+                            </Alert>
+                        )}
+
+                        <Stack className="pos-console__catalog-search" direction="row" spacing={1}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                inputRef={searchInputRef}
+                                placeholder={tp('Scan barcode or search product...')}
+                                value={searchQuery}
+                                onChange={(event) => setSearchQuery(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        fetchSearch({ autoAddFirst: true, clearInputAfterSearch: true });
+                                    }
+                                }}
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    },
+                                    htmlInput: { enterKeyHint: 'search' },
+                                }}
+                            />
+                            <Button variant="contained" size="small" onClick={() => fetchSearch()} disabled={searchLoading} sx={{ minWidth: 110 }}>
+                                {tp('Search')}
+                            </Button>
+                        </Stack>
+
+                        <Stack
+                            className="pos-console__categories"
+                            direction="row"
+                            spacing={0.5}
+                            sx={{
+                                mt: 1.25,
+                                mb: 0.35,
+                                alignItems: 'center',
+                            }}
+                        >
+                            <IconButton
+                                size="small"
+                                aria-label={tp('Scroll categories left')}
+                                onClick={() => scrollCategories(-1)}
+                                sx={{
+                                    width: 26,
+                                    height: 28,
+                                    p: 0,
+                                    flexShrink: 0,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <ChevronLeftIcon fontSize="small" />
+                            </IconButton>
+                            <Box
+                                ref={categoryScrollRef}
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    px: 0.5,
+                                    py: 0.25,
+                                    overflowX: 'auto',
+                                    overflowY: 'hidden',
+                                    scrollbarWidth: 'none',
+                                    msOverflowStyle: 'none',
+                                    '&::-webkit-scrollbar': { display: 'none' },
+                                }}
+                            >
+                                <RadioGroup
+                                    row
+                                    value={String(categoryId)}
+                                    onChange={(event) => setCategoryId(event.target.value)}
+                                    sx={{
+                                        flexWrap: 'nowrap',
+                                        gap: 0.85,
+                                        minWidth: 'max-content',
+                                        width: 'max-content',
+                                        '& .MuiFormControlLabel-root': {
+                                            mr: 0,
+                                            ml: 0,
+                                            px: 1,
+                                            pr: 1.25,
+                                            height: 28,
+                                            minWidth: 'fit-content',
+                                            flexShrink: 0,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            bgcolor: 'background.paper',
+                                            borderRadius: 1,
+                                        },
+                                        '& .MuiFormControlLabel-root:has(.Mui-checked)': {
+                                            borderColor: 'primary.main',
+                                            bgcolor: 'rgba(10, 23, 91, 0.06)',
+                                        },
+                                        '& .MuiFormControlLabel-label': {
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            whiteSpace: 'nowrap',
+                                        },
+                                        '& .MuiRadio-root': {
+                                            p: 0.25,
+                                            mr: 0.25,
+                                        },
+                                    }}
+                                >
+                                    <FormControlLabel value="" control={<Radio size="small" />} label={tp('All')} />
+                                    {categories.map((item) => (
+                                        <FormControlLabel key={item.id} value={String(item.id)} control={<Radio size="small" />} label={item.name} />
+                                    ))}
+                                </RadioGroup>
+                            </Box>
+                            <IconButton
+                                size="small"
+                                aria-label={tp('Scroll categories right')}
+                                onClick={() => scrollCategories(1)}
+                                sx={{
+                                    width: 26,
+                                    height: 28,
+                                    p: 0,
+                                    flexShrink: 0,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.paper',
+                                }}
+                            >
+                                <ChevronRightIcon fontSize="small" />
+                            </IconButton>
+                        </Stack>
+
+                        {cart.length > 0 && (
+                            <Box className="pos-console__selected-strip" sx={{ display: { xs: 'block', md: 'none' }, mt: 0.75 }}>
+                                <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary' }}>
+                                        {tp('Selected products')}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                        {cart.length} {cart.length === 1 ? tp('item') : tp('items')}
+                                    </Typography>
+                                </Stack>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        gap: 1,
+                                        overflowX: 'auto',
+                                        overflowY: 'hidden',
+                                        pb: 0.75,
+                                        scrollbarWidth: 'none',
+                                        msOverflowStyle: 'none',
+                                        '&::-webkit-scrollbar': { display: 'none' },
+                                    }}
+                                >
+                                    {cart.map((line) => {
+                                        const lineTotal = calculateLineTotal(line);
+
+                                        return (
+                                            <Box
+                                                className="pos-console__selected-card"
+                                                key={line.id}
+                                                sx={{
+                                                    width: 176,
+                                                    minWidth: 176,
+                                                    display: 'grid',
+                                                    gridTemplateColumns: '48px minmax(0, 1fr) 28px',
+                                                    gap: 0.75,
+                                                    alignItems: 'center',
+                                                    p: 0.75,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    bgcolor: 'background.paper',
+                                                }}
+                                            >
+                                                <Box
+                                                    className="pos-console__selected-image"
+                                                    sx={{
+                                                        width: 48,
+                                                        height: 48,
+                                                        display: 'grid',
+                                                        placeItems: 'center',
+                                                        bgcolor: 'action.hover',
+                                                        overflow: 'hidden',
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                    }}
+                                                >
+                                                    {line.image_path ? (
+                                                        <Box component="img" src={storageUrl(line.image_path, app_url)} alt="" loading="lazy" decoding="async" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    ) : (
+                                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, fontWeight: 800, textAlign: 'center', px: 0.25 }}>
+                                                            {line.product_code || tp('No image')}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
+                                                <Box sx={{ minWidth: 0 }}>
+                                                    <Typography variant="caption" title={line.name} sx={{ display: 'block', fontWeight: 800, lineHeight: 1.12 }} noWrap>
+                                                        {line.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+                                                        x{line.quantity} - {money(lineTotal)}{Number(line.foc_quantity || 0) > 0 ? ` + ${tp('FOC')} ${line.foc_quantity}` : ''}
+                                                    </Typography>
+                                                </Box>
+                                                <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    aria-label={`${tp('Remove item')} ${line.name}`}
+                                                    onClick={() => removeCartLine(line.id)}
+                                                    sx={{ width: 28, height: 28, alignSelf: 'start' }}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
+                        )}
+
+                        <Divider sx={{ my: 1.25 }} />
+
+                        <Stack className="pos-console__results-meta" direction="row" justifyContent="space-between" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                                {resultHeading}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {searchLoading && searchResults.length === 0 ? tp('Loading...') : `${searchResults.length} ${tp('shown')}`}
+                            </Typography>
+                        </Stack>
+
+                        <TableContainer className="pos-console__product-table" ref={setProductResultsElement} sx={{ mt: 1, flex: 1, minHeight: 0, overflow: 'auto' }}>
+                                <Table
+                                    size="small"
+                                    stickyHeader
+                                    sx={{
+                                        tableLayout: 'fixed',
+                                        '& .MuiTableCell-root': { px: 0.75, py: 0.55 },
+                                        '& .MuiTableCell-head': { py: 0.55, fontSize: 12 },
+                                    }}
+                                >
+                                    <TableHead>
+                                        <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'rgba(255,255,255,.05)' }}>
+                                            <TableCell sx={{ fontWeight: 700, width: '58%' }}>{tp('Product')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: '20%' }} align="right">{tp('Price')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: '12%' }} align="right">{tp('Available')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: '10%' }} align="center">{tp('Add')}</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {virtualTopSpacer > 0 && (
+                                            <TableRow aria-hidden="true">
+                                                <TableCell colSpan={4} sx={{ p: 0, height: virtualTopSpacer, border: 0 }} />
+                                            </TableRow>
+                                        )}
+                                        {visibleTableProducts.map((product) => {
+                                            const outOfStock = Number(product.available_qty || 0) <= 0;
+                                            return (
+                                                <TableRow key={product.id} hover sx={outOfStock ? { bgcolor: 'rgba(211, 47, 47, 0.08)' } : undefined}>
+                                                    <TableCell>
+                                                        <Stack className="pos-console__product-cell" direction="row" spacing={0.75}>
+                                                            <Box className="pos-console__list-thumbnail">
+                                                                {product.image_path ? (
+                                                                    <Box
+                                                                        component="img"
+                                                                        src={storageUrl(product.image_path, app_url)}
+                                                                        alt=""
+                                                                        loading="lazy"
+                                                                        decoding="async"
+                                                                    />
+                                                                ) : (
+                                                                    <ImagePlaceholderIcon aria-hidden="true" />
+                                                                )}
+                                                            </Box>
+                                                            <Box className="pos-console__product-copy">
+                                                                <Typography variant="body2" noWrap title={getProductDisplayName(product)}>{getProductDisplayName(product)}</Typography>
+                                                                <Typography variant="caption" color="text.secondary" noWrap>{product.product_code || '-'} · {product.unit_code || product.unit_name}</Typography>
+                                                                <Typography className="pos-console__mobile-product-meta" variant="caption" color="text.secondary" noWrap>
+                                                                    {money(resolveProductPrice(product))} · {product.available_qty} {tp('available')}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Stack>
+                                                    </TableCell>
+                                                    <TableCell className="pos-console__product-price" align="right">
+                                                        <Typography variant="body2" noWrap>{money(resolveProductPrice(product))}</Typography>
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        <Typography variant="body2" sx={{ fontWeight: 700, color: outOfStock ? 'error.main' : 'inherit' }}>{product.available_qty}</Typography>
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <IconButton size="small" color={outOfStock ? 'error' : 'primary'} disabled={outOfStock} onClick={() => addProductToCart(product)} sx={{ width: 30, height: 30 }}>
+                                                            <AddIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                        {virtualBottomSpacer > 0 && (
+                                            <TableRow aria-hidden="true">
+                                                <TableCell colSpan={4} sx={{ p: 0, height: virtualBottomSpacer, border: 0 }} />
+                                            </TableRow>
+                                        )}
+                                        {resultMeta.has_more && (
+                                            <TableRow ref={productLoadMoreSentinelRef} className="pos-console__load-sentinel" aria-hidden="true">
+                                                <TableCell colSpan={4} sx={{ p: 0, height: 1, border: 0 }} />
+                                            </TableRow>
+                                        )}
+                                        {searchResults.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} align="center" sx={{ py: 2 }}>
+                                                    <Typography variant="body2" color="text.secondary">{tp('Search products or scan a barcode to add items.')}</Typography>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                        </TableContainer>
+
+                        {searchLoading && searchResults.length > 0 && (
+                            <Stack
+                                className="pos-console__infinite-status"
+                                direction="row"
+                                spacing={0.75}
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <CircularProgress size={13} thickness={5} />
+                                <Typography variant="caption">{tp('Loading products...')}</Typography>
+                            </Stack>
+                        )}
+
+                    </Paper>
+
+                    <Paper className="pos-console__cart" sx={{ p: { xs: 1.15, md: 1.25 }, width: '100%', height: { xs: 'auto', md: '100%' }, display: { xs: mobileStep === 'cart' ? 'flex' : 'none', md: 'flex' }, flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', borderTop: '2px solid', borderTopColor: 'success.main' }}>
+                        <Box className="pos-console__cart-header" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: 1, width: '100%' }}>
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{tp('Current Sale')}</Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                    {cart.length} {cart.length === 1 ? tp('item') : tp('items')} {tp('from')} {location?.name || tp('warehouse')}
+                                </Typography>
+                            </Box>
+                            <Stack direction="row" spacing={1} sx={{ justifySelf: 'end', flexShrink: 0, alignItems: 'center' }}>
+                                {hasAlternatePriceItems && (
+                                    <Chip size="small" color="warning" variant="outlined" label={tp('Alternate pricing')} />
+                                )}
+                                {focLineCount > 0 && (
+                                    <Chip size="small" color="info" variant="outlined" icon={<FocIcon />} label={`${focLineCount} ${tp('FOC')}`} />
+                                )}
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<CheckoutIcon />}
+                                    disabled={busy || !isOnline || !locationId || cart.length === 0 || hasStockIssue}
+                                    onClick={openPaymentDialog}
+                                    sx={{ minWidth: 128, fontWeight: 800 }}
+                                >
+                                    {tp('Sell')} {money(totals.grandTotal)}
+                                </Button>
+                            </Stack>
+                        </Box>
+
+                        <Divider className="pos-console__cart-divider" sx={{ my: 1 }} />
+
+                        <Typography className="pos-console__cart-label" variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>{tp('Cart')}</Typography>
+
+                        {isMobile ? (
+                            <Stack className="pos-console__cart-cards" spacing={0.85} sx={{ flex: 1, minHeight: 140, overflow: 'visible' }}>
+                                {cart.map((line) => {
+                                    const lineTotal = calculateLineTotal(line);
+                                    const exceedsStock = lineExceedsStock(line);
+
+                                    return (
+                                        <Paper
+                                            className={`pos-console__mobile-cart-card ${Number(line.foc_quantity || 0) > 0 ? 'is-foc' : ''}`}
+                                            key={line.id}
+                                            variant="outlined"
+                                            sx={{
+                                                p: 0.85,
+                                                borderColor: exceedsStock ? 'error.main' : (Number(line.foc_quantity || 0) > 0 ? 'info.main' : 'divider'),
+                                                bgcolor: exceedsStock ? 'rgba(211, 47, 47, 0.08)' : (Number(line.foc_quantity || 0) > 0 ? 'rgba(40, 116, 188, 0.07)' : 'background.paper'),
+                                            }}
+                                        >
+                                            <Stack className="pos-console__mobile-cart-main" direction="row" spacing={0.85} sx={{ alignItems: 'center', minWidth: 0 }}>
+                                                 <Box className="pos-console__cart-product" sx={{ minWidth: 0, flex: 1 }}>
+                                                    <Typography variant="body2" title={line.name} sx={{ fontWeight: 800, lineHeight: 1.12 }} noWrap>
+                                                        {line.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }} noWrap>
+                                                        {line.product_code || '-'} · {line.unit_code || line.unit_name}
+                                                     </Typography>
+                                                 </Box>
+                                                 <Box className="pos-console__line-total">
+                                                     <Typography variant="caption" color="text.secondary">{tp('Total')}</Typography>
+                                                     <Typography variant="body2" noWrap>{money(lineTotal)}</Typography>
+                                                 </Box>
+                                                 <IconButton
+                                                    size="small"
+                                                    color="error"
+                                                    aria-label={`${tp('Remove item')} ${line.name}`}
+                                                    onClick={() => removeCartLine(line.id)}
+                                                    sx={{ width: 34, height: 34, flexShrink: 0 }}
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                             </Stack>
+
+                                             {renderCartLineOptions(line, exceedsStock)}
+                                        </Paper>
+                                    );
+                                })}
+                                {cart.length === 0 && (
+                                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
+                                        <Typography variant="body2" color="text.secondary" align="center">{tp('Cart is empty.')}</Typography>
+                                    </Paper>
+                                )}
+                            </Stack>
+                        ) : (
+                            <Stack className="pos-console__cart-list" sx={{ flex: 1, minHeight: 180, overflowY: 'auto' }}>
+                                {cart.map((line) => {
+                                    const lineTotal = calculateLineTotal(line);
+                                    const exceedsStock = lineExceedsStock(line);
+
+                                    return (
+                                        <Box
+                                            className={`pos-console__cart-line ${exceedsStock ? 'has-error' : ''} ${Number(line.foc_quantity || 0) > 0 ? 'is-foc' : ''}`}
+                                            key={line.id}
+                                        >
+                                             <Box className="pos-console__cart-product">
+                                                <Typography variant="body2" title={line.name} noWrap>{line.name}</Typography>
+                                                <Typography variant="caption" color="text.secondary" noWrap>
+                                                    {line.product_code || '-'} · {line.unit_code || line.unit_name}
+                                                 </Typography>
+                                             </Box>
+                                             <Box className="pos-console__line-total">
+                                                <Typography variant="caption" color="text.secondary">{tp('Total')}</Typography>
+                                                <Typography variant="body2" noWrap>{money(lineTotal)}</Typography>
+                                            </Box>
+                                            <IconButton
+                                                className="pos-console__remove-line"
+                                                size="small"
+                                                color="error"
+                                                aria-label={`${tp('Remove item')} ${line.name}`}
+                                                onClick={() => removeCartLine(line.id)}
+                                            >
+                                                 <DeleteIcon fontSize="small" />
+                                             </IconButton>
+                                             {renderCartLineOptions(line, exceedsStock)}
+                                        </Box>
+                                    );
+                                })}
+                                {cart.length === 0 && (
+                                    <Box className="pos-console__cart-empty">
+                                        <Typography variant="body2" color="text.secondary">{tp('Cart is empty.')}</Typography>
+                                    </Box>
+                                )}
+                            </Stack>
+                        )}
+
+                    </Paper>
+
+                    <Paper
+                        className="pos-console__checkout-mobile"
+                        component="form"
+                        onSubmit={checkout}
+                        sx={{
+                            p: 1.25,
+                            width: '100%',
+                            display: { xs: mobileStep === 'checkout' ? 'flex' : 'none', md: 'none' },
+                            flexDirection: 'column',
+                            gap: 1.25,
+                            borderTop: '2px solid',
+                            borderTopColor: 'warning.main',
+                        }}
+                    >
+                        <Stack className="pos-console__checkout-header" direction="row" justifyContent="space-between" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{tp('Final Checkout')}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {cart.length} {cart.length === 1 ? tp('item') : tp('items')} - {location?.name || tp('warehouse')}
+                                </Typography>
+                            </Box>
+                            <Chip size="small" color="primary" label={money(totals.grandTotal)} />
+                        </Stack>
+
+                        {paymentFormContent}
+
+                        <Stack className="pos-console__checkout-actions" spacing={1} sx={{ pt: 0.5, width: '100%', minWidth: 0 }}>
+                            <Button
+                                type="button"
+                                variant="outlined"
+                                fullWidth
+                                onClick={() => setMobileStep('cart')}
+                                disabled={busy}
+                                sx={{ minHeight: 46, fontWeight: 800 }}
+                            >
+                                {tp('Back to Cart')}
+                            </Button>
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                                    gap: 1,
+                                    width: '100%',
+                                    minWidth: 0,
+                                    '& .MuiButton-root': {
+                                        fontWeight: 800,
+                                        overflow: 'hidden',
+                                        textAlign: 'center',
+                                    },
+                                }}
+                            >
+                                {completeSaleButtons}
+                            </Box>
+                        </Stack>
+                    </Paper>
+                </Box>
+            </Box>
+
+            <Dialog
+                open={paymentDialogOpen}
+                onClose={() => !busy && setPaymentDialogOpen(false)}
+                maxWidth={false}
+                slotProps={{
+                    paper: {
+                        className: 'pos-console__payment-dialog',
+                        style: {
+                            '--pos-primary': theme.palette.primary.main,
+                            '--pos-primary-strong': theme.palette.primary.dark,
+                            '--pos-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                        },
+                        sx: {
+                            width: 'min(520px, calc(100vw - 24px))',
+                            maxWidth: 520,
+                            borderRadius: 1.5,
+                            border: `1px solid ${alpha(theme.palette.primary.main, 0.16)}`,
+                            boxShadow: '0 18px 48px rgba(10, 19, 24, 0.20), 0 3px 10px rgba(10, 19, 24, 0.08)',
+                            overflow: 'hidden',
+                        },
+                    },
+                }}
+            >
+                <Box className="pos-console__payment-window" component="form" onSubmit={checkout}>
+                    <DialogTitle
+                        className="pos-console__payment-titlebar"
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 1.25,
+                            minHeight: 44,
+                            height: 44,
+                            px: 1.25,
+                            py: 0,
+                            borderBottom: `1px solid ${theme.palette.divider}`,
+                            bgcolor: 'background.paper',
+                        }}
+                    >
+                        <Stack direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
+                            <Box
+                                sx={{
+                                    width: 28,
+                                    height: 28,
+                                    flex: '0 0 auto',
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                    borderRadius: 1.25,
+                                    border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                    color: 'primary.main',
+                                }}
+                            >
+                                <CheckoutIcon sx={{ fontSize: 16 }} />
+                            </Box>
+                            <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', minHeight: 28 }}>
+                                <Typography component="h2" sx={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>
+                                    {tp('Complete Sale')}
+                                </Typography>
+                            </Box>
+                        </Stack>
+                        <IconButton size="small" sx={{ width: 28, height: 28 }} onClick={() => setPaymentDialogOpen(false)} disabled={busy}>
+                            <CloseIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent className="pos-console__payment-body" sx={{ p: 1.25, bgcolor: 'grey.50' }}>
+                        {paymentFormContent}
+                    </DialogContent>
+                    <DialogActions className="pos-console__payment-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
+                        <Button type="button" variant="outlined" onClick={() => setPaymentDialogOpen(false)} disabled={busy}>{tp('Cancel')}</Button>
+                        {completeSaleButtons}
+                    </DialogActions>
+                </Box>
+            </Dialog>
+
+            <Dialog open={Boolean(receipt)} onClose={() => setReceipt(null)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {tp('Sale complete')}
+                    <IconButton size="small" onClick={() => setReceipt(null)}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={1}>
+                        <Typography variant="h6" sx={{ fontWeight: 800 }}>{receipt?.order?.receipt_number}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            {tp('Total')} {money(receipt?.order?.final_amount)}
+                        </Typography>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    {receipt?.receipt_url && <Button variant="contained" component="a" href={receipt.receipt_url}>{tp('Open receipt')}</Button>}
+                </DialogActions>
+            </Dialog>
+        </Box>
+    );
+}

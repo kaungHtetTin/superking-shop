@@ -1,0 +1,242 @@
+﻿import React from 'react';
+import { Link, router, usePage } from '@/spa/router';
+import {
+    Box,
+    Button,
+    Container,
+    Divider,
+    IconButton,
+    Paper,
+    Stack,
+    Typography,
+} from '@mui/material';
+import { Add, DeleteOutlined, Remove, ShoppingCartRounded } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import BackLink from '@/Components/User/BackLink';
+import Navbar from '@/Components/User/Navbar';
+import MobileBottomNav, { MobileBottomNavSpacer } from '@/Components/User/MobileBottomNav';
+import Footer from '@/Components/User/Footer';
+import UserBrandHead from '@/Components/User/UserBrandHead';
+import { routeWithBase, storageUrl } from '@/Utils/url';
+import { useCartStore } from '@/stores/cartStore';
+import { formatMoney } from '@/Utils/pricing';
+import {
+    eyebrowSxForTheme,
+    getMusicStoreColors,
+    sectionShellSxForTheme,
+    storefrontBackgroundSx,
+} from '@/Components/User/musicStoreDesign';
+import { usePhraseTranslation } from '@/Utils/i18n';
+
+export default function CartIndex() {
+    const theme = useTheme();
+    const musicColors = getMusicStoreColors(theme);
+    const sectionShellSx = sectionShellSxForTheme(theme);
+    const ORDER_QTY_MAX = 999;
+    const { app_base, app_url, auth } = usePage().props;
+    const t = usePhraseTranslation();
+    const items = useCartStore((s) => s.items);
+    const setQty = useCartStore((s) => s.setQty);
+    const removeItem = useCartStore((s) => s.removeItem);
+
+    const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+
+    return (
+        <Box
+            sx={{
+                minHeight: '100dvh',
+                display: 'flex',
+                flexDirection: 'column',
+                ...storefrontBackgroundSx(theme),
+            }}
+        >
+            <UserBrandHead title="Your Cart" />
+            <Navbar />
+
+            <Container maxWidth="lg" sx={{ mt: { xs: '16px', md: '24px' }, pb: { xs: '24px', md: '32px' }, flex: '1 0 auto', width: '100%' }}>
+                <BackLink href={routeWithBase('/products', app_base)}>
+                    {t('Continue shopping')}
+                </BackLink>
+
+                <Typography sx={{ ...eyebrowSxForTheme(theme), mb: 0.5 }}>
+                    {t('Your setlist')}
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, mb: 2, color: musicColors.ink }}>
+                    {t('Shopping cart')}
+                </Typography>
+
+                {items.length === 0 ? (
+                    <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '24px', sm: '28px' }, textAlign: 'center' }}>
+                        <ShoppingCartRounded sx={{ fontSize: 52, color: 'primary.main', mb: '12px' }} />
+                        <Typography variant="h6" sx={{ fontWeight: 700, mb: '8px' }}>{t('Your cart is empty')}</Typography>
+                        <Typography color="text.secondary" sx={{ mb: '16px', maxWidth: 520, mx: 'auto' }}>
+                            {t('Your cart is empty. Add an instrument, cable, accessory, or studio essential to get started.')}
+                        </Typography>
+                        <Button variant="contained" component={Link} href={routeWithBase('/products', app_base)}>
+                            {t('Browse products')}
+                        </Button>
+                    </Paper>
+                ) : (
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' }, gap: { xs: '12px', md: '16px' }, alignItems: 'start' }}>
+                        {items.map((line) => (
+                            <Paper
+                                key={line.unitId}
+                                elevation={0}
+                                sx={{
+                                    p: { xs: '12px', sm: '16px' },
+                                    borderRadius: 1.5,
+                                    border: '1px solid',
+                                    borderColor: 'rgba(36,27,24,0.09)',
+                                    bgcolor: musicColors.sheet,
+                                    gridColumn: { md: 1 },
+                                    display: 'grid',
+                                    gridTemplateColumns: {
+                                        xs: '76px minmax(0, 1fr)',
+                                        sm: '90px minmax(0, 1fr) auto',
+                                    },
+                                    gridTemplateAreas: {
+                                        xs: '"image details" "actions actions"',
+                                        sm: '"image details actions"',
+                                    },
+                                    columnGap: { xs: '12px', sm: '14px' },
+                                    rowGap: { xs: '12px', sm: 0 },
+                                    alignItems: { xs: 'start', sm: 'stretch' },
+                                }}
+                            >
+                                <Box
+                                    component="img"
+                                    src={line.imagePath ? storageUrl(line.imagePath, app_url) : routeWithBase('/images/product-placeholder.svg', app_base)}
+                                    alt=""
+                                    sx={{
+                                        gridArea: 'image',
+                                        width: { xs: 76, sm: 90 },
+                                        aspectRatio: '3 / 4',
+                                        height: 'auto',
+                                        objectFit: 'cover',
+                                        borderRadius: 1,
+                                        alignSelf: 'flex-start',
+                                    }}
+                                />
+                                <Box sx={{ gridArea: 'details', minWidth: 0 }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.3, mb: '2px' }}>
+                                        {line.name}
+                                    </Typography>
+                                    <Stack spacing="2px" sx={{ mb: '4px', minWidth: 0 }}>
+                                        <Typography component="div" variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+                                            {line.unitName}
+                                        </Typography>
+                                        {line.productCode && (
+                                            <Typography component="div" variant="caption" color="text.secondary" sx={{ lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+                                                {t('Product code')}: {line.productCode}
+                                            </Typography>
+                                        )}
+                                        {line.isPreorder && (
+                                            <Typography component="div" variant="caption" color="warning.main" sx={{ fontWeight: 700 }}>
+                                                {t('Pre-order')}
+                                            </Typography>
+                                        )}
+                                        {line.flashSale && (
+                                            <Typography component="div" variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+                                                {t('Flash Sale')}
+                                            </Typography>
+                                        )}
+                                    </Stack>
+                                    <Typography variant="body2" color="primary" sx={{ fontWeight: 700, mt: '4px' }}>
+                                        {formatMoney(line.price)} {t('each')}
+                                    </Typography>
+                                    {line.flashSale && line.originalPrice && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
+                                            {formatMoney(line.originalPrice)}
+                                        </Typography>
+                                    )}
+                                </Box>
+                                <Box
+                                    sx={{
+                                        gridArea: 'actions',
+                                        display: 'flex',
+                                        flexDirection: { xs: 'row', sm: 'column' },
+                                        alignItems: { xs: 'center', sm: 'flex-end' },
+                                        justifyContent: { xs: 'space-between', sm: 'flex-end' },
+                                        gap: { xs: '8px', sm: '6px' },
+                                        minWidth: 0,
+                                        width: { xs: '100%', sm: 'auto' },
+                                    }}
+                                >
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', minWidth: 0 }}>
+                                        {formatMoney(line.price * line.qty)}
+                                    </Typography>
+                                    <Stack
+                                        direction="row"
+                                        alignItems="center"
+                                        spacing="4px"
+                                        justifyContent="flex-end"
+                                        sx={{ width: 'auto', flexShrink: 0 }}
+                                    >
+                                        <Box
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                borderRadius: 1,
+                                                bgcolor: 'background.paper',
+                                            }}
+                                        >
+                                            <IconButton aria-label={t('Decrease quantity')} size="small" sx={{ width: 44, height: 44 }} onClick={() => setQty(line.unitId, line.qty - 1)} disabled={line.qty <= 1}>
+                                                <Remove fontSize="small" />
+                                            </IconButton>
+                                            <Typography aria-live="polite" sx={{ px: '4px', minWidth: 24, textAlign: 'center', fontWeight: 700, fontSize: '0.875rem' }}>{line.qty}</Typography>
+                                            <IconButton
+                                                aria-label={t('Increase quantity')}
+                                                size="small"
+                                                sx={{ width: 44, height: 44 }}
+                                                onClick={() => setQty(line.unitId, line.qty + 1)}
+                                                disabled={line.qty >= ORDER_QTY_MAX}
+                                            >
+                                                <Add fontSize="small" />
+                                            </IconButton>
+                                        </Box>
+                                        <IconButton size="small" color="error" sx={{ width: 44, height: 44 }} onClick={() => removeItem(line.unitId)} aria-label={t('Remove')}>
+                                            <DeleteOutlined />
+                                        </IconButton>
+                                    </Stack>
+                                </Box>
+                            </Paper>
+                        ))}
+
+                        <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '14px', sm: '20px' }, gridColumn: { md: 2 }, gridRow: { md: '1 / span 99' }, position: 'sticky', top: { md: 112 }, bottom: { xs: 72, md: 'auto' }, zIndex: 10, backdropFilter: { xs: 'blur(14px)', md: 'none' }, boxShadow: { xs: '0 -8px 24px rgba(36,27,24,.10)', md: sectionShellSx.boxShadow } }}>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '12px', alignItems: 'center' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                    {t('Subtotal')}
+                                </Typography>
+                                <Typography variant="h6" sx={{ fontWeight: 700, textAlign: 'right', overflowWrap: 'normal' }}>
+                                    {formatMoney(subtotal)}
+                                </Typography>
+                            </Box>
+                            <Divider sx={{ my: 2 }} />
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                size="large"
+                                sx={{ py: 1.5, fontWeight: 700, borderRadius: 2 }}
+                                onClick={() => {
+                                    if (!auth?.user) {
+                                        router.visit(routeWithBase('/login', app_base));
+                                        return;
+                                    }
+                                    router.visit(routeWithBase('/checkout', app_base));
+                                }}
+                            >
+                                {t(auth?.user ? 'Proceed to checkout' : 'Log in to checkout')}
+                            </Button>
+                        </Paper>
+                    </Box>
+                )}
+            </Container>
+
+            <Footer />
+            <MobileBottomNavSpacer />
+            <MobileBottomNav />
+        </Box>
+    );
+}

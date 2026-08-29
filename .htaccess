@@ -1,0 +1,14 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # If request is already under /public, let Laravel's public/.htaccess handle it.
+    RewriteRule ^public/ - [L]
+
+    # Serve existing root files/directories directly.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Forward everything else to /public (shared-hosting style).
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
