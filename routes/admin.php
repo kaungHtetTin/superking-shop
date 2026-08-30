@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BlogController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CreditReportController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\FinanceController;
@@ -145,11 +146,20 @@ Route::middleware(['auth', 'admin'])->group(function () {
     });
 
     Route::middleware('admin.permission:view_customers')->group(function () {
+        Route::get('/credit', [CreditReportController::class, 'index'])->middleware('admin.permission:credit.manage')->name('credit.index');
+        Route::get('/credit/export', [CreditReportController::class, 'export'])->middleware('admin.permission:credit.manage')->name('credit.export');
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+        Route::get('/customers/{customer}/credit-statement', [CustomerController::class, 'creditStatement'])->middleware('admin.permission:credit.manage')->name('customers.credit-statement');
         Route::post('/customers/{customer}/loyalty-adjustments', [CustomerController::class, 'adjustLoyalty'])
             ->middleware('super_admin')
             ->name('customers.loyalty-adjustments.store');
+        Route::patch('/customers/{customer}/credit-settings', [CustomerController::class, 'updateCreditSettings'])
+            ->middleware('admin.permission:credit.manage')
+            ->name('customers.credit-settings.update');
+        Route::post('/customers/{customer}/credit-payments', [CustomerController::class, 'recordCreditPayment'])
+            ->middleware('admin.permission:credit.manage')
+            ->name('customers.credit-payments.store');
     });
 
     Route::middleware('admin.any_permission:view_reports,reports.sales,reports.inventory')->group(function () {

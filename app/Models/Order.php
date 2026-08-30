@@ -39,6 +39,9 @@ class Order extends Model
         'final_amount',
         'status',
         'payment_status',
+        'credit_due_date',
+        'credit_amount',
+        'paid_amount',
         'payment_method',
         'payment_method_id',
         'payment_method_snapshot',
@@ -66,6 +69,9 @@ class Order extends Model
         'points_restored_at' => 'datetime',
         'payment_reviewed_at' => 'datetime',
         'status_updated_at' => 'datetime',
+        'credit_due_date' => 'date',
+        'credit_amount' => 'decimal:2',
+        'paid_amount' => 'decimal:2',
         'payment_method_snapshot' => 'array',
         'pos_tender_summary' => 'array',
     ];
@@ -122,6 +128,11 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CustomerCreditTransaction::class);
     }
 
     public function reservations(): HasMany

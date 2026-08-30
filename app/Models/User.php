@@ -37,6 +37,9 @@ class User extends Authenticatable
         'status',
         'permissions',
         'loyalty_points',
+        'credit_limit',
+        'credit_terms_days',
+        'credit_status',
         'tier',
     ];
 
@@ -58,6 +61,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'permissions' => 'array',
+        'credit_limit' => 'decimal:2',
     ];
 
     public function scopeAdminStaff(Builder $query): Builder
@@ -187,6 +191,11 @@ class User extends Authenticatable
     public function posShifts()
     {
         return $this->hasMany(PosShift::class, 'cashier_id');
+    }
+
+    public function creditTransactions()
+    {
+        return $this->hasMany(CustomerCreditTransaction::class, 'customer_id');
     }
 
     public function reviews()

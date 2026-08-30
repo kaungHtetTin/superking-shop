@@ -51,6 +51,13 @@ export default function PosReceipt({ order }) {
                     <span>{t('Discount')}</span><strong>-{formatMoney(order.discount_amount || 0)}</strong>
                     <span>{t('Total')}</span><strong>{formatMoney(order.final_amount)}</strong>
                     <span>{t('Tender')}</span><strong>{t(order.pos_tender_summary?.tender_type || order.payment_method)}</strong>
+                    {Number(order.credit_amount || 0) > 0 && (
+                        <>
+                            <span>{t('Paid now')}</span><strong>{formatMoney(order.paid_amount || 0)}</strong>
+                            <span>{t('Credit balance')}</span><strong>{formatMoney(Math.max(0, Number(order.final_amount) - Number(order.paid_amount || 0)))}</strong>
+                            <span>{t('Due date')}</span><strong>{order.credit_due_date || '-'}</strong>
+                        </>
+                    )}
                 </div>
                 <footer>
                     {t('Served by')} {order.server?.name || order.shift?.cashier?.name || t('Staff')}

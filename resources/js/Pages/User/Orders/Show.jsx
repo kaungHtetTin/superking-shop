@@ -14,7 +14,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Close, CreditScoreOutlined, EventOutlined } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import BackLink from '@/Components/User/BackLink';
 import Navbar from '@/Components/User/Navbar';
@@ -43,6 +43,8 @@ const orderStatusLabels = {
 };
 
 const paymentStatusColor = {
+    unpaid: 'error',
+    partially_paid: 'warning',
     pending_review: 'warning',
     paid: 'success',
     rejected: 'error',
@@ -56,6 +58,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
 
     const paymentLabel = paymentStatusLabels[order.payment_status] || order.payment_status;
     const proofUrl = order.payment_proof_url || storageUrl(order.payment_proof_path, app_url);
+    const creditBalance = Math.max(0, Number(order.final_amount) - Number(order.paid_amount || 0));
 
     return (
         <Box className="user-storefront" sx={{ ...storefrontBackgroundSx(theme), minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
@@ -155,6 +158,20 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                         </>
                     )}
                 </Paper>
+
+                {Number(order.credit_amount) > 0 && (
+                    <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2.5, border: '1px solid', borderColor: creditBalance > 0 ? 'warning.light' : 'success.light', mb: 2, bgcolor: creditBalance > 0 ? 'rgba(237,108,2,.035)' : 'rgba(46,125,50,.035)' }}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
+                            <Stack direction="row" spacing={1.25}>
+                                <Box sx={{ width: 42, height: 42, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: creditBalance > 0 ? 'warning.light' : 'success.light', color: creditBalance > 0 ? 'warning.dark' : 'success.dark' }}><CreditScoreOutlined /></Box>
+                                <Box><Typography sx={{ fontWeight: 800 }}>{t('Credit payment')}</Typography><Typography variant="body2" color="text.secondary">{t('Paid')} {formatMoney(order.paid_amount || 0)} · {t('Total')} {formatMoney(order.final_amount)}</Typography></Box>
+                            </Stack>
+                            <Box sx={{ textAlign: { sm: 'right' } }}><Typography variant="caption" color="text.secondary">{t('Balance due')}</Typography><Typography variant="h6" sx={{ fontWeight: 900, color: creditBalance > 0 ? 'warning.dark' : 'success.main' }}>{formatMoney(creditBalance)}</Typography></Box>
+                        </Stack>
+                        {creditBalance > 0 && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1.5 }}><EventOutlined sx={{ fontSize: 18, color: 'warning.dark' }} /><Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Due date')}: {order.credit_due_date || '-'}</Typography></Stack>}
+                        <Button component={Link} href={routeWithBase('/my-credit', app_base)} size="small" sx={{ mt: 1 }}>{t('View my credit history')} →</Button>
+                    </Paper>
+                )}
 
                 <Paper elevation={0} sx={{ p: { xs: '16px', sm: '20px' }, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>

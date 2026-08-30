@@ -5,6 +5,7 @@ use App\Http\Controllers\User\BlogController;
 use App\Http\Controllers\User\CategoryController;
 use App\Http\Controllers\User\CheckoutController;
 use App\Http\Controllers\User\ChatController;
+use App\Http\Controllers\User\CreditController;
 use App\Http\Controllers\User\GuideController;
 use App\Http\Controllers\User\HomeController;
 use App\Http\Controllers\User\OrderController;
@@ -68,6 +69,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/my-credit', [CreditController::class, 'index'])->name('credit.index');
+    Route::get('/my-credit/statement', [CreditController::class, 'statement'])->name('credit.statement');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

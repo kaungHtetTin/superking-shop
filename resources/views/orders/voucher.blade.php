@@ -360,6 +360,20 @@
                 <span>Total</span>
                 <strong>{{ $formatMoney($order->final_amount) }}</strong>
             </div>
+            @if($order->credit_amount > 0)
+                <div class="detail-row">
+                    <span>Paid</span>
+                    <strong>{{ $formatMoney($order->paid_amount) }}</strong>
+                </div>
+                <div class="detail-row total-final">
+                    <span>Credit balance</span>
+                    <strong>{{ $formatMoney(max(0, $order->final_amount - $order->paid_amount)) }}</strong>
+                </div>
+                <div class="detail-row">
+                    <span>Due date</span>
+                    <strong>{{ $order->credit_due_date?->format('Y-m-d') ?: '-' }}</strong>
+                </div>
+            @endif
         </section>
 
         @if($order->order_notes)

@@ -14,6 +14,7 @@ import {
 import {
     ArticleOutlined,
     ChatBubbleOutlined,
+    CreditScoreOutlined,
     FavoriteBorder,
     HelpOutlineOutlined,
     KeyboardArrowDown,
@@ -215,6 +216,13 @@ export default function ProfileMenu() {
                             icon={<ReceiptLong fontSize="small" />}
                             label={t('storefront.my_orders', 'My orders')}
                             secondary={t('storefront.orders_hint', 'Track payments & delivery')}
+                            onClose={handleClose}
+                        />
+                        <MenuLinkItem
+                            href={routeWithBase('/my-credit', app_base)}
+                            icon={<CreditScoreOutlined fontSize="small" />}
+                            label={t('My credit')}
+                            secondary={t('Balance, due dates & payment history')}
                             onClose={handleClose}
                         />
                         <MenuLinkItem

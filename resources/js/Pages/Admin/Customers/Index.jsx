@@ -8,12 +8,12 @@ import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
 
-export default function CustomersIndex({ customers, filters, tiers }) {
+export default function CustomersIndex({ customers, filters, tiers, creditStats = {} }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const [search, setSearch] = useState(filters.q ?? '');
     const applyFilters = (patch) => router.get(routeWithBase('/admin/customers', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
-    const hasActiveFilters = Boolean(filters.q || filters.tier);
+    const hasActiveFilters = Boolean(filters.q || filters.tier || filters.credit_status || filters.credit);
     const dateOnly = (value) => value ? String(value).split('T')[0] : '';
     const handleSearch = (e) => {
         e.preventDefault();
@@ -23,6 +23,12 @@ export default function CustomersIndex({ customers, filters, tiers }) {
     return (
         <AdminLayout title={t('Customers')} eyebrow={t('Shopper management')}>
             <Head title={t('Customers')} />
+            <div className="metrics-grid four">
+                <article className="metric-card glass"><small>{t('Credit outstanding')}</small><strong>{formatMoney(creditStats.outstanding)}</strong><p>{t('Total receivables')}</p></article>
+                <article className="metric-card glass"><small>{t('Overdue credit')}</small><strong>{formatMoney(creditStats.overdue)}</strong><p>{t('Past due balance')}</p></article>
+                <article className="metric-card glass"><small>{t('Active credit accounts')}</small><strong>{creditStats.active_accounts || 0}</strong><p>{t('Approved customers')}</p></article>
+                <article className="metric-card glass"><small>{t('Suspended accounts')}</small><strong>{creditStats.suspended_accounts || 0}</strong><p>{t('Credit blocked')}</p></article>
+            </div>
             <section className="panel glass">
                 <PanelHeading eyebrow={t('Customer base')} title={t('Registered shoppers')} />
                 <form className="filter-toolbar customer-filter" onSubmit={handleSearch}>
@@ -33,6 +39,17 @@ export default function CustomersIndex({ customers, filters, tiers }) {
                     <select value={filters.tier || ''} onChange={(e) => applyFilters({ tier: e.target.value || undefined })}>
                         <option value="">{t('All tiers')}</option>
                         {tiers.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
+                    </select>
+                    <select value={filters.credit || ''} onChange={(e) => applyFilters({ credit: e.target.value || undefined })}>
+                        <option value="">{t('All balances')}</option>
+                        <option value="outstanding">{t('Outstanding credit')}</option>
+                        <option value="overdue">{t('Overdue credit')}</option>
+                    </select>
+                    <select value={filters.credit_status || ''} onChange={(e) => applyFilters({ credit_status: e.target.value || undefined })}>
+                        <option value="">{t('All credit statuses')}</option>
+                        <option value="active">{t('Active')}</option>
+                        <option value="suspended">{t('Suspended')}</option>
+                        <option value="disabled">{t('Disabled')}</option>
                     </select>
                     <button type="submit" className="btn primary">
                         {t('Search')}
@@ -60,13 +77,14 @@ export default function CustomersIndex({ customers, filters, tiers }) {
                                 <th>{t('Points')}</th>
                                 <th>{t('Orders')}</th>
                                 <th>{t('Paid revenue')}</th>
+                                <th>{t('Credit balance')}</th>
                                 <th>{t('Joined')}</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {customers.data.length === 0 ? (
-                                <tr><td colSpan={7}><span className="muted">{t('No customers found.')}</span></td></tr>
+                                <tr><td colSpan={8}><span className="muted">{t('No customers found.')}</span></td></tr>
                             ) : customers.data.map((customer) => (
                                 <tr key={customer.id}>
                                     <td>
@@ -82,6 +100,10 @@ export default function CustomersIndex({ customers, filters, tiers }) {
                                     <td>{customer.loyalty_points}</td>
                                     <td>{customer.orders_count}</td>
                                     <td>{formatMoney(customer.paid_revenue)}</td>
+                                    <td>
+                                        <strong>{formatMoney(customer.credit_balance)}</strong>
+                                        <small>{t(customer.credit_status || 'disabled')} · {t('Limit')} {formatMoney(customer.credit_limit)}</small>
+                                    </td>
                                     <td><small>{dateOnly(customer.created_at)}</small></td>
                                     <td>
                                         <Link href={routeWithBase(`/admin/customers/${customer.id}`, app_base)} className="icon-btn small">

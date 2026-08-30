@@ -169,7 +169,7 @@ class OrderController extends Controller
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $hadPaidStock = $order->payment_status === 'paid';
+        $hadPaidStock = $order->payment_status === 'paid' || (float) $order->credit_amount > 0;
 
         try {
             $orderManagementService->cancelOrder(

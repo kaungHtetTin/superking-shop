@@ -22,7 +22,8 @@ class OrderManagementService
         LoyaltyService $loyaltyService,
         AuditLogService $auditLogService,
         private InventoryService $inventoryService,
-        private StockReservationService $stockReservations
+        private StockReservationService $stockReservations,
+        private CustomerCreditService $creditService
     )
     {
         $this->loyaltyService = $loyaltyService;
@@ -88,7 +89,7 @@ class OrderManagementService
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             if ($newStatus === 'cancelled') {
-                return $this->cancelOrder($order, null, restoreStock: $order->payment_status === 'paid');
+                return $this->cancelOrder($order, null, restoreStock: $order->payment_status === 'paid' || (float) $order->credit_amount > 0);
             }
 
             $order->forceFill([
@@ -121,11 +122,17 @@ class OrderManagementService
 
         return DB::transaction(function () use ($order, $actor, $reason, $restoreStock, $reservationStatus) {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
-            $order->load(['location', 'items.product', 'items.unit', 'items.focUnit']);
+            $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'user', 'server']);
 
             if ($order->status === 'cancelled') {
                 throw ValidationException::withMessages([
                     'order' => 'Order is already cancelled.',
+                ]);
+            }
+
+            if ((float) $order->credit_amount > 0 && (float) $order->paid_amount > 0) {
+                throw ValidationException::withMessages([
+                    'order' => 'This credit order has collected payments. Refund those payments before cancelling it.',
                 ]);
             }
 
@@ -138,7 +145,7 @@ class OrderManagementService
                 );
             }
 
-            if ($restoreStock && $order->payment_status === 'paid') {
+            if ($restoreStock && ($order->payment_status === 'paid' || (float) $order->credit_amount > 0)) {
                 if (! $order->location) {
                     throw ValidationException::withMessages(['order' => 'This order has no inventory location.']);
                 }
@@ -171,6 +178,18 @@ class OrderManagementService
                 }
             }
 
+
+            $creditWasReversed = false;
+            if ((float) $order->credit_amount > 0 && $order->user) {
+                $this->creditService->reverseOrderBalance(
+                    $order->user,
+                    $order,
+                    $actor ?: $order->server ?: $order->user,
+                    $reason ?: 'Credit order cancelled'
+                );
+                $creditWasReversed = true;
+            }
+
             foreach ($order->items as $item) {
                 $flashSaleItemId = $item->promotion_snapshot['flash_sale_item_id'] ?? null;
                 if ($flashSaleItemId) {
@@ -185,6 +204,9 @@ class OrderManagementService
                 'status' => 'cancelled',
                 'status_updated_at' => now(),
             ];
+            if ($creditWasReversed) {
+                $updates['payment_status'] = 'cancelled';
+            }
 
             if ($order->payment_status === 'pending_review') {
                 $updates['payment_status'] = 'rejected';
@@ -223,6 +245,11 @@ class OrderManagementService
 
     public function deleteOrderAsReturn(Order $order, ?User $actor = null, ?string $reason = null): void
     {
+        if ((float) $order->credit_amount > 0) {
+            throw ValidationException::withMessages([
+                'order' => 'Credit orders must be cancelled and retained for ledger audit; they cannot be deleted.',
+            ]);
+        }
         DB::transaction(function () use ($order, $actor, $reason) {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'returns', 'user']);

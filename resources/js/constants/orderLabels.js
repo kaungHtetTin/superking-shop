@@ -9,12 +9,16 @@ export const orderStatusColor = {
 export const paymentStatusColor = {
     pending_review: 'warning',
     paid: 'success',
+    partially_paid: 'warning',
+    unpaid: 'error',
     rejected: 'error',
 };
 
 export const paymentLabels = {
     pending_review: 'Awaiting review',
     paid: 'Confirmed',
+    partially_paid: 'Partially paid',
+    unpaid: 'Credit outstanding',
     rejected: 'Rejected',
 };
 

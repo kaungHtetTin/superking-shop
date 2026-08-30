@@ -11,6 +11,7 @@ use App\Models\ProductUnit;
 use App\Models\PosShift;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\CustomerCreditService;
 use App\Services\Inventory\InventoryService;
 use App\Services\LoyaltyService;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 
 class PosCheckoutService
 {
-    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService)
+    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService, private CustomerCreditService $creditService)
     {
     }
 
@@ -111,13 +112,36 @@ class PosCheckoutService
             $final = round(max(0, $subtotal - $discount), 2);
             $tenderType = $payload['tender_type'] ?? 'cash';
             $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
-            if ($amountTendered < $final) {
+            $isCredit = $tenderType === 'credit';
+            $customer = null;
+            $creditAmount = 0.0;
+            $depositMethod = $payload['credit_deposit_method'] ?? 'cash';
+
+            if ($isCredit) {
+                if (! $cashier->hasAdminPermission('credit.manage')) {
+                    throw ValidationException::withMessages(['tender_type' => 'You cannot create credit sales.']);
+                }
+                if (empty($payload['customer_id'])) {
+                    throw ValidationException::withMessages(['customer_id' => 'Choose a registered customer for a credit sale.']);
+                }
+                $customer = User::query()->lockForUpdate()->findOrFail((int) $payload['customer_id']);
+                if ($amountTendered < 0 || $amountTendered >= $final) {
+                    throw ValidationException::withMessages(['amount_tendered' => 'Credit deposit must be zero or less than the sale total.']);
+                }
+                if (! in_array($depositMethod, ['cash', 'card', 'mobile'], true)) {
+                    throw ValidationException::withMessages(['credit_deposit_method' => 'Choose a valid deposit payment method.']);
+                }
+                $creditAmount = round($final - $amountTendered, 2);
+                $this->creditService->assertCanBorrow($customer, $creditAmount);
+            } elseif ($amountTendered < $final) {
                 throw ValidationException::withMessages(['amount_tendered' => 'Amount tendered must cover the sale total.']);
             }
-            if ($tenderType !== 'cash' && abs($amountTendered - $final) > 0.009) {
+            if (! $isCredit && $tenderType !== 'cash' && abs($amountTendered - $final) > 0.009) {
                 throw ValidationException::withMessages(['amount_tendered' => 'Card and mobile payments must equal the sale total.']);
             }
-            $changeDue = $tenderType === 'cash' ? round($amountTendered - $final, 2) : 0.0;
+            $changeDue = ! $isCredit && $tenderType === 'cash' ? round($amountTendered - $final, 2) : 0.0;
+            $paymentStatus = $isCredit ? ($amountTendered > 0 ? 'partially_paid' : 'unpaid') : 'paid';
+            $dueDate = $isCredit ? now()->addDays(max(1, (int) $customer->credit_terms_days))->toDateString() : null;
             $order = Order::create([
                 'user_id' => $payload['customer_id'] ?? null,
                 'order_number' => $this->number('POS'),
@@ -136,9 +160,12 @@ class PosCheckoutService
                 'shipping_fee' => 0,
                 'final_amount' => $final,
                 'status' => 'delivered',
-                'payment_status' => 'paid',
+                'payment_status' => $paymentStatus,
+                'credit_due_date' => $dueDate,
+                'credit_amount' => $creditAmount,
+                'paid_amount' => $isCredit ? $amountTendered : $final,
                 'payment_method' => $tenderType,
-                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue],
+                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue, 'credit_amount' => $creditAmount, 'deposit_method' => $isCredit ? $depositMethod : null],
                 'receiver_name' => $payload['customer_name'] ?? 'Walk-in customer',
                 'receiver_phone' => $payload['customer_phone'] ?? null,
                 'order_notes' => $payload['notes'] ?? null,
@@ -169,46 +196,60 @@ class PosCheckoutService
                 }
             }
 
-            Payment::create([
+            $payment = null;
+            $paidNow = $isCredit ? $amountTendered : $final;
+            $actualTender = $isCredit ? $depositMethod : $tenderType;
+            if ($paidNow > 0) {
+                $payment = Payment::create([
                 'order_id' => $order->id,
                 'register_id' => $shift->pos_register_id,
                 'shift_id' => $shift->id,
                 'received_by' => $cashier->id,
                 'transaction_id' => $this->paymentTransactionId(),
-                'amount' => $final,
+                'amount' => $paidNow,
                 'amount_tendered' => $amountTendered,
                 'change_due' => $changeDue,
-                'method' => $tenderType,
-                'tender_type' => $tenderType,
+                'method' => $actualTender,
+                'tender_type' => $actualTender,
                 'status' => 'paid',
-                'payment_details' => $payload['payment_details'] ?? [],
-            ]);
-            if ($tenderType === 'cash') {
-                $shift->increment('cash_sales', $final);
+                'payment_details' => array_merge($payload['payment_details'] ?? [], $isCredit ? ['credit_deposit' => true] : []),
+                ]);
+            }
+            if ($isCredit) {
+                $this->creditService->recordSale($customer, $order, $creditAmount, $cashier);
+            }
+            if ($actualTender === 'cash' && $paidNow > 0) {
+                $shift->increment('cash_sales', $paidNow);
                 $shift->update([
                     'expected_cash' => round((float) $shift->opening_cash + (float) $shift->cash_sales - (float) $shift->cash_refunds, 2),
                 ]);
             }
-            FinancialEntry::create([
+            if ($paidNow > 0) {
+                FinancialEntry::create([
                 'recorded_by' => $cashier->id,
                 'type' => 'income',
                 'category' => FinancialEntry::CATEGORY_POS_SALE,
                 'title' => "POS sale {$order->receipt_number}",
-                'amount' => $final,
+                'amount' => $paidNow,
                 'entry_date' => now()->toDateString(),
-                'payment_method' => $tenderType,
+                'payment_method' => $actualTender,
                 'reference' => $order->receipt_number,
                 'status' => 'approved',
                 'notes' => "Auto-created from POS sale in {$location->name}.",
-            ]);
+                ]);
+            }
             $this->auditLogService->record('pos.sale.completed', $order, [
                 'receipt_number' => $order->receipt_number,
                 'location_id' => $location->id,
                 'total' => $final,
+                'paid_now' => $paidNow,
+                'credit_amount' => $creditAmount,
                 'foc_line_count' => collect($items)->where('focQuantity', '>', 0)->count(),
                 'foc_base_quantity' => round((float) collect($items)->sum('focBaseQuantity'), 4),
             ]);
-            $this->loyaltyService->awardForPaidOrder($order->fresh('user'));
+            if (! $isCredit) {
+                $this->loyaltyService->awardForPaidOrder($order->fresh('user'));
+            }
 
             return $order->fresh(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'server', 'user']);
         }, 3);

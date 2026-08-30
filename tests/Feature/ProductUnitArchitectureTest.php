@@ -17,6 +17,7 @@ use App\Services\FlashSalePricingService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Inventory\StorefrontInventoryService;
 use App\Services\POS\PosCheckoutService;
+use App\Services\OrderManagementService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -239,6 +240,168 @@ class ProductUnitArchitectureTest extends TestCase
             'tender_type' => 'cash',
             'amount_tendered' => 10,
         ], $cashier);
+    }
+
+    public function test_pos_credit_sale_records_deposit_balance_due_date_and_ledger(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create([
+            'role' => User::CUSTOMER_ROLE,
+            'credit_status' => 'active',
+            'credit_limit' => 100,
+            'credit_terms_days' => 14,
+        ]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-sale-stock');
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 2,
+            'credit_deposit_method' => 'cash',
+        ], $cashier);
+
+        $this->assertSame('partially_paid', $order->payment_status);
+        $this->assertSame(2.0, (float) $order->paid_amount);
+        $this->assertSame(8.0, (float) $order->credit_amount);
+        $this->assertSame(now()->addDays(14)->toDateString(), $order->credit_due_date->toDateString());
+        $this->assertSame(2.0, (float) $order->payments->sole()->amount);
+        $this->assertSame(2.0, (float) $shift->fresh()->cash_sales);
+        $this->assertDatabaseHas('customer_credit_transactions', [
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'type' => 'sale',
+            'amount' => 8,
+            'balance_after' => 8,
+        ]);
+    }
+
+    public function test_pos_credit_sale_cannot_exceed_customer_limit(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create([
+            'role' => User::CUSTOMER_ROLE,
+            'credit_status' => 'active',
+            'credit_limit' => 5,
+        ]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-limit-stock');
+
+        $this->expectException(ValidationException::class);
+        app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 0,
+        ], $cashier);
+    }
+
+    public function test_credit_repayment_updates_order_ledger_and_cash_shift(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $cashier->roles()->sync([\App\Models\Role::where('name', 'super_admin')->value('id')]);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-payment-stock');
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 2,
+            'credit_deposit_method' => 'cash',
+        ], $cashier);
+
+        $this->post('/admin/login', ['email' => $cashier->email, 'password' => 'password'])->assertRedirect();
+
+        $response = $this->post("/admin/customers/{$customer->id}/credit-payments", [
+            'order_id' => $order->id,
+            'amount' => 3,
+            'tender_type' => 'cash',
+            'shift_id' => $shift->id,
+            'notes' => 'Part payment',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('success', 'Credit payment recorded.');
+        $this->assertSame(5.0, (float) $order->fresh()->paid_amount);
+        $this->assertSame('partially_paid', $order->fresh()->payment_status);
+        $this->assertSame(5.0, (float) $customer->creditTransactions()->latest()->first()->balance_after);
+        $this->assertSame(5.0, (float) $shift->fresh()->cash_sales);
+    }
+
+    public function test_account_credit_payment_is_allocated_to_oldest_due_invoices_first(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $cashier->roles()->sync([\App\Models\Role::where('name', 'super_admin')->value('id')]);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-fifo-stock');
+
+        $first = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id, 'shift_id' => $shift->id, 'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit', 'amount_tendered' => 0,
+        ], $cashier);
+        $second = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id, 'shift_id' => $shift->id, 'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit', 'amount_tendered' => 0,
+        ], $cashier);
+        $first->update(['credit_due_date' => now()->subDay()]);
+        $second->update(['credit_due_date' => now()->addDay()]);
+
+        $this->post('/admin/login', ['email' => $cashier->email, 'password' => 'password'])->assertRedirect();
+        $this->post("/admin/customers/{$customer->id}/credit-payments", [
+            'order_id' => '', 'amount' => 15, 'tender_type' => 'mobile', 'reference' => 'FIFO-TEST',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('paid', $first->fresh()->payment_status);
+        $this->assertSame(10.0, (float) $first->fresh()->paid_amount);
+        $this->assertSame('partially_paid', $second->fresh()->payment_status);
+        $this->assertSame(5.0, (float) $second->fresh()->paid_amount);
+        $this->assertDatabaseHas('payments', ['order_id' => $first->id, 'transaction_id' => 'FIFO-TEST-1', 'amount' => 10]);
+        $this->assertDatabaseHas('payments', ['order_id' => $second->id, 'transaction_id' => 'FIFO-TEST-2', 'amount' => 5]);
+    }
+
+    public function test_unpaid_credit_order_cancellation_reverses_debt_and_restores_stock(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-cancel-stock');
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 0,
+        ], $cashier);
+
+        app(OrderManagementService::class)->cancelOrder($order, $cashier, 'Customer cancelled', restoreStock: true);
+
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('cancelled', $order->fresh()->payment_status);
+        $this->assertSame(0.0, (float) $customer->creditTransactions()->latest()->first()->balance_after);
+        $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
     }
 
     /** @return array{Product, ProductUnit, ProductUnit} */

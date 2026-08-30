@@ -169,6 +169,9 @@ function AdminChrome({ children, mainClassName = '' }) {
                               },
                           ]
                         : []),
+                    ...(can('credit.manage')
+                        ? [{ label: t('Credit accounts'), href: routeWithBase('/admin/credit', app_base), icon: 'wallet' }]
+                        : []),
                     ...(can('manage_finance')
                         ? [
                               {

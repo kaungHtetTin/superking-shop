@@ -1,0 +1,1 @@
+const e={pending_review:"Awaiting review",paid:"Confirmed",partially_paid:"Partially paid",unpaid:"Credit outstanding",rejected:"Rejected"},i={pending:"Pending",processing:"Processing",shipped:"Shipped",delivered:"Delivered",cancelled:"Cancelled"},d=["pending","processing","shipped","delivered"];export{d as f,i as o,e as p};

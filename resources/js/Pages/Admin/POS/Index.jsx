@@ -105,6 +105,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [activeShift, setActiveShift] = useState(firstRegister?.shifts?.[0] || null);
     const [openingCash, setOpeningCash] = useState('0');
     const [amountTendered, setAmountTendered] = useState('');
+    const [creditDepositMethod, setCreditDepositMethod] = useState('cash');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [errors, setErrors] = useState({});
@@ -119,7 +120,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
     const locationRegisters = registers.filter((register) => Number(register.location_id) === Number(locationId));
-    const paymentMethods = ['cash', 'card', 'mobile'];
+    const paymentMethods = ['cash', 'card', 'mobile', ...(can.credit ? ['credit'] : [])];
     const api = async (url, options = {}) => {
         setErrors({});
         try {
@@ -598,6 +599,14 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
         return { subtotal, discount, grandTotal };
     }, [cart, discountType, discountValue]);
+    const creditDeposit = tenderType === 'credit' ? Math.max(0, Number(amountTendered || 0)) : 0;
+    const creditAmount = tenderType === 'credit' ? Math.max(0, totals.grandTotal - creditDeposit) : 0;
+    const creditUnavailable = tenderType === 'credit' && (
+        !selectedCustomer
+        || selectedCustomer.credit_status !== 'active'
+        || creditAmount <= 0
+        || creditAmount > Number(selectedCustomer.available_credit || 0) + 0.009
+    );
 
     const hasStockIssue = useMemo(() => {
         const usageByProduct = new Map();
@@ -692,7 +701,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     discount_type: discountType || null,
                     discount_value: discountValue || 0,
                     tender_type: tenderType,
-                    amount_tendered: tenderType === 'cash' ? Number(amountTendered || 0) : totals.grandTotal,
+                    amount_tendered: ['cash', 'credit'].includes(tenderType) ? Number(amountTendered || 0) : totals.grandTotal,
+                    credit_deposit_method: tenderType === 'credit' ? creditDepositMethod : null,
                 },
             });
             if (checkoutIntentRef.current === 'print' && data.receipt_url) {
@@ -774,6 +784,11 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             <Stack>
                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.name}</Typography>
                                 <Typography variant="caption" color="text.secondary">{[option.phone, option.email].filter(Boolean).join(' / ') || tp('No contact')}</Typography>
+                                {option.credit_status === 'active' && (
+                                    <Typography variant="caption" color="primary.main">
+                                        {tp('Available credit')}: {money(option.available_credit)}
+                                    </Typography>
+                                )}
                             </Stack>
                         </li>
                     )}
@@ -838,7 +853,11 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     exclusive
                     fullWidth
                     value={tenderType}
-                    onChange={(event, next) => next && setTenderType(next)}
+                    onChange={(event, next) => {
+                        if (!next) return;
+                        setTenderType(next);
+                        setAmountTendered(next === 'credit' ? '0' : String(totals.grandTotal));
+                    }}
                 >
                     {paymentMethods.map((method) => (
                         <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{tp(method)}</ToggleButton>
@@ -860,6 +879,37 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     fullWidth
                 />
             )}
+            {tenderType === 'credit' && (
+                <Stack spacing={1}>
+                    {!selectedCustomer && <Alert severity="warning">{tp('Choose a registered customer for a credit sale.')}</Alert>}
+                    {selectedCustomer && selectedCustomer.credit_status !== 'active' && (
+                        <Alert severity="error">{tp('Credit sales are not enabled for this customer.')}</Alert>
+                    )}
+                    {selectedCustomer?.credit_status === 'active' && (
+                        <Alert severity={creditAmount <= Number(selectedCustomer.available_credit || 0) ? 'info' : 'error'}>
+                            {tp('Available credit')}: {money(selectedCustomer.available_credit)} · {tp('Due in')} {selectedCustomer.credit_terms_days} {tp('days')}
+                        </Alert>
+                    )}
+                    <TextField
+                        size="small"
+                        type="number"
+                        label={tp('Deposit paid now')}
+                        value={amountTendered}
+                        onChange={(event) => setAmountTendered(event.target.value)}
+                        error={creditDeposit >= totals.grandTotal || creditDeposit < 0}
+                        helperText={`${tp('Credit balance')}: ${money(creditAmount)}`}
+                        inputProps={{ min: 0, max: Math.max(0, totals.grandTotal - 0.01), step: 100 }}
+                        fullWidth
+                    />
+                    {creditDeposit > 0 && (
+                        <TextField select size="small" label={tp('Deposit method')} value={creditDepositMethod} onChange={(event) => setCreditDepositMethod(event.target.value)} fullWidth>
+                            <MenuItem value="cash">{tp('cash')}</MenuItem>
+                            <MenuItem value="card">{tp('card')}</MenuItem>
+                            <MenuItem value="mobile">{tp('mobile')}</MenuItem>
+                        </TextField>
+                    )}
+                </Stack>
+            )}
         </Stack>
     );
 
@@ -869,7 +919,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal)}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -889,7 +939,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal)}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -1625,6 +1675,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             borderRadius: 1.5,
                             border: `1px solid ${alpha(theme.palette.primary.main, 0.16)}`,
                             boxShadow: '0 18px 48px rgba(10, 19, 24, 0.20), 0 3px 10px rgba(10, 19, 24, 0.08)',
+                            maxHeight: 'calc(100dvh - 24px)',
                             overflow: 'hidden',
                         },
                     },
@@ -1672,7 +1723,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             <CloseIcon sx={{ fontSize: 18 }} />
                         </IconButton>
                     </DialogTitle>
-                    <DialogContent className="pos-console__payment-body" sx={{ p: 1.25, bgcolor: 'grey.50' }}>
+                    <DialogContent className="pos-console__payment-body" sx={{ p: 1.25, bgcolor: 'grey.50', overflowY: 'auto' }}>
                         {paymentFormContent}
                     </DialogContent>
                     <DialogActions className="pos-console__payment-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>

@@ -63,6 +63,7 @@ class PosController extends Controller
                 ->values(),
             'can' => [
                 'discount' => $request->user()->hasAdminPermission('pos.discount'),
+                'credit' => $request->user()->hasAdminPermission('credit.manage'),
             ],
         ]);
     }
@@ -197,7 +198,12 @@ class PosController extends Controller
             })
             ->orderBy('name')
             ->limit(20)
-            ->get(['id', 'name', 'email', 'phone']);
+            ->select(['id', 'name', 'email', 'phone', 'credit_limit', 'credit_terms_days', 'credit_status'])
+            ->withSum('creditTransactions as credit_balance', 'amount')
+            ->get()
+            ->each(function (User $customer) {
+                $customer->setAttribute('available_credit', max(0, round((float) $customer->credit_limit - (float) ($customer->credit_balance ?? 0), 2)));
+            });
     }
 
     public function openShift(Request $request, PosShiftService $service)
@@ -244,7 +250,8 @@ class PosController extends Controller
             'items.*.foc_product_unit_id' => ['nullable', 'integer', 'exists:product_units,id'],
             'discount_type' => ['nullable', 'string', Rule::in(['percent', 'amount'])],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
-            'tender_type' => ['required', 'string', Rule::in(['cash', 'card', 'mobile'])],
+            'tender_type' => ['required', 'string', Rule::in(['cash', 'card', 'mobile', 'credit'])],
+            'credit_deposit_method' => ['nullable', 'string', Rule::in(['cash', 'card', 'mobile'])],
             'amount_tendered' => ['required', 'numeric', 'min:0'],
             'payment_details' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:2000'],

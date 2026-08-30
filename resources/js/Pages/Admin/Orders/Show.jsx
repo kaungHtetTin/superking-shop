@@ -334,6 +334,13 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                                 <span>{t('Total')}</span>
                                 <strong style={{ fontSize: 15 }}>{formatMoney(order.final_amount)}</strong>
                             </div>
+                            {Number(order.credit_amount || 0) > 0 && (
+                                <>
+                                    <div className="detail-row"><span>{t('Paid')}</span><strong>{formatMoney(order.paid_amount || 0)}</strong></div>
+                                    <div className="detail-row"><span>{t('Credit balance')}</span><strong>{formatMoney(Math.max(0, Number(order.final_amount) - Number(order.paid_amount || 0)))}</strong></div>
+                                    <div className="detail-row"><span>{t('Due date')}</span><strong>{order.credit_due_date || '-'}</strong></div>
+                                </>
+                            )}
                         </div>
                     </section>
 

@@ -22,7 +22,7 @@ function StatCard({ label, value, hint }) {
     );
 }
 
-export default function CustomerShow({ customer, stats, recentOrders, topCategories, reviews, rewardHistories = [], canAdjustLoyalty = false }) {
+export default function CustomerShow({ customer, stats, recentOrders, topCategories, reviews, rewardHistories = [], canAdjustLoyalty = false, canManageCredit = false, creditSummary = {}, creditTransactions = [], creditOrders = [], creditPaymentShifts = [] }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const loyaltyForm = useForm({
@@ -30,12 +30,36 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
         points: '',
         description: '',
     });
+    const creditSettingsForm = useForm({
+        credit_status: customer.credit_status || 'disabled',
+        credit_limit: customer.credit_limit || 0,
+        credit_terms_days: customer.credit_terms_days || 30,
+    });
+    const creditPaymentForm = useForm({
+        order_id: '',
+        amount: '',
+        tender_type: 'cash',
+        reference: '',
+        notes: '',
+        shift_id: creditPaymentShifts[0]?.id || '',
+    });
 
     const submitLoyaltyAdjustment = (event) => {
         event.preventDefault();
         loyaltyForm.post(routeWithBase(`/admin/customers/${customer.id}/loyalty-adjustments`, app_base), {
             preserveScroll: true,
             onSuccess: () => loyaltyForm.reset(),
+        });
+    };
+    const submitCreditSettings = (event) => {
+        event.preventDefault();
+        creditSettingsForm.patch(routeWithBase(`/admin/customers/${customer.id}/credit-settings`, app_base), { preserveScroll: true });
+    };
+    const submitCreditPayment = (event) => {
+        event.preventDefault();
+        creditPaymentForm.post(routeWithBase(`/admin/customers/${customer.id}/credit-payments`, app_base), {
+            preserveScroll: true,
+            onSuccess: () => creditPaymentForm.reset('amount', 'reference', 'notes'),
         });
     };
 
@@ -68,6 +92,118 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
                     <StatCard label={t('Average order')} value={money(stats.average_order_value)} hint={t('Paid orders only')} />
                     <StatCard label={t('Loyalty points')} value={customer.loyalty_points || 0} hint={customer.tier || t('Bronze')} />
                     <StatCard label={t('Reviews')} value={stats.reviews} hint={t('Product feedback')} />
+                </div>
+            </section>
+
+            <section className="panel glass" style={{ marginBottom: 14 }}>
+                <PanelHeading eyebrow={t('Accounts receivable')} title={t('Customer credit')} />
+                {canManageCredit && <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}><a className="btn secondary" href={routeWithBase(`/admin/customers/${customer.id}/credit-statement`, app_base)}><Icon name="download" size={14} />{t('Statement PDF')}</a></div>}
+                <div className="metrics-grid four">
+                    <StatCard label={t('Outstanding balance')} value={money(creditSummary.balance)} hint={t(creditSummary.status || 'disabled')} />
+                    <StatCard label={t('Credit limit')} value={money(creditSummary.limit)} hint={t(':count day terms', { count: creditSummary.terms_days || 30 })} />
+                    <StatCard label={t('Available credit')} value={money(creditSummary.available)} hint={t('Remaining borrowing capacity')} />
+                    <StatCard label={t('Overdue')} value={money(creditSummary.overdue)} hint={t('Past due balance')} />
+                </div>
+
+                {canManageCredit && (
+                    <div className="report-analysis-grid" style={{ marginTop: 14 }}>
+                        <form className="crud-grid" onSubmit={submitCreditSettings}>
+                            <label className="form-field">
+                                <span>{t('Credit status')}</span>
+                                <select value={creditSettingsForm.data.credit_status} onChange={(e) => creditSettingsForm.setData('credit_status', e.target.value)}>
+                                    <option value="disabled">{t('Disabled')}</option>
+                                    <option value="active">{t('Active')}</option>
+                                    <option value="suspended">{t('Suspended')}</option>
+                                </select>
+                                {creditSettingsForm.errors.credit_status && <small className="field-error">{creditSettingsForm.errors.credit_status}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Credit limit')}</span>
+                                <input type="number" min="0" step="100" value={creditSettingsForm.data.credit_limit} onChange={(e) => creditSettingsForm.setData('credit_limit', e.target.value)} />
+                                {creditSettingsForm.errors.credit_limit && <small className="field-error">{creditSettingsForm.errors.credit_limit}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Payment terms (days)')}</span>
+                                <input type="number" min="1" max="365" value={creditSettingsForm.data.credit_terms_days} onChange={(e) => creditSettingsForm.setData('credit_terms_days', e.target.value)} />
+                                {creditSettingsForm.errors.credit_terms_days && <small className="field-error">{creditSettingsForm.errors.credit_terms_days}</small>}
+                            </label>
+                            <div className="form-field" style={{ justifyContent: 'flex-end' }}>
+                                <button type="submit" className="btn primary" disabled={creditSettingsForm.processing}>{t('Save credit settings')}</button>
+                            </div>
+                        </form>
+
+                        <form className="crud-grid" onSubmit={submitCreditPayment}>
+                            <label className="form-field span-2">
+                                <span>{t('Credit order')}</span>
+                                <select value={creditPaymentForm.data.order_id} onChange={(e) => creditPaymentForm.setData('order_id', e.target.value)} disabled={!creditOrders.length}>
+                                    {!creditOrders.length && <option value="">{t('No outstanding credit orders')}</option>}
+                                    {!!creditOrders.length && <option value="">{t('Automatic allocation (oldest due first)')}</option>}
+                                    {creditOrders.map((order) => (
+                                        <option key={order.id} value={order.id}>{order.receipt_number || order.order_number} · {money(Number(order.final_amount) - Number(order.paid_amount || 0))} · {order.credit_due_date}</option>
+                                    ))}
+                                </select>
+                                {creditPaymentForm.errors.order_id && <small className="field-error">{creditPaymentForm.errors.order_id}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Payment amount')}</span>
+                                <input type="number" min="0.01" step="0.01" value={creditPaymentForm.data.amount} onChange={(e) => creditPaymentForm.setData('amount', e.target.value)} />
+                                {creditPaymentForm.errors.amount && <small className="field-error">{creditPaymentForm.errors.amount}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Payment method')}</span>
+                                <select value={creditPaymentForm.data.tender_type} onChange={(e) => creditPaymentForm.setData('tender_type', e.target.value)}>
+                                    <option value="cash">{t('Cash')}</option>
+                                    <option value="card">{t('Card')}</option>
+                                    <option value="mobile">{t('Mobile')}</option>
+                                    <option value="bank_transfer">{t('Bank transfer')}</option>
+                                </select>
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Reference')}</span>
+                                <input value={creditPaymentForm.data.reference} onChange={(e) => creditPaymentForm.setData('reference', e.target.value)} />
+                            </label>
+                            {creditPaymentForm.data.tender_type === 'cash' && (
+                                <label className="form-field span-2">
+                                    <span>{t('Cash register shift')}</span>
+                                    <select value={creditPaymentForm.data.shift_id} onChange={(e) => creditPaymentForm.setData('shift_id', e.target.value)}>
+                                        {!creditPaymentShifts.length && <option value="">{t('Open a POS shift before receiving cash')}</option>}
+                                        {creditPaymentShifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.register?.name} ({shift.register?.code}) · #{shift.id}</option>)}
+                                    </select>
+                                    {creditPaymentForm.errors.shift_id && <small className="field-error">{creditPaymentForm.errors.shift_id}</small>}
+                                </label>
+                            )}
+                            <label className="form-field">
+                                <span>{t('Notes')}</span>
+                                <input value={creditPaymentForm.data.notes} onChange={(e) => creditPaymentForm.setData('notes', e.target.value)} />
+                            </label>
+                            <div className="span-2" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <button type="submit" className="btn primary" disabled={creditPaymentForm.processing || !creditOrders.length}>{t('Record credit payment')}</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+            </section>
+
+            <section className="panel glass" style={{ marginBottom: 14 }}>
+                <PanelHeading eyebrow={t('Audit ledger')} title={t('Credit transaction history')} />
+                <div className="table-wrap">
+                    <table>
+                        <thead><tr><th>{t('Date')}</th><th>{t('Transaction')}</th><th>{t('Order')}</th><th>{t('Type')}</th><th>{t('Amount')}</th><th>{t('Balance')}</th><th>{t('Due date')}</th><th>{t('Staff')}</th></tr></thead>
+                        <tbody>
+                            {!creditTransactions.length ? <tr><td colSpan={8}><span className="muted">{t('No credit transactions yet.')}</span></td></tr> : creditTransactions.map((entry) => (
+                                <tr key={entry.id}>
+                                    <td><small>{entry.created_at}</small></td>
+                                    <td><strong>{entry.transaction_number}</strong><small>{entry.reference || '-'}</small></td>
+                                    <td>{entry.order?.order_number || '-'}</td>
+                                    <td><StatusBadge status={Number(entry.amount) > 0 ? 'warning' : 'success'} label={t(entry.type)} /></td>
+                                    <td><strong>{Number(entry.amount) > 0 ? '+' : ''}{money(entry.amount)}</strong></td>
+                                    <td>{money(entry.balance_after)}</td>
+                                    <td>{entry.due_date || '-'}</td>
+                                    <td>{entry.creator?.name || '-'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
