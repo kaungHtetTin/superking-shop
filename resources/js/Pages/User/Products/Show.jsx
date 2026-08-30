@@ -145,6 +145,16 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
             flashSale: selectedUnit.flash_sale || null,
             imagePath: img,
             maxQty: selectedUnit.available_qty,
+            unitOptions: buyableUnits.map((unit) => ({
+                id: unit.id,
+                name: unit.name || unit.code,
+                code: unit.code || null,
+                price: unitPrice(unit),
+                originalPrice: unitOriginalPrice(unit),
+                flashSale: unit.flash_sale || null,
+                imagePath: unit.image?.image_path || img,
+                maxQty: Number(unit.available_qty || 0),
+            })),
             isPreorder: false,
             qty: Math.min(quantity, Number(selectedUnit.available_qty ?? 1)),
         });

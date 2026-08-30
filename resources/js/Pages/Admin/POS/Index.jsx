@@ -71,13 +71,14 @@ const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
     line.available_base_qty || (Number(line.available_qty || 0) * Number(line.conversion_factor || 1)),
 ) + 0.00005;
 
-export default function PosIndex({ locations = [], categories = [], priceTypes = ['retail'], can = {} }) {
+export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
     const { app_base, app_url, flash = {}, errors: pageErrors = {} } = usePage().props;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const t = useTranslation();
     const tp = usePhraseTranslation();
     const firstLocation = locations[0];
+    const firstRegister = registers.find((register) => Number(register.location_id) === Number(firstLocation?.id));
     const [locationId, setLocationId] = useState(firstLocation?.id || '');
     const [categoryId, setCategoryId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +101,10 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
     const [mobileStep, setMobileStep] = useState('products');
     const [tenderType, setTenderType] = useState('cash');
+    const [registerId, setRegisterId] = useState(firstRegister?.id || '');
+    const [activeShift, setActiveShift] = useState(firstRegister?.shifts?.[0] || null);
+    const [openingCash, setOpeningCash] = useState('0');
+    const [amountTendered, setAmountTendered] = useState('');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [errors, setErrors] = useState({});
@@ -113,6 +118,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     const productLoadMoreLockRef = useRef(false);
 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
+    const locationRegisters = registers.filter((register) => Number(register.location_id) === Number(locationId));
     const paymentMethods = ['cash', 'card', 'mobile'];
     const api = async (url, options = {}) => {
         setErrors({});
@@ -298,7 +304,15 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
         setSearchResults([]);
         setResultMeta((prev) => ({ ...prev, page: 1, has_more: false, next_page: null, mode: 'popular' }));
         setSearchQuery('');
+        const nextRegister = registers.find((register) => Number(register.location_id) === Number(locationId));
+        setRegisterId(nextRegister?.id || '');
+        setActiveShift(nextRegister?.shifts?.[0] || null);
     }, [locationId]);
+
+    useEffect(() => {
+        const register = registers.find((item) => Number(item.id) === Number(registerId));
+        setActiveShift(register?.shifts?.[0] || null);
+    }, [registerId]);
 
     const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
 
@@ -630,6 +644,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
             return;
         }
         if (cart.length) {
+            setAmountTendered(String(totals.grandTotal));
             if (isMobile) {
                 setMobileStep('checkout');
             } else {
@@ -638,9 +653,24 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
         }
     };
 
+    const openRegisterShift = async () => {
+        if (!registerId) return;
+        setBusy(true);
+        try {
+            const data = await api('/admin/pos/shifts/open', {
+                method: 'post',
+                data: { register_id: registerId, opening_cash: Number(openingCash || 0) },
+            });
+            setActiveShift(data.shift);
+            setMessage(tp('Register shift opened.'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const checkout = async (event) => {
         event.preventDefault();
-        if (!locationId || !cart.length) return;
+        if (!locationId || !activeShift || !cart.length) return;
 
         setBusy(true);
         try {
@@ -648,6 +678,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 method: 'post',
                 data: {
                     location_id: locationId,
+                    shift_id: activeShift.id,
                     customer_id: selectedCustomer?.id || null,
                     customer_name: selectedCustomer?.name || 'Walk-in customer',
                     customer_phone: selectedCustomer?.phone || null,
@@ -661,6 +692,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     discount_type: discountType || null,
                     discount_value: discountValue || 0,
                     tender_type: tenderType,
+                    amount_tendered: tenderType === 'cash' ? Number(amountTendered || 0) : totals.grandTotal,
                 },
             });
             if (checkoutIntentRef.current === 'print' && data.receipt_url) {
@@ -685,6 +717,42 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
 
     const paymentFormContent = (
         <Stack spacing={1.25} className="pos-console__payment-form">
+            <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{tp('Register and shift')}</Typography>
+                <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    label={tp('Register')}
+                    value={registerId}
+                    onChange={(event) => setRegisterId(event.target.value)}
+                >
+                    {locationRegisters.map((register) => (
+                        <MenuItem key={register.id} value={register.id}>{register.name} ({register.code})</MenuItem>
+                    ))}
+                </TextField>
+                {!activeShift && (
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                        <TextField
+                            size="small"
+                            type="number"
+                            label={tp('Opening cash')}
+                            value={openingCash}
+                            onChange={(event) => setOpeningCash(event.target.value)}
+                            inputProps={{ min: 0, step: 100 }}
+                            fullWidth
+                        />
+                        <Button type="button" variant="outlined" onClick={openRegisterShift} disabled={busy || !registerId}>
+                            {tp('Open shift')}
+                        </Button>
+                    </Stack>
+                )}
+                {activeShift && (
+                    <Alert severity="success" sx={{ mt: 1, py: 0 }}>
+                        {tp('Open shift')} #{activeShift.id} · {tp('Opening cash')} {money(activeShift.opening_cash)}
+                    </Alert>
+                )}
+            </Box>
             <Box>
                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, alignItems: 'center' }}>
                     <Box>
@@ -777,6 +845,21 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     ))}
                 </ToggleButtonGroup>
             </Box>
+            {tenderType === 'cash' && (
+                <TextField
+                    size="small"
+                    type="number"
+                    label={tp('Cash received')}
+                    value={amountTendered}
+                    onChange={(event) => setAmountTendered(event.target.value)}
+                    error={Number(amountTendered || 0) < totals.grandTotal}
+                    helperText={Number(amountTendered || 0) < totals.grandTotal
+                        ? tp('Cash received must cover the sale total.')
+                        : `${tp('Change')}: ${money(Math.max(0, Number(amountTendered || 0) - totals.grandTotal))}`}
+                    inputProps={{ min: totals.grandTotal, step: 100 }}
+                    fullWidth
+                />
+            )}
         </Stack>
     );
 
@@ -786,7 +869,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || hasStockIssue}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal)}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -806,7 +889,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || hasStockIssue}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal)}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}

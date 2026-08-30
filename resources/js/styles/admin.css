@@ -1260,7 +1260,7 @@
 .app-root .report-chart svg,
 .app-root .report-chart-empty {
   width: 100%;
-  min-height: 280px;
+  height: 280px;
   display: block;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -1268,6 +1268,7 @@
 }
 
 .app-root .report-chart-empty {
+  min-height: 280px;
   display: grid;
   place-items: center;
 }

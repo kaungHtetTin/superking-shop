@@ -56,6 +56,7 @@ Route::get('/buying-guide', [GuideController::class, 'index'])->name('buying-gui
 Route::get('/invoices/{token}', [PublicInvoiceController::class, 'show'])->name('public.invoices.show');
 
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::post('/cart/selling-units', [CartController::class, 'sellingUnits'])->name('cart.selling-units');
 Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
 
 Route::middleware('auth')->group(function () {

@@ -168,8 +168,11 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                         {item.product?.name}
                                     </Typography>
+                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 700 }}>
+                                        {t('Selling unit')}: {item.unit_name || item.unit?.name || t('unit')}
+                                    </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {t('Qty')} {item.quantity} {item.unit_name || item.unit?.name || ''} - {formatMoney(item.unit_price)} {t('each')}
+                                        {t('Qty')} {item.quantity} · {formatMoney(item.unit_price)} {t('each')}
                                     </Typography>
                                     {Number(item.foc_quantity || 0) > 0 && (
                                         <Typography variant="caption" color="info.main" sx={{ display: 'block', fontWeight: 700 }}>

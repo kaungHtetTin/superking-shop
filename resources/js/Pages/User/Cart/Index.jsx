@@ -1,4 +1,5 @@
 ﻿import React from 'react';
+import axios from 'axios';
 import { Link, router, usePage } from '@/spa/router';
 import {
     Box,
@@ -8,6 +9,8 @@ import {
     IconButton,
     Paper,
     Stack,
+    TextField,
+    MenuItem,
     Typography,
 } from '@mui/material';
 import { Add, DeleteOutlined, Remove, ShoppingCartRounded } from '@mui/icons-material';
@@ -19,7 +22,7 @@ import Footer from '@/Components/User/Footer';
 import UserBrandHead from '@/Components/User/UserBrandHead';
 import { routeWithBase, storageUrl } from '@/Utils/url';
 import { useCartStore } from '@/stores/cartStore';
-import { formatMoney } from '@/Utils/pricing';
+import { formatMoney, unitOriginalPrice, unitPrice } from '@/Utils/pricing';
 import {
     eyebrowSxForTheme,
     getMusicStoreColors,
@@ -37,7 +40,36 @@ export default function CartIndex() {
     const t = usePhraseTranslation();
     const items = useCartStore((s) => s.items);
     const setQty = useCartStore((s) => s.setQty);
+    const changeUnit = useCartStore((s) => s.changeUnit);
+    const syncUnitOptions = useCartStore((s) => s.syncUnitOptions);
     const removeItem = useCartStore((s) => s.removeItem);
+
+    React.useEffect(() => {
+        const productIds = [...new Set(items.map((item) => Number(item.productId)).filter(Boolean))];
+        if (productIds.length === 0) return undefined;
+
+        let cancelled = false;
+        axios.post(routeWithBase('/cart/selling-units', app_base), { product_ids: productIds })
+            .then(({ data }) => {
+                if (cancelled) return;
+                Object.entries(data.products || {}).forEach(([productId, units]) => {
+                    syncUnitOptions(productId, (units || []).map((unit) => ({
+                        id: unit.id,
+                        name: unit.name || unit.code,
+                        code: unit.code || null,
+                        price: unitPrice(unit),
+                        originalPrice: unitOriginalPrice(unit),
+                        flashSale: unit.flash_sale || null,
+                        maxQty: Number(unit.available_qty || 0),
+                    })));
+                });
+            })
+            .catch(() => {});
+
+        return () => {
+            cancelled = true;
+        };
+    }, [app_base]);
 
     const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
 
@@ -122,9 +154,26 @@ export default function CartIndex() {
                                         {line.name}
                                     </Typography>
                                     <Stack spacing="2px" sx={{ mb: '4px', minWidth: 0 }}>
-                                        <Typography component="div" variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
-                                            {line.unitName}
-                                        </Typography>
+                                        {(line.unitOptions || []).length > 1 ? (
+                                            <TextField
+                                                select
+                                                size="small"
+                                                label={t('Selling unit')}
+                                                value={line.unitId}
+                                                onChange={(event) => changeUnit(line.unitId, event.target.value)}
+                                                sx={{ mt: '4px', minWidth: 150, maxWidth: '100%' }}
+                                            >
+                                                {line.unitOptions.map((unit) => (
+                                                    <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.maxQty || 0) <= 0}>
+                                                        {unit.name || unit.code} · {formatMoney(unit.price)}
+                                                    </MenuItem>
+                                                ))}
+                                            </TextField>
+                                        ) : (
+                                            <Typography component="div" variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
+                                                {t('Selling unit')}: {line.unitName}
+                                            </Typography>
+                                        )}
                                         {line.productCode && (
                                             <Typography component="div" variant="caption" color="text.secondary" sx={{ lineHeight: 1.35, overflowWrap: 'anywhere' }}>
                                                 {t('Product code')}: {line.productCode}
@@ -191,7 +240,7 @@ export default function CartIndex() {
                                                 size="small"
                                                 sx={{ width: 44, height: 44 }}
                                                 onClick={() => setQty(line.unitId, line.qty + 1)}
-                                                disabled={line.qty >= ORDER_QTY_MAX}
+                                                disabled={line.qty >= Math.min(ORDER_QTY_MAX, Number(line.maxQty || ORDER_QTY_MAX))}
                                             >
                                                 <Add fontSize="small" />
                                             </IconButton>

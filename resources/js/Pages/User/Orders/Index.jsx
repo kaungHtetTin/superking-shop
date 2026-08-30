@@ -93,6 +93,16 @@ export default function OrdersIndex({ orders }) {
                                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: '4px' }}>
                                             {(order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} {t('items')}
                                         </Typography>
+                                        {(order.items || []).slice(0, 3).map((item) => (
+                                            <Typography key={item.id} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                {item.product?.name || t('Product')} · {item.quantity} {item.unit_name || item.unit?.name || t('unit')}
+                                            </Typography>
+                                        ))}
+                                        {(order.items || []).length > 3 && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                +{order.items.length - 3} {t('more')}
+                                            </Typography>
+                                        )}
                                     </Box>
                                     <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing="8px" alignItems={{ xs: 'flex-start', sm: 'center' }} flexWrap="wrap">
                                         <Chip size="small" label={t(order.status)} color={statusColor[order.status] || 'default'} variant="outlined" />

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
@@ -27,6 +27,24 @@ function MetricCard({ label, value, hint, icon, tone }) {
 
 function SalesTrendChart({ rows }) {
     const t = usePhraseTranslation();
+    const chartRef = useRef(null);
+    const [chartWidth, setChartWidth] = useState(760);
+
+    useEffect(() => {
+        const element = chartRef.current;
+        if (!element) return undefined;
+
+        const updateWidth = () => {
+            setChartWidth(Math.max(320, Math.round(element.getBoundingClientRect().width)));
+        };
+
+        updateWidth();
+        const observer = new ResizeObserver(updateWidth);
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, []);
+
     const chart = useMemo(() => {
         const data = rows.map((row) => ({
             day: row.day,
@@ -36,9 +54,9 @@ function SalesTrendChart({ rows }) {
 
         if (data.length === 0) return null;
 
-        const width = 760;
-        const height = 260;
-        const padding = { top: 18, right: 18, bottom: 34, left: 64 };
+        const width = chartWidth;
+        const height = 280;
+        const padding = { top: 18, right: 18, bottom: 34, left: 96 };
         const innerWidth = width - padding.left - padding.right;
         const innerHeight = height - padding.top - padding.bottom;
         const maxRevenue = Math.max(...data.map((row) => row.revenue), 1);
@@ -66,7 +84,7 @@ function SalesTrendChart({ rows }) {
             labelStep,
             latest,
         };
-    }, [rows]);
+    }, [rows, chartWidth]);
 
     if (!chart) {
         return (
@@ -90,7 +108,7 @@ function SalesTrendChart({ rows }) {
                     <strong>{chart.latest.orders}</strong>
                 </div>
             </div>
-            <svg viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label={t('Sales by day line chart')}>
+            <svg ref={chartRef} viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label={t('Sales by day line chart')}>
                 {chart.ticks.map((tick) => (
                     <g key={tick}>
                         <line

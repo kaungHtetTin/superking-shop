@@ -51,7 +51,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
     const [quoteError, setQuoteError] = useState(null);
     const fileInputRef = useRef(null);
 
-    const { data, setData, post, processing, errors, reset, transform } = useForm({
+    const { data, setData, post, processing, errors, reset, transform, setError, clearErrors } = useForm({
         lines: [],
         receiver_name: auth?.user?.name ?? '',
         receiver_phone: auth?.user?.phone ?? '',
@@ -79,6 +79,28 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
         () => paymentMethods.find((method) => String(method.id) === String(data.payment_method_id)) || null,
         [paymentMethods, data.payment_method_id],
     );
+    const checkoutError = useMemo(() => {
+        const preferredFields = [
+            'lines',
+            'receiver_name',
+            'receiver_phone',
+            'shipping_address',
+            'order_notes',
+            'payment_method_id',
+            'payment_proof',
+            'coupon_code',
+            'redeem_points',
+            'inventory',
+            'order',
+            'quantity',
+        ];
+
+        return preferredFields
+            .map((field) => errors[field])
+            .find(Boolean)
+            || Object.values(errors).find(Boolean)
+            || t('Please fix the errors and try again.');
+    }, [errors, t]);
 
     React.useEffect(() => {
         if (items.length === 0) {
@@ -123,6 +145,17 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
     const handleProofChange = (e) => {
         const file = e.target.files?.[0] ?? null;
+
+        if (file && file.size > 10 * 1024 * 1024) {
+            e.target.value = '';
+            setData('payment_proof', null);
+            setError('payment_proof', t('The payment screenshot is too large. Please upload an image no larger than 10 MB.'));
+            if (proofPreview) URL.revokeObjectURL(proofPreview);
+            setProofPreview(null);
+            return;
+        }
+
+        clearErrors('payment_proof');
         setData('payment_proof', file);
         if (proofPreview) URL.revokeObjectURL(proofPreview);
         setProofPreview(file ? URL.createObjectURL(file) : null);
@@ -147,6 +180,21 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
         post(routeWithBase('/checkout', app_base), {
             preserveScroll: true,
             forceFormData: true,
+            onError: (submissionErrors) => {
+                const fields = Object.keys(submissionErrors);
+                const shippingFields = ['receiver_name', 'receiver_phone', 'shipping_address', 'order_notes', 'coupon_code', 'redeem_points'];
+                const paymentFields = ['payment_method_id', 'payment_method', 'payment_proof'];
+
+                if (fields.some((field) => shippingFields.includes(field))) {
+                    setActiveStep(0);
+                } else if (fields.some((field) => paymentFields.includes(field))) {
+                    setActiveStep(1);
+                } else {
+                    setActiveStep(2);
+                }
+
+                window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+            },
             onSuccess: () => {
                 clearCart();
                 reset();
@@ -195,14 +243,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
                 {Object.keys(errors).length > 0 && (
                     <Alert severity="error" sx={{ mb: 2 }}>
-                        {errors.lines ||
-                            errors.receiver_name ||
-                            errors.receiver_phone ||
-                            errors.shipping_address ||
-                            errors.payment_method_id ||
-                            errors.payment_proof ||
-                            errors.payment_method ||
-                            t('Please fix the errors and try again.')}
+                        {checkoutError}
                     </Alert>
                 )}
 
@@ -426,6 +467,11 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
                     {activeStep === 2 && (
                         <Stack spacing="16px">
+                            {quoteError && (
+                                <Alert severity="warning">
+                                    {t(quoteError)}
+                                </Alert>
+                            )}
                             {items.map((line) => (
                                 <Stack key={line.unitId} direction="row" justifyContent="space-between" alignItems="flex-start">
                                     <Box sx={{ minWidth: 0, pr: 1 }}>

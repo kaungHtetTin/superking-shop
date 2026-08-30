@@ -8,6 +8,7 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ProductUnit;
+use App\Models\PosShift;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\Inventory\InventoryService;
@@ -28,6 +29,20 @@ class PosCheckoutService
             $location = Location::query()->where('is_active', true)->findOrFail((int) $payload['location_id']);
             if (! $cashier->canAccessLocation($location)) {
                 throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
+            }
+
+            $shift = PosShift::query()
+                ->with('register')
+                ->lockForUpdate()
+                ->findOrFail((int) ($payload['shift_id'] ?? 0));
+            if ($shift->status !== 'open') {
+                throw ValidationException::withMessages(['shift_id' => 'This register shift is already closed. Open a new shift before selling.']);
+            }
+            if ((int) $shift->cashier_id !== (int) $cashier->id) {
+                throw ValidationException::withMessages(['shift_id' => 'This register shift belongs to another cashier.']);
+            }
+            if (! $shift->register || ! $shift->register->is_active || (int) $shift->register->location_id !== (int) $location->id) {
+                throw ValidationException::withMessages(['shift_id' => 'The open shift does not belong to the selected warehouse.']);
             }
 
             $lines = collect($payload['items']);
@@ -95,14 +110,22 @@ class PosCheckoutService
             $discount = $this->discountAmount($payload, $subtotal, $cashier);
             $final = round(max(0, $subtotal - $discount), 2);
             $tenderType = $payload['tender_type'] ?? 'cash';
+            $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
+            if ($amountTendered < $final) {
+                throw ValidationException::withMessages(['amount_tendered' => 'Amount tendered must cover the sale total.']);
+            }
+            if ($tenderType !== 'cash' && abs($amountTendered - $final) > 0.009) {
+                throw ValidationException::withMessages(['amount_tendered' => 'Card and mobile payments must equal the sale total.']);
+            }
+            $changeDue = $tenderType === 'cash' ? round($amountTendered - $final, 2) : 0.0;
             $order = Order::create([
                 'user_id' => $payload['customer_id'] ?? null,
                 'order_number' => $this->number('POS'),
                 'receipt_number' => $this->number('RCT'),
                 'sales_channel' => 'pos',
                 'location_id' => $location->id,
-                'register_id' => null,
-                'shift_id' => null,
+                'register_id' => $shift->pos_register_id,
+                'shift_id' => $shift->id,
                 'served_by' => $cashier->id,
                 'total_amount' => round($subtotal, 2),
                 'discount_amount' => $discount,
@@ -115,7 +138,7 @@ class PosCheckoutService
                 'status' => 'delivered',
                 'payment_status' => 'paid',
                 'payment_method' => $tenderType,
-                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $final, 'change_due' => 0],
+                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue],
                 'receiver_name' => $payload['customer_name'] ?? 'Walk-in customer',
                 'receiver_phone' => $payload['customer_phone'] ?? null,
                 'order_notes' => $payload['notes'] ?? null,
@@ -148,18 +171,24 @@ class PosCheckoutService
 
             Payment::create([
                 'order_id' => $order->id,
-                'register_id' => null,
-                'shift_id' => null,
+                'register_id' => $shift->pos_register_id,
+                'shift_id' => $shift->id,
                 'received_by' => $cashier->id,
                 'transaction_id' => $this->paymentTransactionId(),
                 'amount' => $final,
-                'amount_tendered' => $final,
-                'change_due' => 0,
+                'amount_tendered' => $amountTendered,
+                'change_due' => $changeDue,
                 'method' => $tenderType,
                 'tender_type' => $tenderType,
                 'status' => 'paid',
                 'payment_details' => $payload['payment_details'] ?? [],
             ]);
+            if ($tenderType === 'cash') {
+                $shift->increment('cash_sales', $final);
+                $shift->update([
+                    'expected_cash' => round((float) $shift->opening_cash + (float) $shift->cash_sales - (float) $shift->cash_refunds, 2),
+                ]);
+            }
             FinancialEntry::create([
                 'recorded_by' => $cashier->id,
                 'type' => 'income',

@@ -334,13 +334,19 @@ export const router = {
                 // Defer success until the follow-up GET when a mutation redirected.
                 onSuccess: (!isGet && response.redirected && response.url) ? undefined : options.onSuccess,
             });
+            const redirectedPageErrors = flattenErrors(page?.props?.errors || {});
+            const redirectedWithErrors = !isGet
+                && response.redirected
+                && Object.keys(redirectedPageErrors).length > 0;
 
             if (response.redirected && response.url) {
                 const redirectedUrl = new URL(response.url);
                 window.history.replaceState({}, '', redirectedUrl.pathname + redirectedUrl.search + redirectedUrl.hash);
 
                 // Mutations that redirect can leave stale props; refresh with an explicit GET.
-                if (!isGet && page?.component) {
+                // A validation redirect already contains the flashed errors and must not be
+                // followed by another GET, which would consume them and report false success.
+                if (!isGet && page?.component && !redirectedWithErrors) {
                     return this.visit(redirectedUrl.pathname + redirectedUrl.search, {
                         method: 'get',
                         replace: true,
@@ -558,10 +564,11 @@ export function useForm(initialData = {}) {
         setRecentlySuccessful(false);
         setErrors({});
 
-        const payload = transformRef.current(data);
+        const { data: explicitData, ...visitOptions } = options;
+        const payload = explicitData === undefined ? transformRef.current(data) : explicitData;
 
         return router.visit(url, {
-            ...options,
+            ...visitOptions,
             method,
             data: payload,
             onError: (nextErrors) => {

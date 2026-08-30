@@ -36,9 +36,7 @@
         .top-actions {
             width: 148mm;
             margin: 14px auto 0;
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
+            text-align: right;
         }
         .top-actions button,
         .top-actions a {
@@ -50,26 +48,29 @@
             font-weight: 700;
             text-decoration: none;
             cursor: pointer;
+            display: inline-block;
+            margin-left: 8px;
         }
         .top-actions .primary { background: {{ $settings['theme_color'] ?? '#087f74' }}; border-color: {{ $settings['theme_color'] ?? '#087f74' }}; color: #fff; }
         .header {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 12px;
-            align-items: start;
+            display: table;
+            width: 100%;
+            table-layout: fixed;
             border-bottom: 2px solid {{ $settings['theme_color'] ?? '#087f74' }};
             padding-bottom: 10px;
         }
         .brand {
-            display: flex;
-            gap: 10px;
-            align-items: center;
+            display: table-cell;
+            vertical-align: top;
         }
         .brand img {
             width: 38px;
             height: 38px;
             object-fit: contain;
             border-radius: 6px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
         }
         .brand-mark {
             width: 38px;
@@ -77,21 +78,26 @@
             border-radius: 6px;
             background: {{ $settings['theme_color'] ?? '#087f74' }};
             color: #fff;
-            display: grid;
-            place-items: center;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+            line-height: 38px;
+            text-align: center;
             font-weight: 900;
             font-size: 16px;
         }
+        .brand > div:last-child { display: inline-block; vertical-align: middle; }
         h1, h2, h3, p { margin: 0; }
         h1 { font-size: 18px; font-weight: 900; }
         h2 { font-size: 16px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
         h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{ $settings['theme_color'] ?? '#087f74' }}; margin-bottom: 5px; }
         .muted { color: #667286; }
-        .invoice-meta { text-align: right; display: grid; gap: 2px; }
+        .invoice-meta { width: 42%; text-align: right; display: table-cell; vertical-align: top; }
+        .invoice-meta > * { display: block; }
         .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            display: table;
+            width: 100%;
+            table-layout: fixed;
             margin-top: 12px;
         }
         .box {
@@ -100,12 +106,16 @@
             padding: 8px;
             min-height: 58px;
         }
+        .grid > .box { display: table-cell; width: 50%; vertical-align: top; }
+        .grid > .box:first-child { border-right: 5px solid #fff; }
         .detail-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
+            display: table;
+            width: 100%;
             padding: 2px 0;
         }
+        .detail-row > span,
+        .detail-row > strong { display: table-cell; width: 50%; }
+        .detail-row > strong { text-align: right; white-space: nowrap; padding-right: 2px; }
         .items {
             width: 100%;
             border-collapse: collapse;
@@ -130,6 +140,7 @@
         .items .num { text-align: right; white-space: nowrap; }
         .totals {
             width: 58%;
+            float: right;
             margin-left: auto;
             margin-top: 10px;
             border: 1px solid #dfe6e3;
@@ -144,14 +155,18 @@
             font-weight: 900;
         }
         .footer {
+            clear: both;
             margin-top: 12px;
-            display: grid;
-            grid-template-columns: 1fr 74px;
-            gap: 12px;
-            align-items: end;
+            display: table;
+            width: 100%;
+            table-layout: fixed;
             border-top: 1px solid #dfe6e3;
             padding-top: 9px;
         }
+        .totals + .box { clear: both; }
+        .footer > div { display: table-cell; vertical-align: bottom; }
+        .footer > div:first-child { width: 85%; }
+        .footer > .qr { width: 15%; }
         .qr {
             text-align: center;
             font-size: 8px;
@@ -179,16 +194,23 @@
             .sheet { min-height: 0; padding: 18px; margin-top: 12px; overflow: hidden; }
             .top-actions { margin-top: 12px; }
             .top-actions button,
-            .top-actions a { flex: 1; min-height: 44px; text-align: center; }
-            .header { grid-template-columns: 1fr; }
+            .top-actions a { width: calc(50% - 6px); min-height: 44px; text-align: center; margin-left: 0; }
+            .header,
+            .header > .brand,
+            .header > .invoice-meta { display: block; width: 100%; }
             .invoice-meta { text-align: left; }
             h2 { text-align: left; }
-            .grid { grid-template-columns: 1fr; }
+            .grid,
+            .grid > .box { display: block; width: 100%; }
+            .grid > .box:first-child { border-right: 1px solid #dfe6e3; margin-bottom: 10px; }
             .items { font-size: 10px; }
             .items th,
             .items td { padding: 5px 3px; }
-            .totals { width: 100%; }
-            .footer { grid-template-columns: 1fr; }
+            .totals { width: 100%; float: none; }
+            .footer,
+            .footer > div,
+            .footer > div:first-child,
+            .footer > .qr { display: block; width: 100%; }
             .qr { text-align: left; }
             .qr img { margin-left: 0; }
         }
@@ -197,6 +219,29 @@
             .sheet { margin: 0; border: 0; width: auto; min-height: auto; }
             .no-print { display: none !important; }
         }
+        @if(!empty($pdf))
+        /* Dompdf does not fully support grid/flex. These table-based equivalents
+           preserve the browser invoice layout in the downloaded A5 document. */
+        body { background: #fff; }
+        .no-print { display: none !important; }
+        .sheet {
+            width: auto;
+            min-height: auto;
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+        .header { display: table; width: 100%; padding-top: 8mm; }
+        .header > .brand { display: table-cell; width: 58%; }
+        .header > .invoice-meta { display: table-cell; width: 42%; }
+        .grid { display: table; width: 100%; }
+        .grid > .box { display: table-cell; width: 50%; }
+        .totals { width: 58%; float: right; }
+        .footer { display: table; width: 100%; }
+        .footer > div { display: table-cell; }
+        .footer > div:first-child { width: 85%; }
+        .footer > .qr { width: 15%; }
+        @endif
     </style>
 </head>
 <body>

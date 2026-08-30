@@ -52,10 +52,11 @@ class OrderVoucherService
         ];
     }
 
-    public function renderHtml(Order $order, bool $public = false): string
+    public function renderHtml(Order $order, bool $public = false, bool $pdf = false): string
     {
         return view('orders.voucher', array_merge($this->prepare($order), [
             'public' => $public,
+            'pdf' => $pdf,
         ]))->render();
     }
 
@@ -67,53 +68,27 @@ class OrderVoucherService
         $htmlPath = $dir.DIRECTORY_SEPARATOR.'voucher-'.$order->id.'-'.Str::random(8).'.html';
         $pdfPath = $dir.DIRECTORY_SEPARATOR.'voucher-'.$order->order_number.'-'.Str::random(8).'.pdf';
 
-        File::put($htmlPath, $this->renderHtml($order));
+        File::put($htmlPath, $this->renderHtml($order, pdf: true));
 
-        $chrome = $this->chromePath();
         $process = new Process([
-            $chrome,
-            '--headless',
-            '--disable-gpu',
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--print-to-pdf='.$pdfPath,
-            '--print-to-pdf-no-header',
-            $this->fileUrl($htmlPath),
+            env('NODE_PATH', 'node'),
+            base_path('scripts/generate-voucher-pdf.cjs'),
+            $htmlPath,
+            $pdfPath,
+        ], base_path(), [
+            'PUPPETEER_CACHE_DIR' => storage_path('app/puppeteer'),
         ]);
-        $process->setTimeout(45);
+        $process->setTimeout(60);
         $process->run();
 
         File::delete($htmlPath);
 
-        if (! $process->isSuccessful() || ! File::exists($pdfPath)) {
+        if (! $process->isSuccessful() || ! File::exists($pdfPath) || File::size($pdfPath) === 0) {
+            File::delete($pdfPath);
             throw new \RuntimeException('Could not generate voucher PDF. '.$process->getErrorOutput());
         }
 
         return $pdfPath;
-    }
-
-    private function chromePath(): string
-    {
-        $candidates = array_filter([
-            env('CHROME_PATH'),
-            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-        ]);
-
-        foreach ($candidates as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        throw new \RuntimeException('Chrome or Edge was not found. Set CHROME_PATH in .env to enable PDF generation.');
-    }
-
-    private function fileUrl(string $path): string
-    {
-        return 'file:///'.str_replace(' ', '%20', str_replace('\\', '/', $path));
     }
 
     private function absoluteUrl(?string $url): ?string

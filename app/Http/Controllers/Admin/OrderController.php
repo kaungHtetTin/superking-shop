@@ -136,9 +136,17 @@ class OrderController extends Controller
         ]);
 
         try {
-            $orderManagementService->updateStatus($order, $validated['status']);
+            $updatedOrder = $orderManagementService->updateStatus($order, $validated['status']);
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
+        }
+
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'status' => $updatedOrder->status,
+                'status_updated_at' => $updatedOrder->status_updated_at,
+                'message' => 'Order status updated.',
+            ]);
         }
 
         return back()->with('success', 'Order status updated.');
@@ -191,6 +199,14 @@ class OrderController extends Controller
             $orderManagementService->deleteOrderAsReturn($order, $request->user(), $validated['reason'] ?? null);
         } catch (ValidationException $e) {
             return back()->withErrors($e->errors());
+        }
+
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'deleted' => true,
+                'redirect' => route('admin.orders.index'),
+                'message' => 'Order deleted. Stock and POS finance records were reversed.',
+            ]);
         }
 
         return redirect()

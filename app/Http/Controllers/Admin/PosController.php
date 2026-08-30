@@ -40,8 +40,19 @@ class PosController extends Controller
             ->orderBy('name')
             ->get(['id', 'parent_id', 'name']);
 
+        $registers = PosRegister::query()
+            ->whereIn('location_id', $locationIds)
+            ->where('is_active', true)
+            ->with(['location:id,name', 'shifts' => fn ($query) => $query
+                ->where('cashier_id', $request->user()->id)
+                ->where('status', 'open')
+                ->latest('opened_at')])
+            ->orderBy('name')
+            ->get();
+
         return Spa::render('Admin/POS/Index', [
             'locations' => $locations,
+            'registers' => $registers,
             'categories' => $categories,
             'priceTypes' => ProductPriceType::query()
                 ->whereHas('product', fn ($query) => $query->where('status', 'active')->where('is_active', true))
@@ -221,6 +232,7 @@ class PosController extends Controller
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
+            'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
             'customer_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
@@ -233,6 +245,7 @@ class PosController extends Controller
             'discount_type' => ['nullable', 'string', Rule::in(['percent', 'amount'])],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
             'tender_type' => ['required', 'string', Rule::in(['cash', 'card', 'mobile'])],
+            'amount_tendered' => ['required', 'numeric', 'min:0'],
             'payment_details' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);

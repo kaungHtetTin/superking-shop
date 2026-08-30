@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Head, Link, useForm, usePage } from '@/spa/router';
+import { useEffect, useState } from 'react';
+import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { AdminFlash } from '@/Components/Admin/AdminFlash';
@@ -25,11 +25,12 @@ function activeStepIndex(status, paymentStatus) {
 
 export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments, canManageOrders, canCancelOrders }) {
     const t = usePhraseTranslation();
-    const { app_base, app_url, flash } = usePage().props;
+    const { app_base, app_url, flash, errors: pageErrors = {} } = usePage().props;
     const [rejectOpen, setRejectOpen] = useState(false);
     const [cancelOpen, setCancelOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [statusOverride, setStatusOverride] = useState(null);
 
     const rejectForm = useForm({ reason: '' });
     const confirmForm = useForm({
@@ -43,10 +44,11 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
 
     const proofUrl = order.payment_proof_url || storageUrl(order.payment_proof_path, app_url);
     const paymentAccount = order.payment_method_snapshot || order.selected_payment_method || (order.payment_method ? { banking_service: order.payment_method } : null);
-    const awaitingReview = order.payment_status === 'pending_review' && order.status !== 'cancelled';
-    const isCancelled = order.status === 'cancelled';
-    const isDelivered = order.status === 'delivered';
-    const stepActive = activeStepIndex(order.status, order.payment_status);
+    const displayStatus = statusOverride || order.status;
+    const awaitingReview = order.payment_status === 'pending_review' && displayStatus !== 'cancelled';
+    const isCancelled = displayStatus === 'cancelled';
+    const isDelivered = displayStatus === 'delivered';
+    const stepActive = activeStepIndex(displayStatus, order.payment_status);
     const adminDiscountAmount = Number(order.admin_discount_amount || 0);
     const checkoutDiscountAmount = Math.max(0, Number(order.discount_amount || 0) - adminDiscountAmount);
     const orderPayableAmount = Number(order.final_amount || 0);
@@ -62,12 +64,20 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
         ? approvalDiscountValue > 100
         : approvalDiscountValue > orderPayableAmount;
 
+    useEffect(() => {
+        if (statusOverride && order.status === statusOverride) {
+            setStatusOverride(null);
+        }
+    }, [order.status, statusOverride]);
+
     const handleConfirm = () => {
         const message = approvalDiscountAmount > 0
             ? t('Confirm payment and apply :amount discount? Stock will be deducted and fulfillment begins.', { amount: formatMoney(approvalDiscountAmount) })
             : t('Confirm payment? Stock will be deducted and fulfillment begins.');
         if (!confirm(message)) return;
-        confirmForm.post(routeWithBase(`/admin/orders/${order.id}/confirm-payment`, app_base), { preserveScroll: true });
+        confirmForm.post(routeWithBase(`/admin/orders/${order.id}/confirm-payment`, app_base), {
+            preserveScroll: true,
+        });
     };
 
     const handleReject = (e) => {
@@ -80,10 +90,12 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
 
     const advanceStatus = (status) => {
         statusForm.clearErrors();
-        statusForm.transform(() => ({ status }));
+        setStatusOverride(status);
         statusForm.patch(routeWithBase(`/admin/orders/${order.id}/status`, app_base), {
+            data: { status },
             preserveScroll: true,
-            onFinish: () => statusForm.transform((data) => data),
+            onSuccess: (response) => setStatusOverride(response?.status || status),
+            onError: () => setStatusOverride(null),
         });
     };
 
@@ -104,7 +116,13 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
         e.preventDefault();
         deleteForm.delete(routeWithBase(`/admin/orders/${order.id}`, app_base), {
             preserveScroll: true,
-            onSuccess: () => setDeleteOpen(false),
+            onSuccess: (response) => {
+                setDeleteOpen(false);
+                router.visit(response?.redirect || routeWithBase('/admin/orders', app_base), {
+                    replace: true,
+                    showSkeleton: false,
+                });
+            },
         });
     };
 
@@ -133,7 +151,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                 flash={flash}
                 errors={{
                     order: confirmForm.errors.order || cancelForm.errors.order || deleteForm.errors.order,
-                    status: statusForm.errors.status,
+                    status: statusForm.errors.status || pageErrors.status,
                 }}
             />
 
@@ -149,7 +167,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                     </div>
                     <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <StatusBadge status={order.status} label={t(orderStatusLabels[order.status] || order.status)} />
+                            <StatusBadge status={displayStatus} label={t(orderStatusLabels[displayStatus] || displayStatus)} />
                             <StatusBadge
                                 status={order.payment_status}
                                 label={t(paymentLabels[order.payment_status] || order.payment_status)}
@@ -483,7 +501,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                         <section className="panel glass">
                             <PanelHeading eyebrow={t('Fulfillment')} title={t('Update status')} />
                             <div className="stack-sm">
-                                {order.status === 'processing' && (
+                                {displayStatus === 'processing' && (
                                     <button
                                         type="button"
                                         className="btn primary full"
@@ -491,10 +509,10 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                                         disabled={statusForm.processing}
                                     >
                                         <Icon name="navigation" size={14} />
-                                        {t('Mark as shipped')}
+                                        {statusForm.processing ? t('Updating...') : t('Mark as shipped')}
                                     </button>
                                 )}
-                                {order.status === 'shipped' && (
+                                {displayStatus === 'shipped' && (
                                     <button
                                         type="button"
                                         className="btn primary full"
@@ -502,7 +520,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                                         disabled={statusForm.processing}
                                     >
                                         <Icon name="check" size={14} />
-                                        {t('Mark as delivered')}
+                                        {statusForm.processing ? t('Updating...') : t('Mark as delivered')}
                                     </button>
                                 )}
                             </div>
@@ -516,9 +534,15 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                     )}
 
                     {canCancelOrders && (
-                        <button type="button" className="btn danger full" onClick={() => setDeleteOpen(true)}>
+                        <button
+                            type="button"
+                            className="btn danger full"
+                            onClick={() => setDeleteOpen(true)}
+                            disabled={deleteForm.processing}
+                            aria-busy={deleteForm.processing}
+                        >
                             <Icon name="trash" size={14} />
-                            {t('Delete & return stock')}
+                            {deleteForm.processing ? t('Deleting...') : t('Delete & return stock')}
                         </button>
                     )}
 
@@ -630,8 +654,8 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                             <button type="button" className="btn secondary" onClick={() => setDeleteOpen(false)}>
                                 {t('Close')}
                             </button>
-                            <button type="submit" className="btn danger" disabled={deleteForm.processing}>
-                                {t('Delete order')}
+                            <button type="submit" className="btn danger" disabled={deleteForm.processing} aria-busy={deleteForm.processing}>
+                                {deleteForm.processing ? t('Deleting...') : t('Delete order')}
                             </button>
                         </div>
                     </form>

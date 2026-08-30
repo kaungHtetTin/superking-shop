@@ -10,6 +10,8 @@ use App\Models\InventoryBalance;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductUnit;
+use App\Models\PosRegister;
+use App\Models\PosShift;
 use App\Models\User;
 use App\Services\FlashSalePricingService;
 use App\Services\Inventory\InventoryService;
@@ -158,10 +160,12 @@ class ProductUnitArchitectureTest extends TestCase
         [$product, $piece, $box] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 25, idempotencyKey: 'pos-foc-opening');
 
         $order = app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
+            'shift_id' => $shift->id,
             'customer_name' => 'Walk-in customer',
             'items' => [
                 [
@@ -173,6 +177,7 @@ class ProductUnitArchitectureTest extends TestCase
                 ],
             ],
             'tender_type' => 'cash',
+            'amount_tendered' => 100,
         ], $cashier);
 
         $paidLine = $order->items->sole();
@@ -180,6 +185,10 @@ class ProductUnitArchitectureTest extends TestCase
 
         $this->assertSame(96.0, (float) $order->total_amount);
         $this->assertSame(96.0, (float) $order->final_amount);
+        $this->assertSame($shift->id, $order->shift_id);
+        $this->assertSame($shift->pos_register_id, $order->register_id);
+        $this->assertSame(4.0, (float) $order->payments->sole()->change_due);
+        $this->assertSame(96.0, (float) $shift->fresh()->cash_sales);
         $this->assertSame('wholesale', $paidLine->price_type);
         $this->assertSame(96.0, (float) $paidLine->unit_price);
         $this->assertSame($piece->id, $paidLine->foc_product_unit_id);
@@ -196,15 +205,18 @@ class ProductUnitArchitectureTest extends TestCase
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'staff']);
         $cashier->locations()->attach($location->id, ['is_default' => true]);
+        $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'pos-foc-denied-opening');
 
         $this->expectException(ValidationException::class);
         app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
+            'shift_id' => $shift->id,
             'items' => [
                 ['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => 1, 'foc_product_unit_id' => $piece->id],
             ],
             'tender_type' => 'cash',
+            'amount_tendered' => 10,
         ], $cashier);
     }
 
@@ -214,15 +226,18 @@ class ProductUnitArchitectureTest extends TestCase
         [, $otherPiece] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'pos-foc-product-opening');
 
         $this->expectException(ValidationException::class);
         app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
+            'shift_id' => $shift->id,
             'items' => [
                 ['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => 1, 'foc_product_unit_id' => $otherPiece->id],
             ],
             'tender_type' => 'cash',
+            'amount_tendered' => 10,
         ], $cashier);
     }
 
@@ -292,6 +307,25 @@ class ProductUnitArchitectureTest extends TestCase
             'is_active' => true,
             'is_default_fulfillment' => $default,
             'is_system' => false,
+        ]);
+    }
+
+    private function shift(Location $location, User $cashier): PosShift
+    {
+        $register = PosRegister::create([
+            'location_id' => $location->id,
+            'code' => 'REG-'.uniqid(),
+            'name' => 'Register '.uniqid(),
+            'is_active' => true,
+        ]);
+
+        return PosShift::create([
+            'pos_register_id' => $register->id,
+            'cashier_id' => $cashier->id,
+            'status' => 'open',
+            'opening_cash' => 1000,
+            'expected_cash' => 1000,
+            'opened_at' => now(),
         ]);
     }
 }
