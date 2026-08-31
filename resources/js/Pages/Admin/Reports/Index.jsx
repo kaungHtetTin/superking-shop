@@ -304,9 +304,8 @@ function PosReport({ report, filters, locations, appBase }) {
             <ReportFilters view="pos" filters={filters} locations={locations} appBase={appBase} showDates />
             <div className="metrics-grid four">
                 <MetricCard label="POS revenue" value={money(summary.revenue)} hint={t(':count completed sales', { count: summary.orders || 0 })} icon="wallet" tone="success" />
-                <MetricCard label="Average sale" value={money(summary.average_sale)} hint={report.own_only ? 'Your shifts only' : 'All accessible warehouses'} icon="receipt" />
+                <MetricCard label="Average sale" value={money(summary.average_sale)} hint={report.own_only ? 'Your sales only' : 'All accessible warehouses'} icon="receipt" />
                 <MetricCard label="Discounts" value={money(summary.discounts)} hint="POS order discounts" icon="tag" />
-                <MetricCard label="Closed shifts" value={report.shifts.filter((shift) => shift.status === 'closed').length} hint={t(':count shifts in period', { count: report.shifts.length })} icon="card" />
             </div>
             <div className="reports-layout">
                 <div className="report-analysis-grid">
@@ -317,7 +316,6 @@ function PosReport({ report, filters, locations, appBase }) {
                     <section className="panel glass"><PanelHeading eyebrow={t('Register performance')} title={t('Sales by register')} /><div className="table-wrap report-products-table"><table><thead><tr><th>{t('Register')}</th><th>{t('Orders')}</th><th>{t('Revenue')}</th></tr></thead><tbody>{report.by_register.length === 0 ? <tr><td colSpan={3}><span className="muted">{t('No register sales.')}</span></td></tr> : report.by_register.map((row) => <tr key={row.id}><td><strong>{row.name}</strong><small>{row.code}</small></td><td>{row.orders}</td><td>{money(row.revenue)}</td></tr>)}</tbody></table></div></section>
                     <section className="panel glass"><PanelHeading eyebrow={t('Team performance')} title={t('Sales by cashier')} /><div className="table-wrap report-products-table"><table><thead><tr><th>{t('Cashier')}</th><th>{t('Orders')}</th><th>{t('Revenue')}</th></tr></thead><tbody>{report.by_cashier.length === 0 ? <tr><td colSpan={3}><span className="muted">{t('No cashier sales.')}</span></td></tr> : report.by_cashier.map((row) => <tr key={row.id}><td><strong>{row.name}</strong></td><td>{row.orders}</td><td>{money(row.revenue)}</td></tr>)}</tbody></table></div></section>
                 </div>
-                <section className="panel glass"><PanelHeading eyebrow={`${report.from} ${t('to')} ${report.to}`} title={t('Shift reconciliation')} /><div className="table-wrap report-products-table"><table><thead><tr><th>{t('Shift')}</th><th>{t('Cashier')}</th><th>{t('Register')}</th><th>{t('Cash sales')}</th><th>{t('Expected')}</th><th>{t('Counted')}</th><th>{t('Variance')}</th></tr></thead><tbody>{report.shifts.length === 0 ? <tr><td colSpan={7}><span className="muted">{t('No shifts in this period.')}</span></td></tr> : report.shifts.map((row) => <tr key={row.id}><td><strong>#{row.id}</strong><small>{row.opened_at}</small></td><td>{row.cashier_name}</td><td><strong>{row.register_name}</strong><small>{row.location_name}</small></td><td>{money(row.cash_sales)}</td><td>{money(row.expected_cash)}</td><td>{row.counted_cash === null ? '-' : money(row.counted_cash)}</td><td><StatusBadge status={Math.abs(Number(row.variance || 0)) > 0.01 ? 'warning' : 'healthy'} label={row.variance === null ? t('Open') : money(row.variance)} /></td></tr>)}</tbody></table></div></section>
             </div>
         </>
     );

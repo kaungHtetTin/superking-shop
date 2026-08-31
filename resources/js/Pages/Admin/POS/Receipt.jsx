@@ -60,7 +60,7 @@ export default function PosReceipt({ order }) {
                     )}
                 </div>
                 <footer>
-                    {t('Served by')} {order.server?.name || order.shift?.cashier?.name || t('Staff')}
+                    {t('Served by')} {order.server?.name || t('Staff')}
                 </footer>
             </section>
         </AdminLayout>

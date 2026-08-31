@@ -7,7 +7,6 @@ use App\Models\OrderItem;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\FinancialEntry;
-use App\Models\PosShift;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\CustomerCreditService;
@@ -15,7 +14,9 @@ use App\Services\CreditStatementService;
 use App\Services\LoyaltyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use App\Support\Spa;
@@ -80,6 +81,7 @@ class CustomerController extends Controller
                 'credit_balance' => max(0, (float) ($customer->credit_balance ?? 0)),
                 'credit_limit' => (float) $customer->credit_limit,
                 'credit_status' => $customer->credit_status,
+                'status' => $customer->status,
                 'created_at' => $customer->created_at?->toDateString(),
             ]),
             'filters' => [
@@ -91,6 +93,102 @@ class CustomerController extends Controller
             'tiers' => array_keys(config('loyalty.tiers', [])),
             'creditStats' => $creditStats,
         ]);
+    }
+
+    public function store(Request $request, AuditLogService $auditLogService): \Illuminate\Http\RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')],
+            'phone' => ['nullable', 'string', 'max:30', Rule::unique('users', 'phone')],
+            'password' => ['required', 'confirmed', Password::defaults()],
+        ]);
+
+        $customer = User::create([
+            'name' => trim($validated['name']),
+            'email' => strtolower(trim($validated['email'])),
+            'phone' => filled($validated['phone'] ?? null) ? trim($validated['phone']) : null,
+            'password' => Hash::make($validated['password']),
+            'role' => User::CUSTOMER_ROLE,
+            'status' => 'active',
+            'auth_provider' => 'email',
+            'credit_status' => 'disabled',
+        ]);
+
+        $auditLogService->record('customer.created_by_admin', $customer, [
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+        ], $request);
+
+        return redirect()->route('admin.customers.index', [], 303)
+            ->with('success', 'Customer account created successfully.');
+    }
+
+    public function update(Request $request, User $customer, AuditLogService $auditLogService): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($customer->role === User::CUSTOMER_ROLE, 404);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')->ignore($customer->id)],
+            'phone' => ['nullable', 'string', 'max:30', Rule::unique('users', 'phone')->ignore($customer->id)],
+            'status' => ['required', Rule::in(['active', 'suspended'])],
+            'password' => ['nullable', 'confirmed', Password::defaults()],
+        ]);
+
+        $before = $customer->only(['name', 'email', 'phone', 'status']);
+        $customer->fill([
+            'name' => trim($validated['name']),
+            'email' => strtolower(trim($validated['email'])),
+            'phone' => filled($validated['phone'] ?? null) ? trim($validated['phone']) : null,
+            'status' => $validated['status'],
+        ]);
+        if (filled($validated['password'] ?? null)) {
+            $customer->password = Hash::make($validated['password']);
+        }
+        $customer->save();
+
+        $auditLogService->record('customer.updated_by_admin', $customer, [
+            'before' => $before,
+            'password_changed' => filled($validated['password'] ?? null),
+        ], $request);
+
+        return redirect()->route('admin.customers.index', [], 303)
+            ->with('success', 'Customer account updated successfully.');
+    }
+
+    public function destroy(Request $request, User $customer, AuditLogService $auditLogService): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($customer->role === User::CUSTOMER_ROLE, 404);
+
+        $creditBalance = (float) $customer->creditTransactions()->sum('amount');
+        if ($creditBalance > 0.009) {
+            throw ValidationException::withMessages([
+                'customer' => 'Settle the outstanding credit balance before deleting this customer.',
+            ]);
+        }
+
+        DB::transaction(function () use ($customer, $auditLogService, $request) {
+            $originalEmail = $customer->email;
+            $originalPhone = $customer->phone;
+
+            $auditLogService->record('customer.deleted_by_admin', $customer, [
+                'email' => $originalEmail,
+                'phone' => $originalPhone,
+                'orders_count' => $customer->orders()->count(),
+            ], $request);
+
+            $customer->forceFill([
+                'email' => 'deleted-'.$customer->id.'-'.Str::lower(Str::random(12)).'@deleted.invalid',
+                'phone' => null,
+                'google_id' => null,
+                'remember_token' => null,
+            ])->save();
+            $customer->delete();
+        });
+
+        return redirect()->route('admin.customers.index', [], 303)
+            ->with('success', 'Customer account deleted. Sales history was retained.');
     }
 
     public function show(User $customer, CustomerCreditService $creditService)
@@ -152,13 +250,6 @@ class CustomerController extends Controller
             ->orderBy('credit_due_date')
             ->get(['id', 'order_number', 'receipt_number', 'final_amount', 'paid_amount', 'credit_due_date', 'payment_status']);
         $creditBalance = $creditService->balance($customer);
-        $creditPaymentShifts = PosShift::query()
-            ->where('cashier_id', request()->user()->id)
-            ->where('status', 'open')
-            ->with('register:id,code,name,location_id')
-            ->latest('opened_at')
-            ->get();
-
         return Spa::render('Admin/Customers/Show', [
             'customer' => $customer,
             'stats' => [
@@ -187,7 +278,6 @@ class CustomerController extends Controller
             ],
             'creditTransactions' => $creditTransactions,
             'creditOrders' => $creditOrders,
-            'creditPaymentShifts' => $creditPaymentShifts,
         ]);
     }
 
@@ -235,7 +325,6 @@ class CustomerController extends Controller
             'tender_type' => ['required', Rule::in(['cash', 'card', 'mobile', 'bank_transfer'])],
             'reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:500'],
-            'shift_id' => ['nullable', 'integer', 'exists:pos_shifts,id'],
         ]);
 
         DB::transaction(function () use ($validated, $customer, $request, $creditService, $loyaltyService, $auditLogService) {
@@ -258,25 +347,7 @@ class CustomerController extends Controller
                 throw ValidationException::withMessages(['amount' => 'Payment exceeds the selected outstanding balance.']);
             }
 
-            $shift = null;
-            if ($validated['tender_type'] === 'cash') {
-                if (empty($validated['shift_id'])) {
-                    throw ValidationException::withMessages(['shift_id' => 'Choose your open register shift for a cash repayment.']);
-                }
-                $shift = PosShift::query()->with('register')->lockForUpdate()->findOrFail($validated['shift_id']);
-                if ($shift->status !== 'open' || (int) $shift->cashier_id !== (int) $request->user()->id || ! $shift->register?->is_active) {
-                    throw ValidationException::withMessages(['shift_id' => 'Cash repayments require your active register shift.']);
-                }
-            }
-
             $batchReference = ($validated['reference'] ?? null) ?: 'CRPAY-'.now()->format('ymd').'-'.strtoupper(Str::random(8));
-
-            if ($shift) {
-                $shift->increment('cash_sales', $amount);
-                $shift->update([
-                    'expected_cash' => round((float) $shift->opening_cash + (float) $shift->cash_sales - (float) $shift->cash_refunds, 2),
-                ]);
-            }
 
             $remaining = $amount;
             $allocationCount = 0;
@@ -286,8 +357,8 @@ class CustomerController extends Controller
                 $allocated = min($remaining, $outstanding);
                 $payment = Payment::create([
                     'order_id' => $order->id,
-                    'register_id' => $shift?->pos_register_id,
-                    'shift_id' => $shift?->id,
+                    'register_id' => null,
+                    'shift_id' => null,
                     'received_by' => $request->user()->id,
                     'transaction_id' => $batchReference.'-'.($allocationCount + 1),
                     'amount' => $allocated,

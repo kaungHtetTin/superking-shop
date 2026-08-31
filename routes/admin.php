@@ -149,7 +149,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::get('/credit', [CreditReportController::class, 'index'])->middleware('admin.permission:credit.manage')->name('credit.index');
         Route::get('/credit/export', [CreditReportController::class, 'export'])->middleware('admin.permission:credit.manage')->name('credit.export');
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+        Route::patch('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+        Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
         Route::get('/customers/{customer}/credit-statement', [CustomerController::class, 'creditStatement'])->middleware('admin.permission:credit.manage')->name('customers.credit-statement');
         Route::post('/customers/{customer}/loyalty-adjustments', [CustomerController::class, 'adjustLoyalty'])
             ->middleware('super_admin')
@@ -228,10 +231,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:pos.access')->name('pos.products.search');
     Route::get('/pos/customers/search', [PosController::class, 'customers'])
         ->middleware('admin.permission:pos.access')->name('pos.customers.search');
-    Route::post('/pos/shifts/open', [PosController::class, 'openShift'])
-        ->middleware('admin.permission:pos.shift.open')->name('pos.shifts.open');
-    Route::post('/pos/shifts/close', [PosController::class, 'closeShift'])
-        ->middleware('admin.permission:pos.shift.close')->name('pos.shifts.close');
+    Route::post('/pos/customers', [PosController::class, 'storeCustomer'])
+        ->middleware('admin.permission:pos.access')->name('pos.customers.store');
     Route::post('/pos/checkout', [PosController::class, 'checkout'])
         ->middleware('admin.permission:pos.access')->name('pos.checkout');
     Route::post('/pos/held-carts', [PosController::class, 'holdCart'])

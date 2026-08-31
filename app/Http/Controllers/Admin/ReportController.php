@@ -262,11 +262,10 @@ class ReportController extends Controller
                     ]);
                 }
             } else {
-                fputcsv($output, ['Warehouse', 'Register', 'Cashier', 'Status', 'Opened', 'Closed', 'Cash sales', 'Expected cash', 'Counted cash', 'Variance']);
-                foreach ($report['shifts'] as $row) {
+                fputcsv($output, ['Tender type', 'Payments', 'Amount']);
+                foreach ($report['tenders'] as $row) {
                     fputcsv($output, [
-                        $row->location_name, $row->register_name, $row->cashier_name, $row->status,
-                        $row->opened_at, $row->closed_at, $row->cash_sales, $row->expected_cash, $row->counted_cash, $row->variance,
+                        $row->tender_type, $row->payments, $row->amount,
                     ]);
                 }
             }

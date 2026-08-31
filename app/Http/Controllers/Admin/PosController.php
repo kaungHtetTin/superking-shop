@@ -9,14 +9,14 @@ use App\Models\InventoryBalance;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\PosRegister;
-use App\Models\PosShift;
 use App\Models\ProductUnit;
 use App\Models\ProductPriceType;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\POS\PosCheckoutService;
-use App\Services\POS\PosShiftService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Support\Spa;
@@ -40,19 +40,8 @@ class PosController extends Controller
             ->orderBy('name')
             ->get(['id', 'parent_id', 'name']);
 
-        $registers = PosRegister::query()
-            ->whereIn('location_id', $locationIds)
-            ->where('is_active', true)
-            ->with(['location:id,name', 'shifts' => fn ($query) => $query
-                ->where('cashier_id', $request->user()->id)
-                ->where('status', 'open')
-                ->latest('opened_at')])
-            ->orderBy('name')
-            ->get();
-
         return Spa::render('Admin/POS/Index', [
             'locations' => $locations,
-            'registers' => $registers,
             'categories' => $categories,
             'priceTypes' => ProductPriceType::query()
                 ->whereHas('product', fn ($query) => $query->where('status', 'active')->where('is_active', true))
@@ -206,31 +195,39 @@ class PosController extends Controller
             });
     }
 
-    public function openShift(Request $request, PosShiftService $service)
+    public function storeCustomer(Request $request, AuditLogService $audit): \Illuminate\Http\JsonResponse
     {
-        abort_unless($request->user()->hasAdminPermission('pos.shift.open'), 403);
+        abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
+
         $validated = $request->validate([
-            'register_id' => ['required', 'integer', 'exists:pos_registers,id'],
-            'opening_cash' => ['required', 'numeric', 'min:0'],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email:rfc', 'max:255', Rule::unique('users', 'email')],
+            'phone' => ['nullable', 'string', 'max:30', Rule::unique('users', 'phone')],
         ]);
 
-        $shift = $service->open(PosRegister::with('location')->findOrFail($validated['register_id']), $request->user(), (float) $validated['opening_cash']);
-
-        return response()->json(['shift' => $shift]);
-    }
-
-    public function closeShift(Request $request, PosShiftService $service)
-    {
-        abort_unless($request->user()->hasAdminPermission('pos.shift.close'), 403);
-        $validated = $request->validate([
-            'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
-            'counted_cash' => ['required', 'numeric', 'min:0'],
-            'closing_notes' => ['nullable', 'string', 'max:2000'],
+        $customer = User::create([
+            'name' => trim($validated['name']),
+            'email' => strtolower(trim($validated['email'])),
+            'phone' => filled($validated['phone'] ?? null) ? trim($validated['phone']) : null,
+            'password' => Hash::make(Str::random(40)),
+            'role' => User::CUSTOMER_ROLE,
+            'status' => 'active',
+            'auth_provider' => 'email',
+            'credit_status' => 'disabled',
         ]);
 
-        $shift = $service->close(PosShift::findOrFail($validated['shift_id']), $request->user(), (float) $validated['counted_cash'], $validated['closing_notes'] ?? null);
+        $audit->record('customer.created_from_pos', $customer, [
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+        ], $request);
 
-        return response()->json(['shift' => $shift]);
+        $customer->setAttribute('credit_balance', 0);
+        $customer->setAttribute('available_credit', 0);
+
+        return response()->json(['customer' => $customer->only([
+            'id', 'name', 'email', 'phone', 'credit_limit', 'credit_terms_days',
+            'credit_status', 'credit_balance', 'available_credit',
+        ])], 201);
     }
 
     public function checkout(Request $request, PosCheckoutService $service)
@@ -238,7 +235,6 @@ class PosController extends Controller
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
-            'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
             'customer_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
@@ -313,7 +309,7 @@ class PosController extends Controller
         abort_unless($request->user()->hasAdminPermission('pos.access') || $request->user()->hasAdminPermission('orders.view'), 403);
         abort_unless($order->sales_channel === 'pos', 404);
 
-        $order->load(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'register', 'shift.cashier', 'server', 'user']);
+        $order->load(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'register', 'server', 'user']);
 
         return Spa::render('Admin/POS/Receipt', ['order' => $order]);
     }

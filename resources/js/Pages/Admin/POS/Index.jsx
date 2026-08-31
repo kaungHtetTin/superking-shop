@@ -71,14 +71,13 @@ const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
     line.available_base_qty || (Number(line.available_qty || 0) * Number(line.conversion_factor || 1)),
 ) + 0.00005;
 
-export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
+export default function PosIndex({ locations = [], categories = [], priceTypes = ['retail'], can = {} }) {
     const { app_base, app_url, flash = {}, errors: pageErrors = {} } = usePage().props;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const t = useTranslation();
     const tp = usePhraseTranslation();
     const firstLocation = locations[0];
-    const firstRegister = registers.find((register) => Number(register.location_id) === Number(firstLocation?.id));
     const [locationId, setLocationId] = useState(firstLocation?.id || '');
     const [categoryId, setCategoryId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -95,15 +94,16 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [customerSearchInput, setCustomerSearchInput] = useState('');
     const [customerLoading, setCustomerLoading] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+    const [newCustomer, setNewCustomer] = useState({ name: '', email: '', phone: '' });
+    const [customerCreateErrors, setCustomerCreateErrors] = useState({});
+    const [customerCreating, setCustomerCreating] = useState(false);
     const [salePriceType, setSalePriceType] = useState('retail');
     const [discountType, setDiscountType] = useState('');
     const [discountValue, setDiscountValue] = useState('');
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
     const [mobileStep, setMobileStep] = useState('products');
     const [tenderType, setTenderType] = useState('cash');
-    const [registerId, setRegisterId] = useState(firstRegister?.id || '');
-    const [activeShift, setActiveShift] = useState(firstRegister?.shifts?.[0] || null);
-    const [openingCash, setOpeningCash] = useState('0');
     const [amountTendered, setAmountTendered] = useState('');
     const [creditDepositMethod, setCreditDepositMethod] = useState('cash');
     const [busy, setBusy] = useState(false);
@@ -119,7 +119,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const productLoadMoreLockRef = useRef(false);
 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
-    const locationRegisters = registers.filter((register) => Number(register.location_id) === Number(locationId));
     const paymentMethods = ['cash', 'card', 'mobile', ...(can.credit ? ['credit'] : [])];
     const api = async (url, options = {}) => {
         setErrors({});
@@ -196,6 +195,26 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             setCustomerLoading(false);
         }
     }, [app_base]);
+
+    const createCustomer = async (event) => {
+        event.preventDefault();
+        setCustomerCreateErrors({});
+        setCustomerCreating(true);
+        try {
+            const response = await window.axios.post(routeWithBase('/admin/pos/customers', app_base), newCustomer);
+            const customer = response.data.customer;
+            setCustomerOptions((current) => [customer, ...current.filter((item) => item.id !== customer.id)]);
+            setSelectedCustomer(customer);
+            setCustomerSearchInput(customer.name);
+            setNewCustomer({ name: '', email: '', phone: '' });
+            setCustomerDialogOpen(false);
+            setMessage(tp('Customer created and selected.'));
+        } catch (error) {
+            setCustomerCreateErrors(error.response?.data?.errors || { request: error.response?.data?.message || tp('Unable to create customer.') });
+        } finally {
+            setCustomerCreating(false);
+        }
+    };
 
     useEffect(() => {
         const updateNetworkState = () => setIsOnline(navigator.onLine);
@@ -305,15 +324,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         setSearchResults([]);
         setResultMeta((prev) => ({ ...prev, page: 1, has_more: false, next_page: null, mode: 'popular' }));
         setSearchQuery('');
-        const nextRegister = registers.find((register) => Number(register.location_id) === Number(locationId));
-        setRegisterId(nextRegister?.id || '');
-        setActiveShift(nextRegister?.shifts?.[0] || null);
     }, [locationId]);
-
-    useEffect(() => {
-        const register = registers.find((item) => Number(item.id) === Number(registerId));
-        setActiveShift(register?.shifts?.[0] || null);
-    }, [registerId]);
 
     const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
 
@@ -662,24 +673,9 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         }
     };
 
-    const openRegisterShift = async () => {
-        if (!registerId) return;
-        setBusy(true);
-        try {
-            const data = await api('/admin/pos/shifts/open', {
-                method: 'post',
-                data: { register_id: registerId, opening_cash: Number(openingCash || 0) },
-            });
-            setActiveShift(data.shift);
-            setMessage(tp('Register shift opened.'));
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const checkout = async (event) => {
         event.preventDefault();
-        if (!locationId || !activeShift || !cart.length) return;
+        if (!locationId || !cart.length) return;
 
         setBusy(true);
         try {
@@ -687,7 +683,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 method: 'post',
                 data: {
                     location_id: locationId,
-                    shift_id: activeShift.id,
                     customer_id: selectedCustomer?.id || null,
                     customer_name: selectedCustomer?.name || 'Walk-in customer',
                     customer_phone: selectedCustomer?.phone || null,
@@ -728,47 +723,16 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const paymentFormContent = (
         <Stack spacing={1.25} className="pos-console__payment-form">
             <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{tp('Register and shift')}</Typography>
-                <TextField
-                    select
-                    size="small"
-                    fullWidth
-                    label={tp('Register')}
-                    value={registerId}
-                    onChange={(event) => setRegisterId(event.target.value)}
-                >
-                    {locationRegisters.map((register) => (
-                        <MenuItem key={register.id} value={register.id}>{register.name} ({register.code})</MenuItem>
-                    ))}
-                </TextField>
-                {!activeShift && (
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                        <TextField
-                            size="small"
-                            type="number"
-                            label={tp('Opening cash')}
-                            value={openingCash}
-                            onChange={(event) => setOpeningCash(event.target.value)}
-                            inputProps={{ min: 0, step: 100 }}
-                            fullWidth
-                        />
-                        <Button type="button" variant="outlined" onClick={openRegisterShift} disabled={busy || !registerId}>
-                            {tp('Open shift')}
-                        </Button>
-                    </Stack>
-                )}
-                {activeShift && (
-                    <Alert severity="success" sx={{ mt: 1, py: 0 }}>
-                        {tp('Open shift')} #{activeShift.id} · {tp('Opening cash')} {money(activeShift.opening_cash)}
-                    </Alert>
-                )}
-            </Box>
-            <Box>
-                <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, alignItems: 'center' }}>
+                <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
                     <Box>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{tp('Customer')}</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedCustomer?.name || tp('Walk-in customer')}</Typography>
                     </Box>
+                    <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => {
+                        setCustomerCreateErrors({});
+                        setNewCustomer({ name: '', email: customerSearchInput.includes('@') ? customerSearchInput : '', phone: '' });
+                        setCustomerDialogOpen(true);
+                    }}>{tp('New customer')}</Button>
                 </Stack>
                 <Autocomplete
                     size="small"
@@ -919,7 +883,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -939,7 +903,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -1751,6 +1715,28 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 <DialogActions>
                     {receipt?.receipt_url && <Button variant="contained" component="a" href={receipt.receipt_url}>{tp('Open receipt')}</Button>}
                 </DialogActions>
+            </Dialog>
+
+            <Dialog open={customerDialogOpen} onClose={() => !customerCreating && setCustomerDialogOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" onSubmit={createCustomer}>
+                    <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        {tp('New customer')}
+                        <IconButton size="small" onClick={() => setCustomerDialogOpen(false)} disabled={customerCreating}><CloseIcon /></IconButton>
+                    </DialogTitle>
+                    <DialogContent dividers>
+                        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+                            {customerCreateErrors.request && <Alert severity="error">{customerCreateErrors.request}</Alert>}
+                            <TextField required autoFocus label={tp('Customer name')} value={newCustomer.name} onChange={(event) => setNewCustomer((current) => ({ ...current, name: event.target.value }))} error={Boolean(customerCreateErrors.name)} helperText={customerCreateErrors.name?.[0]} fullWidth />
+                            <TextField required type="email" label={tp('Email address')} value={newCustomer.email} onChange={(event) => setNewCustomer((current) => ({ ...current, email: event.target.value }))} error={Boolean(customerCreateErrors.email)} helperText={customerCreateErrors.email?.[0] || tp('Customer can use this email to activate or reset their password.')} fullWidth />
+                            <TextField label={tp('Phone number (optional)')} value={newCustomer.phone} onChange={(event) => setNewCustomer((current) => ({ ...current, phone: event.target.value }))} error={Boolean(customerCreateErrors.phone)} helperText={customerCreateErrors.phone?.[0]} fullWidth />
+                            <Alert severity="info">{tp('Credit is disabled by default. An authorized admin can enable it from the customer account.')}</Alert>
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button type="button" onClick={() => setCustomerDialogOpen(false)} disabled={customerCreating}>{tp('Cancel')}</Button>
+                        <Button type="submit" variant="contained" disabled={customerCreating || !newCustomer.name.trim() || !newCustomer.email.trim()}>{customerCreating ? tp('Creating...') : tp('Create & select')}</Button>
+                    </DialogActions>
+                </Box>
             </Dialog>
         </Box>
     );

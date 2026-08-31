@@ -70,13 +70,12 @@ export default function RegistersIndex({ registers, locations }) {
                 <PanelHeading eyebrow={t('Checkout stations')} title={t('POS registers')} />
                 <div className="table-wrap">
                     <table className="data-table">
-                        <thead><tr><th>{t('Register')}</th><th>{t('Warehouse')}</th><th>{t('Shifts')}</th><th>{t('Status')}</th><th /></tr></thead>
+                        <thead><tr><th>{t('Register')}</th><th>{t('Warehouse')}</th><th>{t('Status')}</th><th /></tr></thead>
                         <tbody>
-                            {registers.length === 0 ? <tr><td colSpan="5" className="empty-table-cell">{t('No registers yet.')}</td></tr> : registers.map((register) => (
+                            {registers.length === 0 ? <tr><td colSpan="4" className="empty-table-cell">{t('No registers yet.')}</td></tr> : registers.map((register) => (
                                 <tr key={register.id}>
                                     <td><strong>{register.name}</strong><small className="table-subline">{register.code}</small></td>
                                     <td>{register.location.name}<small className="table-subline">{register.location.code}</small></td>
-                                    <td>{register.shifts_count}<small className="table-subline">{register.open_shifts_count} {t('open')}</small></td>
                                     <td><StatusBadge status={register.is_active ? 'success' : 'inactive'} label={register.is_active ? t('Active') : t('Inactive')} /></td>
                                     <td><button className="icon-btn small" type="button" onClick={() => open(register)} aria-label={t('Edit register')}><Icon name="edit" size={13} /></button></td>
                                 </tr>

@@ -191,27 +191,12 @@ class OperationsReportService
             ->groupBy('payments.tender_type')
             ->orderByDesc(DB::raw('SUM(payments.amount)'))
             ->get(['payments.tender_type', DB::raw('COUNT(*) as payments'), DB::raw('SUM(payments.amount) as amount')]);
-        $shifts = DB::table('pos_shifts as shifts')
-            ->join('pos_registers as registers', 'registers.id', '=', 'shifts.pos_register_id')
-            ->join('locations', 'locations.id', '=', 'registers.location_id')
-            ->join('users', 'users.id', '=', 'shifts.cashier_id')
-            ->whereIn('registers.location_id', $locationIds)
-            ->whereBetween('shifts.opened_at', [$from, $to])
-            ->when($ownOnly, fn ($query) => $query->where('shifts.cashier_id', $user->id))
-            ->orderByDesc('shifts.opened_at')
-            ->limit(100)
-            ->get([
-                'shifts.id', 'shifts.status', 'shifts.opened_at', 'shifts.closed_at', 'shifts.cash_sales', 'shifts.expected_cash', 'shifts.counted_cash', 'shifts.variance',
-                'registers.name as register_name', 'locations.name as location_name', 'users.name as cashier_name',
-            ]);
-
         return [
             'summary' => $summary,
             'by_location' => $byLocation,
             'by_register' => $byRegister,
             'by_cashier' => $byCashier,
             'tenders' => $tenders,
-            'shifts' => $shifts,
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'own_only' => $ownOnly,

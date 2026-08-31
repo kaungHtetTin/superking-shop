@@ -22,7 +22,7 @@ function StatCard({ label, value, hint }) {
     );
 }
 
-export default function CustomerShow({ customer, stats, recentOrders, topCategories, reviews, rewardHistories = [], canAdjustLoyalty = false, canManageCredit = false, creditSummary = {}, creditTransactions = [], creditOrders = [], creditPaymentShifts = [] }) {
+export default function CustomerShow({ customer, stats, recentOrders, topCategories, reviews, rewardHistories = [], canAdjustLoyalty = false, canManageCredit = false, creditSummary = {}, creditTransactions = [], creditOrders = [] }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const loyaltyForm = useForm({
@@ -41,7 +41,6 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
         tender_type: 'cash',
         reference: '',
         notes: '',
-        shift_id: creditPaymentShifts[0]?.id || '',
     });
 
     const submitLoyaltyAdjustment = (event) => {
@@ -162,16 +161,6 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
                                 <span>{t('Reference')}</span>
                                 <input value={creditPaymentForm.data.reference} onChange={(e) => creditPaymentForm.setData('reference', e.target.value)} />
                             </label>
-                            {creditPaymentForm.data.tender_type === 'cash' && (
-                                <label className="form-field span-2">
-                                    <span>{t('Cash register shift')}</span>
-                                    <select value={creditPaymentForm.data.shift_id} onChange={(e) => creditPaymentForm.setData('shift_id', e.target.value)}>
-                                        {!creditPaymentShifts.length && <option value="">{t('Open a POS shift before receiving cash')}</option>}
-                                        {creditPaymentShifts.map((shift) => <option key={shift.id} value={shift.id}>{shift.register?.name} ({shift.register?.code}) · #{shift.id}</option>)}
-                                    </select>
-                                    {creditPaymentForm.errors.shift_id && <small className="field-error">{creditPaymentForm.errors.shift_id}</small>}
-                                </label>
-                            )}
                             <label className="form-field">
                                 <span>{t('Notes')}</span>
                                 <input value={creditPaymentForm.data.notes} onChange={(e) => creditPaymentForm.setData('notes', e.target.value)} />

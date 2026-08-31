@@ -8,7 +8,6 @@ use App\Models\Location;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ProductUnit;
-use App\Models\PosShift;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\CustomerCreditService;
@@ -30,20 +29,6 @@ class PosCheckoutService
             $location = Location::query()->where('is_active', true)->findOrFail((int) $payload['location_id']);
             if (! $cashier->canAccessLocation($location)) {
                 throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
-            }
-
-            $shift = PosShift::query()
-                ->with('register')
-                ->lockForUpdate()
-                ->findOrFail((int) ($payload['shift_id'] ?? 0));
-            if ($shift->status !== 'open') {
-                throw ValidationException::withMessages(['shift_id' => 'This register shift is already closed. Open a new shift before selling.']);
-            }
-            if ((int) $shift->cashier_id !== (int) $cashier->id) {
-                throw ValidationException::withMessages(['shift_id' => 'This register shift belongs to another cashier.']);
-            }
-            if (! $shift->register || ! $shift->register->is_active || (int) $shift->register->location_id !== (int) $location->id) {
-                throw ValidationException::withMessages(['shift_id' => 'The open shift does not belong to the selected warehouse.']);
             }
 
             $lines = collect($payload['items']);
@@ -148,8 +133,8 @@ class PosCheckoutService
                 'receipt_number' => $this->number('RCT'),
                 'sales_channel' => 'pos',
                 'location_id' => $location->id,
-                'register_id' => $shift->pos_register_id,
-                'shift_id' => $shift->id,
+                'register_id' => null,
+                'shift_id' => null,
                 'served_by' => $cashier->id,
                 'total_amount' => round($subtotal, 2),
                 'discount_amount' => $discount,
@@ -202,8 +187,8 @@ class PosCheckoutService
             if ($paidNow > 0) {
                 $payment = Payment::create([
                 'order_id' => $order->id,
-                'register_id' => $shift->pos_register_id,
-                'shift_id' => $shift->id,
+                'register_id' => null,
+                'shift_id' => null,
                 'received_by' => $cashier->id,
                 'transaction_id' => $this->paymentTransactionId(),
                 'amount' => $paidNow,
@@ -217,12 +202,6 @@ class PosCheckoutService
             }
             if ($isCredit) {
                 $this->creditService->recordSale($customer, $order, $creditAmount, $cashier);
-            }
-            if ($actualTender === 'cash' && $paidNow > 0) {
-                $shift->increment('cash_sales', $paidNow);
-                $shift->update([
-                    'expected_cash' => round((float) $shift->opening_cash + (float) $shift->cash_sales - (float) $shift->cash_refunds, 2),
-                ]);
             }
             if ($paidNow > 0) {
                 FinancialEntry::create([

@@ -19,7 +19,6 @@ class PosRegisterController extends Controller
         return Spa::render('Admin/Registers/Index', [
             'registers' => PosRegister::query()
                 ->with(['location:id,code,name,type'])
-                ->withCount(['shifts', 'shifts as open_shifts_count' => fn ($query) => $query->where('status', 'open')])
                 ->orderBy('code')
                 ->get(),
             'locations' => Location::query()

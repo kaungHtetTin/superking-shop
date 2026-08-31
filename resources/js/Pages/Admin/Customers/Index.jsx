@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import { Head, Link, router, usePage } from '@/spa/router';
+import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
+import { AdminFlash } from '@/Components/Admin/AdminFlash';
 import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
 
 export default function CustomersIndex({ customers, filters, tiers, creditStats = {} }) {
-    const { app_base } = usePage().props;
+    const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
     const [search, setSearch] = useState(filters.q ?? '');
+    const [createOpen, setCreateOpen] = useState(false);
+    const [editingCustomer, setEditingCustomer] = useState(null);
+    const createForm = useForm({ name: '', email: '', phone: '', status: 'active', password: '', password_confirmation: '' });
     const applyFilters = (patch) => router.get(routeWithBase('/admin/customers', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
     const hasActiveFilters = Boolean(filters.q || filters.tier || filters.credit_status || filters.credit);
     const dateOnly = (value) => value ? String(value).split('T')[0] : '';
@@ -19,10 +23,40 @@ export default function CustomersIndex({ customers, filters, tiers, creditStats 
         e.preventDefault();
         applyFilters({ q: search.trim() || undefined });
     };
+    const openCreate = () => {
+        setEditingCustomer(null);
+        createForm.setData({ name: '', email: '', phone: '', status: 'active', password: '', password_confirmation: '' });
+        createForm.clearErrors();
+        setCreateOpen(true);
+    };
+    const openEdit = (customer) => {
+        setEditingCustomer(customer);
+        createForm.setData({ name: customer.name, email: customer.email || '', phone: customer.phone || '', status: customer.status || 'active', password: '', password_confirmation: '' });
+        createForm.clearErrors();
+        setCreateOpen(true);
+    };
+    const submitCustomer = (event) => {
+        event.preventDefault();
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                setCreateOpen(false);
+                setEditingCustomer(null);
+                createForm.reset();
+            },
+        };
+        if (editingCustomer) createForm.patch(routeWithBase(`/admin/customers/${editingCustomer.id}`, app_base), options);
+        else createForm.post(routeWithBase('/admin/customers', app_base), options);
+    };
+    const deleteCustomer = (customer) => {
+        if (!window.confirm(t('Delete this customer account? Sales history will be retained.'))) return;
+        router.delete(routeWithBase(`/admin/customers/${customer.id}`, app_base), {}, { preserveScroll: true });
+    };
 
     return (
-        <AdminLayout title={t('Customers')} eyebrow={t('Shopper management')}>
+        <AdminLayout title={t('Customers')} eyebrow={t('Shopper management')} action={<button type="button" className="btn primary" onClick={openCreate}><Icon name="plus" size={14} /> {t('Add customer')}</button>}>
             <Head title={t('Customers')} />
+            <AdminFlash flash={flash} errors={createForm.errors} />
             <div className="metrics-grid four">
                 <article className="metric-card glass"><small>{t('Credit outstanding')}</small><strong>{formatMoney(creditStats.outstanding)}</strong><p>{t('Total receivables')}</p></article>
                 <article className="metric-card glass"><small>{t('Overdue credit')}</small><strong>{formatMoney(creditStats.overdue)}</strong><p>{t('Past due balance')}</p></article>
@@ -54,20 +88,19 @@ export default function CustomersIndex({ customers, filters, tiers, creditStats 
                     <button type="submit" className="btn primary">
                         {t('Search')}
                     </button>
+                    {hasActiveFilters && (
+                        <button
+                            type="button"
+                            className="btn secondary customer-filter-reset"
+                            onClick={() => {
+                                setSearch('');
+                                router.get(routeWithBase('/admin/customers', app_base));
+                            }}
+                        >
+                            {t('Reset')}
+                        </button>
+                    )}
                 </form>
-                {hasActiveFilters && (
-                    <button
-                        type="button"
-                        className="text-btn"
-                        style={{ marginBottom: 10 }}
-                        onClick={() => {
-                            setSearch('');
-                            router.get(routeWithBase('/admin/customers', app_base));
-                        }}
-                    >
-                        {t('Reset filters')}
-                    </button>
-                )}
                 <div className="table-wrap">
                     <table>
                         <thead>
@@ -106,9 +139,11 @@ export default function CustomersIndex({ customers, filters, tiers, creditStats 
                                     </td>
                                     <td><small>{dateOnly(customer.created_at)}</small></td>
                                     <td>
-                                        <Link href={routeWithBase(`/admin/customers/${customer.id}`, app_base)} className="icon-btn small">
-                                            <Icon name="external" size={13} />
-                                        </Link>
+                                        <div className="inline-actions customer-row-actions">
+                                            <button type="button" className="icon-btn small" onClick={() => openEdit(customer)} aria-label={t('Edit customer')}><Icon name="edit" size={13} /></button>
+                                            <Link href={routeWithBase(`/admin/customers/${customer.id}`, app_base)} className="icon-btn small" aria-label={t('View customer')}><Icon name="external" size={13} /></Link>
+                                            <button type="button" className="icon-btn small danger" onClick={() => deleteCustomer(customer)} aria-label={t('Delete customer')}><Icon name="trash" size={13} /></button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -117,6 +152,63 @@ export default function CustomersIndex({ customers, filters, tiers, creditStats 
                 </div>
                 <AdminPagination paginator={customers} label={t('customers')} />
             </section>
+
+            {createOpen && (
+                <div className="modal-backdrop customer-create-backdrop" onMouseDown={() => !createForm.processing && setCreateOpen(false)}>
+                    <form className="drawer glass customer-create-drawer" onSubmit={submitCustomer} onMouseDown={(event) => event.stopPropagation()}>
+                        <div className="drawer-header">
+                            <div>
+                                <small className="eyebrow">{editingCustomer ? t('Edit account') : t('Customer account')}</small>
+                                <h2>{editingCustomer ? editingCustomer.name : t('New customer')}</h2>
+                            </div>
+                            <button type="button" className="icon-btn" onClick={() => setCreateOpen(false)} disabled={createForm.processing} aria-label={t('Close')}><Icon name="close" size={16} /></button>
+                        </div>
+                        <div className="customer-create-drawer-body">
+                            <p className="muted">{editingCustomer ? t('Update the customer login and account information.') : t('Create a retail customer account with an email and password.')}</p>
+                            <label className="form-field">
+                                <span>{t('Customer name')}</span>
+                                <input autoFocus required value={createForm.data.name} onChange={(event) => createForm.setData('name', event.target.value)} placeholder={t('Full name')} />
+                                {createForm.errors.name && <small className="field-error">{createForm.errors.name}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Email address')}</span>
+                                <input required type="email" value={createForm.data.email} onChange={(event) => createForm.setData('email', event.target.value)} placeholder="customer@example.com" />
+                                {createForm.errors.email && <small className="field-error">{createForm.errors.email}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Phone number')} <small>({t('Optional')})</small></span>
+                                <input value={createForm.data.phone} onChange={(event) => createForm.setData('phone', event.target.value)} placeholder={t('Phone number')} />
+                                {createForm.errors.phone && <small className="field-error">{createForm.errors.phone}</small>}
+                            </label>
+                            {editingCustomer && <label className="form-field">
+                                <span>{t('Account status')}</span>
+                                <select value={createForm.data.status} onChange={(event) => createForm.setData('status', event.target.value)}>
+                                    <option value="active">{t('Active')}</option>
+                                    <option value="suspended">{t('Suspended')}</option>
+                                </select>
+                                {createForm.errors.status && <small className="field-error">{createForm.errors.status}</small>}
+                            </label>}
+                            <label className="form-field">
+                                <span>{editingCustomer ? t('New password (optional)') : t('Password')}</span>
+                                <input required={!editingCustomer} type="password" autoComplete="new-password" value={createForm.data.password} onChange={(event) => createForm.setData('password', event.target.value)} />
+                                {createForm.errors.password && <small className="field-error">{createForm.errors.password}</small>}
+                            </label>
+                            <label className="form-field">
+                                <span>{t('Confirm password')}</span>
+                                <input required={!editingCustomer || Boolean(createForm.data.password)} type="password" autoComplete="new-password" value={createForm.data.password_confirmation} onChange={(event) => createForm.setData('password_confirmation', event.target.value)} />
+                            </label>
+                            <div className="customer-create-policy">
+                                <Icon name="lock" size={16} />
+                                <span>{editingCustomer ? t('Leave password blank to keep the current password.') : t('The account starts active with credit disabled. Credit can be enabled from the customer details page.')}</span>
+                            </div>
+                        </div>
+                        <div className="drawer-actions">
+                            <button type="button" className="btn secondary" onClick={() => setCreateOpen(false)} disabled={createForm.processing}>{t('Cancel')}</button>
+                            <button type="submit" className="btn primary" disabled={createForm.processing || !createForm.data.name.trim() || !createForm.data.email.trim() || (!editingCustomer && !createForm.data.password)}><Icon name="check" size={14} /> {createForm.processing ? t('Saving...') : editingCustomer ? t('Save changes') : t('Create customer')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </AdminLayout>
     );
 }

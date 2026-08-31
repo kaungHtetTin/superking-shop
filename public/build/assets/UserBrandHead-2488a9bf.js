@@ -1,1 +1,0 @@
-import{u as p,a as i,b as o,H as c}from"./app-c59ed1d5.js";import{P as m}from"./PwaHeadTags-50103f28.js";function u({title:r}){const{app_settings:a}=p().props,t=i(),s=(a==null?void 0:a.app_name)||"Harmony House",e=t(r),n=e?`${e} | ${s}`:s;return o(c,{title:n,children:o(m,{})})}export{u as U};
