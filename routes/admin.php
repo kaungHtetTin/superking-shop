@@ -218,8 +218,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:pos.access')->name('pos.products.search');
     Route::get('/pos/customers/search', [PosController::class, 'customers'])
         ->middleware('admin.permission:pos.access')->name('pos.customers.search');
-    Route::post('/pos/shifts/open', [PosController::class, 'openShift'])
-        ->middleware('admin.permission:pos.shift.open')->name('pos.shifts.open');
     Route::post('/pos/shifts/close', [PosController::class, 'closeShift'])
         ->middleware('admin.permission:pos.shift.close')->name('pos.shifts.close');
     Route::post('/pos/checkout', [PosController::class, 'checkout'])

@@ -189,19 +189,6 @@ class PosController extends Controller
             ->get(['id', 'name', 'email', 'phone']);
     }
 
-    public function openShift(Request $request, PosShiftService $service)
-    {
-        abort_unless($request->user()->hasAdminPermission('pos.shift.open'), 403);
-        $validated = $request->validate([
-            'register_id' => ['required', 'integer', 'exists:pos_registers,id'],
-            'opening_cash' => ['required', 'numeric', 'min:0'],
-        ]);
-
-        $shift = $service->open(PosRegister::with('location')->findOrFail($validated['register_id']), $request->user(), (float) $validated['opening_cash']);
-
-        return response()->json(['shift' => $shift]);
-    }
-
     public function closeShift(Request $request, PosShiftService $service)
     {
         abort_unless($request->user()->hasAdminPermission('pos.shift.close'), 403);
