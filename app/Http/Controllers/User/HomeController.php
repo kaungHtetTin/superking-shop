@@ -33,6 +33,7 @@ class HomeController extends Controller
 
         $latestProducts = Product::with($productRelations)
             ->active()
+            ->inActiveCategory()
             ->availableAnywhere()
             ->latest()
             ->take(12)
@@ -62,6 +63,7 @@ class HomeController extends Controller
             $bestSellerProducts = Product::with($productRelations)
                 ->whereIn('id', $bestSellerIds)
                 ->active()
+                ->inActiveCategory()
                 ->availableAnywhere()
                 ->orderByRaw('FIELD(id, '.implode(',', array_map('intval', $bestSellerIds)).')')
                 ->get();
@@ -94,6 +96,7 @@ class HomeController extends Controller
                     $flashSaleProducts = Product::with($productRelations)
                         ->whereIn('id', $flashSaleProductIds)
                         ->active()
+                        ->inActiveCategory()
                         ->availableAnywhere()
                         ->get()
                         ->sortBy(fn (Product $product) => $productOrder[$product->id] ?? PHP_INT_MAX)

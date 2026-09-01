@@ -24,10 +24,12 @@ class ProductController extends Controller
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'draft'])],
         ]);
 
         $products = Product::query()
             ->with(['category', 'primaryImage', 'baseUnit', 'defaultSellingUnit.prices'])
+            ->withExists(['inventoryMovements as has_inventory_history', 'orderItems as has_sales_history'])
             ->withSum('inventoryBalances as total_on_hand', 'on_hand_qty')
             ->when($filters['q'] ?? null, function ($query, $search) {
                 $query->where(fn ($scope) => $scope
@@ -36,6 +38,7 @@ class ProductController extends Controller
                     ->orWhere('barcode', 'like', "%{$search}%"));
             })
             ->when($filters['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->latest()
             ->paginate(15)
             ->through(function (Product $product) {
@@ -148,9 +151,15 @@ class ProductController extends Controller
         });
     }
 
-    public function destroy(Product $product)
+    public function destroy(Request $request, Product $product)
     {
         if ($product->inventoryMovements()->exists() || $product->orderItems()->exists()) {
+            if ($request->headers->has('X-SPA')) {
+                return response()->json([
+                    'errors' => ['product' => 'A product with inventory or sales history cannot be deleted. Deactivate it instead.'],
+                ], 422);
+            }
+
             return back()->with('error', 'A product with inventory or sales history cannot be deleted. Deactivate it instead.');
         }
 
@@ -159,7 +168,24 @@ class ProductController extends Controller
         }
         $product->delete();
 
+        if ($request->headers->has('X-SPA')) {
+            return response()->json(['deleted' => true]);
+        }
+
         return back()->with('success', 'Product deleted successfully.');
+    }
+
+    public function toggleStatus(Product $product)
+    {
+        $activate = $product->status !== 'active';
+        $product->update([
+            'status' => $activate ? 'active' : 'inactive',
+            'is_active' => $activate,
+        ]);
+
+        return back()->with('success', $activate
+            ? 'Product activated successfully.'
+            : 'Product deactivated successfully. Sales and inventory history were preserved.');
     }
 
     private function validateProduct(Request $request, ?Product $product = null): array

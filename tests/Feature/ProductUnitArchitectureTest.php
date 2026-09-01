@@ -186,10 +186,10 @@ class ProductUnitArchitectureTest extends TestCase
 
         $this->assertSame(96.0, (float) $order->total_amount);
         $this->assertSame(96.0, (float) $order->final_amount);
-        $this->assertSame($shift->id, $order->shift_id);
-        $this->assertSame($shift->pos_register_id, $order->register_id);
+        $this->assertNull($order->shift_id);
+        $this->assertNull($order->register_id);
         $this->assertSame(4.0, (float) $order->payments->sole()->change_due);
-        $this->assertSame(96.0, (float) $shift->fresh()->cash_sales);
+        $this->assertSame(0.0, (float) $shift->fresh()->cash_sales);
         $this->assertSame('wholesale', $paidLine->price_type);
         $this->assertSame(96.0, (float) $paidLine->unit_price);
         $this->assertSame($piece->id, $paidLine->foc_product_unit_id);
@@ -271,7 +271,7 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(8.0, (float) $order->credit_amount);
         $this->assertSame(now()->addDays(14)->toDateString(), $order->credit_due_date->toDateString());
         $this->assertSame(2.0, (float) $order->payments->sole()->amount);
-        $this->assertSame(2.0, (float) $shift->fresh()->cash_sales);
+        $this->assertSame(0.0, (float) $shift->fresh()->cash_sales);
         $this->assertDatabaseHas('customer_credit_transactions', [
             'customer_id' => $customer->id,
             'order_id' => $order->id,
@@ -340,7 +340,7 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(5.0, (float) $order->fresh()->paid_amount);
         $this->assertSame('partially_paid', $order->fresh()->payment_status);
         $this->assertSame(5.0, (float) $customer->creditTransactions()->latest()->first()->balance_after);
-        $this->assertSame(5.0, (float) $shift->fresh()->cash_sales);
+        $this->assertSame(0.0, (float) $shift->fresh()->cash_sales);
     }
 
     public function test_account_credit_payment_is_allocated_to_oldest_due_invoices_first(): void

@@ -104,4 +104,31 @@ class CheckoutAndCartRegressionTest extends TestCase
         $response->assertStatus(413)
             ->assertJsonPath('errors.payment_proof.0', 'The payment screenshot is too large. Please upload an image no larger than 10 MB.');
     }
+
+    public function test_inactive_category_product_cannot_be_quoted_by_a_crafted_checkout_request(): void
+    {
+        $user = User::factory()->create();
+        $category = Category::create(['name' => 'Hidden', 'slug' => 'hidden', 'is_active' => false]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'product_code' => 'PRD-HIDDEN',
+            'barcode' => '880000000099',
+            'name' => 'Hidden product',
+            'slug' => 'hidden-product',
+            'min_quantity' => 0,
+            'original_price' => 10,
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $unit = $product->units()->create([
+            'name' => 'Piece', 'code' => 'pc', 'conversion_factor' => 1,
+            'is_base' => true, 'is_default_selling' => true, 'is_active' => true,
+        ]);
+        $retail = $product->priceTypes()->create(['name' => 'retail', 'is_default' => true]);
+        $unit->prices()->create(['product_price_type_id' => $retail->id, 'price' => 20]);
+
+        $this->actingAs($user)->postJson('/checkout/quote', [
+            'lines' => [['product_unit_id' => $unit->id, 'quantity' => 1]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('lines');
+    }
 }

@@ -31,6 +31,7 @@ class ProductController extends Controller
                 'defaultSellingUnit',
             ])
             ->active()
+            ->inActiveCategory()
             ->availableAnywhere();
 
         // Search
@@ -154,6 +155,7 @@ class ProductController extends Controller
             ])
             ->where('slug', $slug)
             ->active()
+            ->inActiveCategory()
             ->availableAnywhere()
             ->firstOrFail();
 
@@ -174,6 +176,7 @@ class ProductController extends Controller
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->active()
+            ->inActiveCategory()
             ->availableAnywhere()
             ->take(6)
             ->get();
@@ -196,6 +199,7 @@ class ProductController extends Controller
                         'units.prices', 'baseUnit', 'defaultSellingUnit',
                     ])
                     ->active()
+                    ->inActiveCategory()
                     ->availableAnywhere()
                     ->where('id', '!=', $product->id)
                     ->whereIn('category_id', $preferredCategoryIds->all())
@@ -232,6 +236,7 @@ class ProductController extends Controller
                 ])
                 ->whereIn('id', $frequentlyBoughtTogetherIds)
                 ->active()
+                ->inActiveCategory()
                 ->availableAnywhere()
                 ->orderByRaw('FIELD(id, '.implode(',', array_map('intval', $frequentlyBoughtTogetherIds)).')')
                 ->get();
@@ -264,6 +269,7 @@ class ProductController extends Controller
         $product = Product::query()
             ->where('slug', $slug)
             ->where('status', 'active')
+            ->inActiveCategory()
             ->firstOrFail();
 
         $validated = $request->validate([

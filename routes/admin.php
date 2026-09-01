@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\FinanceController;
 use App\Http\Controllers\Admin\FlashSaleController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductImportController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReviewController;
 use App\Http\Controllers\Admin\RoleController;
@@ -71,11 +72,16 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // Products
     Route::get('/products/barcode/generate', [ProductController::class, 'generateBarcode'])->middleware('admin.permission:catalog.manage')->name('products.barcode.generate');
     Route::get('/products/barcodes', [ProductController::class, 'barcodes'])->middleware('admin.permission:catalog.manage')->name('products.barcodes');
+    Route::get('/products/import', [ProductImportController::class, 'create'])->middleware('admin.permission:catalog.manage')->name('products.import.create');
+    Route::get('/products/import/template', [ProductImportController::class, 'template'])->middleware('admin.permission:catalog.manage')->name('products.import.template');
+    Route::get('/products/export', [ProductImportController::class, 'export'])->middleware('admin.permission:catalog.manage')->name('products.export');
+    Route::post('/products/import', [ProductImportController::class, 'store'])->middleware('admin.permission:catalog.manage')->name('products.import.store');
     Route::get('/products', [ProductController::class, 'index'])->middleware('admin.permission:catalog.view')->name('products.index');
     Route::get('/products/create', [ProductController::class, 'create'])->middleware('admin.permission:catalog.manage')->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->middleware('admin.permission:catalog.manage')->name('products.store');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->middleware('admin.permission:catalog.manage')->name('products.edit');
     Route::patch('/products/{product}', [ProductController::class, 'update'])->middleware('admin.permission:catalog.manage')->name('products.update');
+    Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin.permission:catalog.manage')->name('products.toggle-status');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('admin.permission:catalog.manage')->name('products.destroy');
     Route::get('/orders', [OrderController::class, 'index'])->middleware('admin.permission:orders.view')->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->middleware('admin.permission:orders.view')->name('orders.show');

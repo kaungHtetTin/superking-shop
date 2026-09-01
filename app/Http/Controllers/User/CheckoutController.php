@@ -83,7 +83,10 @@ class CheckoutController extends Controller
                 $units = ProductUnit::query()
                     ->whereIn('id', $unitIds)
                     ->where('is_active', true)
-                    ->with(['prices', 'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true)])
+                    ->with(['prices', 'product' => fn ($query) => $query
+                        ->where('status', 'active')
+                        ->where('is_active', true)
+                        ->inActiveCategory()])
                     ->lockForUpdate()
                     ->get()
                     ->keyBy('id');
@@ -191,7 +194,10 @@ class CheckoutController extends Controller
         $units = ProductUnit::query()
             ->whereIn('id', $lines->keys())
             ->where('is_active', true)
-            ->with(['prices', 'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true)])
+            ->with(['prices', 'product' => fn ($query) => $query
+                ->where('status', 'active')
+                ->where('is_active', true)
+                ->inActiveCategory()])
             ->get()
             ->keyBy('id');
         $saleItems = $flashSalePricing->activeItemsForUnitIds($lines->keys()->map(fn ($id) => (int) $id)->all());

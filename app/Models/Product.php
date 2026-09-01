@@ -80,6 +80,11 @@ class Product extends Model
         return $query->where('status', 'active');
     }
 
+    public function scopeInActiveCategory(Builder $query): Builder
+    {
+        return $query->whereHas('category', fn (Builder $category) => $category->where('is_active', true));
+    }
+
     public function scopeAvailableAt(Builder $query, Location|int $location): Builder
     {
         $locationId = $location instanceof Location ? $location->id : $location;

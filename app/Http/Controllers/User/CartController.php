@@ -29,6 +29,7 @@ class CartController extends Controller
         $products = Product::query()
             ->whereIn('id', $validated['product_ids'])
             ->active()
+            ->inActiveCategory()
             ->with(['units' => fn ($query) => $query
                 ->where('is_active', true)
                 ->with('prices')
