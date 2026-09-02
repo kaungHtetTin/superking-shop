@@ -193,6 +193,14 @@ class FinanceController extends Controller
             'title' => $entry->title,
         ], $request);
 
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Financial entry created.',
+                'entry_id' => $entry->id,
+            ]);
+        }
+
         return back()->with('success', 'Financial entry created.');
     }
 
@@ -243,6 +251,14 @@ class FinanceController extends Controller
             'amount' => $entry->amount,
             'title' => $entry->title,
         ], $request);
+
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Financial entry updated.',
+                'entry_id' => $entry->id,
+            ]);
+        }
 
         return back()->with('success', 'Financial entry updated.');
     }

@@ -240,6 +240,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const { app_base, flash } = usePage().props;
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null);
+    const [localSuccess, setLocalSuccess] = useState('');
     const [search, setSearch] = useState(filters.q ?? '');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(
         Boolean(filters.from || filters.to || filters.location_id || filters.type || filters.status || filters.category),
@@ -267,6 +268,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     };
 
     const openModal = (entry = null) => {
+        setLocalSuccess('');
         setEditing(entry);
         form.clearErrors();
         form.setData(
@@ -311,7 +313,9 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         }
 
         if (!failed) {
+            setLocalSuccess(editing ? t('Financial entry updated.') : t('Financial entry created.'));
             closeModal();
+            await router.reload({ preserveScroll: true, showSkeleton: false });
         }
     };
 
@@ -336,7 +340,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             }
         >
             <Head title={t('Finance')} />
-            <AdminFlash flash={flash} errors={form.errors} />
+            <AdminFlash flash={{ ...flash, success: localSuccess || flash?.success }} errors={open ? {} : form.errors} />
 
             <div className="metrics-grid six compact-kpi-strip finance-kpi-strip">
                 <MetricCard label="Order revenue" value={money(summary.order_revenue)} icon="receipt" />
@@ -489,6 +493,12 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                 <Icon name="close" size={14} />
                             </button>
                         </div>
+
+                        {Object.keys(form.errors).length > 0 && (
+                            <div className="flash error" style={{ margin: '12px 16px 0' }}>
+                                {Object.values(form.errors).map((error, index) => <div key={`${index}-${error}`}>{error}</div>)}
+                            </div>
+                        )}
 
                         <div className="crud-grid admin-form-grid">
                             <label className="form-field">
