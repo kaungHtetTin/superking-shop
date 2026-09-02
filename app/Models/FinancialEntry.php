@@ -41,6 +41,7 @@ class FinancialEntry extends Model
 
     protected $fillable = [
         'recorded_by',
+        'location_id',
         'type',
         'category',
         'title',
@@ -62,9 +63,19 @@ class FinancialEntry extends Model
         return $this->belongsTo(User::class, 'recorded_by');
     }
 
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
     public function isStockReceiptEntry(): bool
     {
         return $this->type === 'expense' && $this->category === self::CATEGORY_STOCK_RECEIPT;
+    }
+
+    public function isSystemManaged(): bool
+    {
+        return $this->isStockReceiptEntry();
     }
 
     public static function categoryOptions(): array

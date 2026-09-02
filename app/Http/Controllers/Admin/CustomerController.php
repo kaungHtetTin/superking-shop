@@ -351,10 +351,13 @@ class CustomerController extends Controller
 
             $remaining = $amount;
             $allocationCount = 0;
+            $allocatedByLocation = [];
             foreach ($orders as $order) {
                 if ($remaining <= 0.009) break;
                 $outstanding = round((float) $order->final_amount - (float) $order->paid_amount, 2);
                 $allocated = min($remaining, $outstanding);
+                $locationKey = (int) ($order->location_id ?? 0);
+                $allocatedByLocation[$locationKey] = round(($allocatedByLocation[$locationKey] ?? 0) + $allocated, 2);
                 $payment = Payment::create([
                     'order_id' => $order->id,
                     'register_id' => null,
@@ -378,18 +381,21 @@ class CustomerController extends Controller
                 $allocationCount++;
             }
 
-            FinancialEntry::create([
-                'recorded_by' => $request->user()->id,
-                'type' => 'income',
-                'category' => FinancialEntry::CATEGORY_POS_SALE,
-                'title' => "Customer credit payment {$customer->name}",
-                'amount' => $amount,
-                'entry_date' => now()->toDateString(),
-                'payment_method' => $validated['tender_type'],
-                'reference' => $batchReference,
-                'status' => 'approved',
-                'notes' => $validated['notes'] ?? 'Customer credit repayment.',
-            ]);
+            foreach ($allocatedByLocation as $locationId => $locationAmount) {
+                FinancialEntry::create([
+                    'recorded_by' => $request->user()->id,
+                    'location_id' => $locationId ?: null,
+                    'type' => 'income',
+                    'category' => FinancialEntry::CATEGORY_POS_SALE,
+                    'title' => "Customer credit payment {$customer->name}",
+                    'amount' => $locationAmount,
+                    'entry_date' => now()->toDateString(),
+                    'payment_method' => $validated['tender_type'],
+                    'reference' => $batchReference,
+                    'status' => 'approved',
+                    'notes' => $validated['notes'] ?? 'Customer credit repayment.',
+                ]);
+            }
             $auditLogService->record('customer.credit.payment_recorded', $customer, [
                 'customer_id' => $customer->id,
                 'amount' => $amount,

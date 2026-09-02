@@ -84,6 +84,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin.permission:catalog.manage')->name('products.toggle-status');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('admin.permission:catalog.manage')->name('products.destroy');
     Route::get('/orders', [OrderController::class, 'index'])->middleware('admin.permission:orders.view')->name('orders.index');
+    Route::get('/orders-export.csv', [OrderController::class, 'export'])->middleware('admin.permission:orders.view')->name('orders.export');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->middleware('admin.permission:orders.view')->name('orders.show');
     Route::get('/orders/{order}/voucher', [OrderVoucherController::class, 'show'])->middleware('admin.permission:orders.view')->name('orders.voucher.show');
     Route::get('/orders/{order}/voucher/pdf', [OrderVoucherController::class, 'pdf'])->middleware('admin.permission:orders.view')->name('orders.voucher.pdf');
@@ -178,6 +179,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::middleware('admin.permission:manage_finance')->group(function () {
         Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
+        Route::get('/finance/export', [FinanceController::class, 'export'])->name('finance.export');
         Route::post('/finance/entries', [FinanceController::class, 'store'])->name('finance.entries.store');
         Route::patch('/finance/entries/{entry}', [FinanceController::class, 'update'])->name('finance.entries.update');
         Route::delete('/finance/entries/{entry}', [FinanceController::class, 'destroy'])->name('finance.entries.destroy');

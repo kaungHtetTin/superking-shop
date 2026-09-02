@@ -30,8 +30,10 @@ class StockTransferService
         }
         $transfer = DB::transaction(function () use ($source, $destination, $lines, $actor) {
             $now = now();
-            $transfer = StockTransfer::create(['transfer_number' => $this->number(), 'source_location_id' => $source->id, 'destination_location_id' => $destination->id, 'status' => 'received', 'created_by' => $actor->id, 'shipped_by' => $actor->id, 'received_by' => $actor->id, 'shipped_at' => $now, 'received_at' => $now]);
-            foreach ($this->normalizeLines($source, $lines) as $line) {
+            $normalizedLines = $this->normalizeLines($source, $lines);
+            $totalAmount = round(collect($normalizedLines)->sum('line_total'), 2);
+            $transfer = StockTransfer::create(['transfer_number' => $this->number(), 'source_location_id' => $source->id, 'destination_location_id' => $destination->id, 'status' => 'received', 'total_amount' => $totalAmount, 'created_by' => $actor->id, 'shipped_by' => $actor->id, 'received_by' => $actor->id, 'shipped_at' => $now, 'received_at' => $now]);
+            foreach ($normalizedLines as $line) {
                 $item = $transfer->items()->create(array_merge($line, ['shipped_quantity' => $line['requested_quantity'], 'received_quantity' => $line['requested_quantity']]));
                 $unit = ProductUnit::query()->with('product')->findOrFail($line['product_unit_id']);
                 $out = $this->inventoryService->shipTransfer($source, $unit->product, (float) $line['requested_base_quantity'], $actor, "transfer:{$transfer->id}:out:item:{$item->id}", $transfer, null, $unit, (float) $line['requested_quantity']);
@@ -66,6 +68,8 @@ class StockTransferService
                 throw ValidationException::withMessages(['items' => "Requested quantity for {$unit->product->product_code} exceeds available base stock ({$available})."]);
             }
             $normalized[] = ['product_id' => $unit->product_id, 'product_unit_id' => $unit->id, 'conversion_factor' => $unit->conversion_factor, 'requested_quantity' => $quantity, 'requested_base_quantity' => $baseQuantity];
+            $normalized[array_key_last($normalized)]['unit_cost'] = round((float) $unit->product->original_price * (float) $unit->conversion_factor, 2);
+            $normalized[array_key_last($normalized)]['line_total'] = round((float) $unit->product->original_price * $baseQuantity, 2);
         }
         if (! $normalized) {
             throw ValidationException::withMessages(['items' => 'Add at least one transfer item.']);

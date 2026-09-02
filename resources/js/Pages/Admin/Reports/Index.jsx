@@ -193,7 +193,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
             <form method="get" action={routeWithBase('/admin/reports', appBase)}>
                 <input type="hidden" name="view" value={view} />
                 <label>
-                    <span>{t('Warehouse')}</span>
+                    <span>{t('Store / warehouse')}</span>
                     <select name="location_id" defaultValue={filters?.location_id || ''}>
                         <option value="">{t('All accessible')}</option>
                         {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
@@ -220,9 +220,9 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
                 )}
                 <button className="btn secondary" type="submit"><Icon name="search" size={14} /> {t('Apply')}</button>
             </form>
-            <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}>
+            {['sales', 'inventory', 'pos'].includes(view) && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}>
                 <Icon name="download" size={14} /> CSV
-            </a>
+            </a>}
         </div>
     );
 }
@@ -233,7 +233,7 @@ function InventoryReport({ report, filters, locations, appBase }) {
     return (
         <>
             <ReportFilters view="inventory" filters={filters} locations={locations} appBase={appBase} showStock />
-            <div className="metrics-grid four">
+            <div className="metrics-grid six">
                 <MetricCard label="Original valuation" value={money(summary.cost_value)} hint={t(':count units on hand', { count: summary.on_hand || 0 })} icon="wallet" />
                 <MetricCard label="Retail value" value={money(summary.retail_value)} hint={t(':count available', { count: summary.available || 0 })} icon="chart" tone="success" />
                 <MetricCard label="Low stock" value={summary.low_stock || 0} hint="At reorder point" icon="bell" />
@@ -280,8 +280,8 @@ function InventoryReport({ report, filters, locations, appBase }) {
                 <div className="report-analysis-grid">
                     <section className="panel glass">
                         <PanelHeading eyebrow={t('Last 30 days')} title={t('Transfer activity')} />
-                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Transfer')}</th><th>{t('Route')}</th><th>{t('Units')}</th><th>{t('Date')}</th></tr></thead><tbody>
-                            {report.transfers.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No recent transfers.')}</span></td></tr> : report.transfers.map((row) => <tr key={row.id}><td><strong>{row.transfer_number}</strong></td><td>{row.source_name} {t('to')} {row.destination_name}</td><td>{row.moved_quantity}</td><td>{new Date(row.created_at).toLocaleDateString()}</td></tr>)}
+                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Transfer')}</th><th>{t('Route')}</th><th>{t('Units')}</th><th>{t('Amount')}</th><th>{t('Date')}</th></tr></thead><tbody>
+                            {report.transfers.length === 0 ? <tr><td colSpan={5}><span className="muted">{t('No recent transfers.')}</span></td></tr> : report.transfers.map((row) => <tr key={row.id}><td><strong>{row.transfer_number}</strong></td><td>{row.source_name} {t('to')} {row.destination_name}</td><td>{row.moved_quantity}</td><td><strong>{money(row.total_amount)}</strong></td><td>{new Date(row.created_at).toLocaleDateString()}</td></tr>)}
                         </tbody></table></div>
                     </section>
                     <section className="panel glass">
@@ -354,11 +354,14 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
 
             {view === 'sales' && (
             <>
+            <ReportFilters view="sales" filters={filters} locations={locations} appBase={app_base} showDates />
             <div className="metrics-grid four">
                 <MetricCard label="Paid orders" value={summary.paid_orders} hint="Confirmed payments" icon="receipt" />
                 <MetricCard label="Revenue" value={money(summary.revenue)} hint="Paid order total" icon="wallet" tone="success" />
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} hint="Original product cost at sale" icon="box" />
                 <MetricCard label="Gross profit" value={money(summary.gross_profit)} hint={`${summary.gross_margin}% margin`} icon="chart" tone="success" />
+                <MetricCard label="Operating expenses" value={money(summary.expenses)} hint="Excludes stock purchases" icon="card" tone="danger" />
+                <MetricCard label="Net profit" value={money(summary.net_profit)} hint="After product cost and expenses" icon="wallet" tone={Number(summary.net_profit) < 0 ? 'danger' : 'success'} />
             </div>
 
             <div className="reports-layout">

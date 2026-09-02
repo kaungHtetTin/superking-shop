@@ -1,1 +1,0 @@
-import{b as t}from"./app-f12e32f2.js";import m from"./Form-b0b41a67.js";import"./AdminFlash-b107a171.js";import"./formatErrorMessage-ae84bff6.js";function p({productOptions:o,flashSale:r}){return t(m,{productOptions:o,flashSale:r,mode:"edit"})}export{p as default};

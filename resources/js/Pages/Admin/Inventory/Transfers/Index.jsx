@@ -6,6 +6,7 @@ import { PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import useInventoryRealtime from '@/Utils/useInventoryRealtime';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatMoney } from '@/Utils/pricing';
 
 export default function TransfersIndex({ transfers, canCreate, realtime, lastUpdated, pollIntervalMs = 20000 }) {
     const { app_base } = usePage().props;
@@ -37,20 +38,22 @@ export default function TransfersIndex({ transfers, canCreate, realtime, lastUpd
                                 <th>{t('To')}</th>
                                 <th>{t('Lines')}</th>
                                 <th>{t('Units')}</th>
+                                <th>{t('Amount')}</th>
                                 <th>{t('Date')}</th>
                                 <th />
                             </tr>
                         </thead>
                         <tbody>
                             {transfers.data.length === 0 ? (
-                                <tr><td colSpan="7" className="empty-table-cell">{t('No transfers yet.')}</td></tr>
+                                <tr><td colSpan="8" className="empty-table-cell">{t('No transfers yet.')}</td></tr>
                         ) : transfers.data.map((transfer) => (
                                 <tr key={transfer.id}>
                                     <td><strong>{transfer.transfer_number}</strong></td>
                                     <td>{transfer.source_location.name}<small className="table-subline">{transfer.source_location.code}</small></td>
                                     <td>{transfer.destination_location.name}<small className="table-subline">{transfer.destination_location.code}</small></td>
                                     <td>{transfer.items.length}</td>
-                                    <td>{transfer.items.reduce((sum, item) => sum + item.requested_quantity, 0)}</td>
+                                    <td>{transfer.items.reduce((sum, item) => sum + Number(item.requested_quantity || 0), 0)}</td>
+                                    <td><strong>{formatMoney(transfer.total_amount)}</strong></td>
                                     <td>{new Date(transfer.created_at).toLocaleDateString()}</td>
                                     <td>
                                         <Link className="icon-btn small" href={routeWithBase(`/admin/inventory/transfers/${transfer.id}`, app_base)} aria-label={t('Open transfer')}>

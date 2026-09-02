@@ -135,7 +135,7 @@ class StockReceiptService
         }
         FinancialEntry::updateOrCreate(
             ['type' => 'expense', 'category' => FinancialEntry::CATEGORY_STOCK_RECEIPT, 'reference' => $receipt->receipt_number],
-            ['recorded_by' => $actor->id, 'title' => "Stock receipt {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]
+            ['recorded_by' => $actor->id, 'location_id' => $receipt->location_id, 'title' => "Stock receipt {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]
         );
     }
 

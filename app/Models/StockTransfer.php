@@ -18,6 +18,7 @@ class StockTransfer extends Model
         'source_location_id',
         'destination_location_id',
         'status',
+        'total_amount',
         'notes',
         'created_by',
         'submitted_by',
@@ -32,6 +33,7 @@ class StockTransfer extends Model
     ];
 
     protected $casts = [
+        'total_amount' => 'decimal:2',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'shipped_at' => 'datetime',

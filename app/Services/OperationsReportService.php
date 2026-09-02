@@ -102,11 +102,11 @@ class OperationsReportService
             ->join('stock_transfer_items as items', 'items.stock_transfer_id', '=', 'transfers.id')
             ->where(fn ($query) => $query->whereIn('transfers.source_location_id', $locationIds)->orWhereIn('transfers.destination_location_id', $locationIds))
             ->where('transfers.created_at', '>=', now()->subDays(30))
-            ->groupBy('transfers.id', 'transfers.transfer_number', 'source.name', 'destination.name', 'transfers.created_at')
+            ->groupBy('transfers.id', 'transfers.transfer_number', 'source.name', 'destination.name', 'transfers.total_amount', 'transfers.created_at')
             ->orderByDesc('transfers.created_at')
             ->limit(50)
             ->get([
-                'transfers.id', 'transfers.transfer_number', 'source.name as source_name', 'destination.name as destination_name', 'transfers.created_at',
+                'transfers.id', 'transfers.transfer_number', 'source.name as source_name', 'destination.name as destination_name', 'transfers.total_amount', 'transfers.created_at',
                 DB::raw('SUM(COALESCE(items.requested_base_quantity, 0)) as moved_quantity'),
             ]);
 

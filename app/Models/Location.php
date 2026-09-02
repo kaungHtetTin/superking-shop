@@ -72,4 +72,9 @@ class Location extends Model
     {
         return $this->hasMany(InventoryReservation::class);
     }
+
+    public function financialEntries(): HasMany
+    {
+        return $this->hasMany(FinancialEntry::class);
+    }
 }

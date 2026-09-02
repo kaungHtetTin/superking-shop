@@ -44,13 +44,15 @@ function MetricCard({ label, value, icon }) {
     );
 }
 
-export default function OrdersIndex({ orders, stats, filters, canReviewPayments, canManageOrders }) {
+export default function OrdersIndex({ orders, stats, filters, locations = [], canReviewPayments, canManageOrders }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const [search, setSearch] = useState(filters.q ?? '');
     const [visibleColumns, setVisibleColumns] = useState({ items: true, payment: true, fulfillment: true });
     const activeTab = filters.tab ?? '';
     const toggleColumn = (key) => setVisibleColumns((current) => ({ ...current, [key]: current[key] === false }));
+    const exportQuery = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
 
     const applyFilters = (patch) => {
         router.get(routeWithBase('/admin/orders', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
@@ -121,6 +123,13 @@ export default function OrdersIndex({ orders, stats, filters, canReviewPayments,
                         />
                     </div>
                     <select
+                        value={filters.location_id ?? ''}
+                        onChange={(e) => applyFilters({ location_id: e.target.value || undefined })}
+                    >
+                        <option value="">{t('All stores')}</option>
+                        {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                    </select>
+                    <select
                         value={filters.status ?? ''}
                         onChange={(e) => applyFilters({ status: e.target.value || undefined })}
                     >
@@ -142,12 +151,17 @@ export default function OrdersIndex({ orders, stats, filters, canReviewPayments,
                             </option>
                         ))}
                     </select>
+                    <input type="date" aria-label={t('From')} title={t('From')} value={filters.from ?? ''} onChange={(e) => applyFilters({ from: e.target.value || undefined })} />
+                    <input type="date" aria-label={t('To')} title={t('To')} value={filters.to ?? ''} onChange={(e) => applyFilters({ to: e.target.value || undefined })} />
                     <button type="submit" className="btn primary">
                         {t('Search')}
                     </button>
+                    <a className="btn secondary" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
+                        <Icon name="download" size={14} /> CSV
+                    </a>
                 </form>
 
-                {(filters.q || filters.status || filters.payment_status || filters.tab) && (
+                {(filters.q || filters.location_id || filters.status || filters.payment_status || filters.from || filters.to || filters.tab) && (
                     <button
                         type="button"
                         className="text-btn"

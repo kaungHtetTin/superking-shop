@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Coupon;
 use App\Models\Location;
+use App\Models\FinancialEntry;
 use App\Services\OperationsReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +34,17 @@ class ReportController extends Controller
             'q' => ['nullable', 'string', 'max:120'],
             'stock_status' => ['nullable', 'string', 'in:low,out'],
         ]);
-        $paidOrders = Order::query()->where('payment_status', 'paid');
+        $accessibleLocationIds = array_map('intval', $user->accessibleLocationIds());
+        $requestedLocationId = (int) ($filters['location_id'] ?? 0);
+        abort_if($requestedLocationId && ! in_array($requestedLocationId, $accessibleLocationIds, true), 403);
+        $locationIds = $requestedLocationId ? [$requestedLocationId] : $accessibleLocationIds;
+        $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
+        $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
+        $paidOrders = Order::query()
+            ->where('payment_status', 'paid')
+            ->whereIn('location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('created_at', '<=', $to));
         $paidOrderCount = (clone $paidOrders)->count();
         $paidRevenue = (float) (clone $paidOrders)->sum('final_amount');
         $grossSales = (float) (clone $paidOrders)->sum('total_amount');
@@ -41,18 +52,42 @@ class ReportController extends Controller
         $costOfGoods = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->selectRaw('COALESCE(SUM((order_items.cost_price * order_items.quantity) + order_items.foc_cost_price), 0) as total_cost')
             ->value('total_cost');
         $grossProfit = round($paidRevenue - $costOfGoods, 2);
+        $financeEntries = FinancialEntry::query()
+            ->where('status', 'approved')
+            ->when($requestedLocationId, fn ($query) => $query->where('location_id', $requestedLocationId))
+            ->when(! $requestedLocationId, function ($query) use ($locationIds, $user) {
+                $query->where(function ($locations) use ($locationIds, $user) {
+                    $locations->whereIn('location_id', $locationIds);
+                    if ($user->isSuperAdmin()) {
+                        $locations->orWhereNull('location_id');
+                    }
+                });
+            })
+            ->when($from, fn ($query) => $query->where('entry_date', '>=', $from->toDateString()))
+            ->when($to, fn ($query) => $query->where('entry_date', '<=', $to->toDateString()));
+        $manualIncome = (float) (clone $financeEntries)->where('type', 'income')->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)->sum('amount');
+        $expenses = (float) (clone $financeEntries)->where('type', 'expense')->where('category', '!=', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidCustomerCount = (clone $paidOrders)->distinct('user_id')->count('user_id');
         $unitsSold = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->sum('order_items.quantity');
         $repeatCustomerCount = DB::query()
             ->fromSub(
                 Order::query()
                     ->where('payment_status', 'paid')
+                    ->whereIn('location_id', $locationIds)
+                    ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
+                    ->when($to, fn ($query) => $query->where('created_at', '<=', $to))
                     ->select('user_id')
                     ->groupBy('user_id')
                     ->havingRaw('COUNT(*) > 1'),
@@ -64,6 +99,9 @@ class ReportController extends Controller
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->groupBy('products.id', 'products.name')
             ->orderByDesc(DB::raw('SUM(order_items.quantity)'))
             ->limit(10)
@@ -76,7 +114,9 @@ class ReportController extends Controller
 
         $salesByDay = Order::query()
             ->where('payment_status', 'paid')
-            ->where('created_at', '>=', now()->subDays(30))
+            ->whereIn('location_id', $locationIds)
+            ->where('created_at', '>=', $from ?? now()->subDays(30)->startOfDay())
+            ->when($to, fn ($query) => $query->where('created_at', '<=', $to))
             ->selectRaw('DATE(created_at) as day, COUNT(*) as orders, SUM(final_amount) as revenue')
             ->groupBy('day')
             ->orderBy('day')
@@ -87,6 +127,9 @@ class ReportController extends Controller
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->join('categories', 'categories.id', '=', 'products.category_id')
             ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->groupBy('categories.id', 'categories.name')
             ->orderByDesc(DB::raw('SUM(order_items.total_price)'))
             ->limit(8)
@@ -104,6 +147,9 @@ class ReportController extends Controller
                 OrderItem::query()
                     ->join('orders', 'orders.id', '=', 'order_items.order_id')
                     ->where('orders.payment_status', 'paid')
+                    ->whereIn('orders.location_id', $locationIds)
+                    ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+                    ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
                     ->groupBy('order_items.order_id')
                     ->selectRaw('order_items.order_id, SUM(order_items.quantity) as units, SUM(order_items.total_price) as revenue'),
                 'baskets'
@@ -131,6 +177,9 @@ class ReportController extends Controller
             ->join('products as first_products', 'first_products.id', '=', 'first_items.product_id')
             ->join('products as second_products', 'second_products.id', '=', 'second_items.product_id')
             ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.location_id', $locationIds)
+            ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->groupBy('first_products.id', 'first_products.name', 'second_products.id', 'second_products.name')
             ->orderByDesc(DB::raw('COUNT(DISTINCT orders.id)'))
             ->limit(6)
@@ -141,9 +190,16 @@ class ReportController extends Controller
             ]);
 
         $couponPerformance = Coupon::query()
-            ->leftJoin('orders', function ($join) {
+            ->leftJoin('orders', function ($join) use ($locationIds, $from, $to) {
                 $join->on('orders.coupon_id', '=', 'coupons.id')
                     ->where('orders.payment_status', '=', 'paid');
+                $join->whereIn('orders.location_id', $locationIds);
+                if ($from) {
+                    $join->where('orders.created_at', '>=', $from);
+                }
+                if ($to) {
+                    $join->where('orders.created_at', '<=', $to);
+                }
             })
             ->groupBy('coupons.id', 'coupons.code', 'coupons.type', 'coupons.value')
             ->orderByDesc(DB::raw('COUNT(orders.id)'))
@@ -158,7 +214,7 @@ class ReportController extends Controller
                 DB::raw('COALESCE(SUM(orders.final_amount), 0) as revenue'),
             ]);
 
-        $flashSalePerformance = DB::table('flash_sales')
+        $flashSalePerformance = $requestedLocationId ? collect() : DB::table('flash_sales')
             ->leftJoin('flash_sale_items', 'flash_sale_items.flash_sale_id', '=', 'flash_sales.id')
             ->leftJoin('product_units', 'product_units.id', '=', 'flash_sale_items.product_unit_id')
             ->leftJoin('product_unit_prices', function ($join) {
@@ -208,8 +264,8 @@ class ReportController extends Controller
             'summary' => [
                 'paid_orders' => $paidOrderCount,
                 'revenue' => $paidRevenue,
-                'customers' => User::where('role', User::CUSTOMER_ROLE)->count(),
-                'products' => Product::count(),
+                'customers' => (clone $paidOrders)->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+                'products' => DB::table('inventory_balances')->whereIn('location_id', $locationIds)->where('on_hand_qty', '>', 0)->distinct('product_id')->count('product_id'),
                 'average_order_value' => $paidOrderCount > 0 ? round($paidRevenue / $paidOrderCount, 2) : 0,
                 'units_sold' => $unitsSold,
                 'units_per_order' => $paidOrderCount > 0 ? round($unitsSold / $paidOrderCount, 2) : 0,
@@ -218,6 +274,9 @@ class ReportController extends Controller
                 'cost_of_goods' => round($costOfGoods, 2),
                 'gross_profit' => $grossProfit,
                 'gross_margin' => $paidRevenue > 0 ? round(($grossProfit / $paidRevenue) * 100, 1) : 0,
+                'manual_income' => $manualIncome,
+                'expenses' => $expenses,
+                'net_profit' => round($paidRevenue + $manualIncome - $costOfGoods - $expenses, 2),
             ],
             'topProducts' => $topProducts,
             'salesByDay' => $salesByDay,
@@ -232,13 +291,13 @@ class ReportController extends Controller
     public function export(Request $request, OperationsReportService $operations)
     {
         $view = $request->string('view')->toString();
-        if (! in_array($view, ['inventory', 'pos'], true)) {
-            throw ValidationException::withMessages(['view' => 'Choose inventory or POS for CSV export.']);
+        if (! in_array($view, ['sales', 'inventory', 'pos'], true)) {
+            throw ValidationException::withMessages(['view' => 'Choose sales, inventory, or POS for CSV export.']);
         }
 
         $this->authorizeView($request->user(), $view);
         $filters = $request->validate([
-            'view' => ['required', 'string', 'in:inventory,pos'],
+            'view' => ['required', 'string', 'in:sales,inventory,pos'],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -246,13 +305,44 @@ class ReportController extends Controller
             'stock_status' => ['nullable', 'string', 'in:low,out'],
         ]);
 
+        $accessibleIds = array_map('intval', $request->user()->accessibleLocationIds());
+        $locationId = (int) ($filters['location_id'] ?? 0);
+        abort_if($locationId && ! in_array($locationId, $accessibleIds, true), 403);
+        $locationIds = $locationId ? [$locationId] : $accessibleIds;
+
         $filename = $view.'-report-'.now()->format('Ymd-His').'.csv';
+        if ($view === 'sales') {
+            $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
+            $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
+            $orders = Order::query()->with(['location:id,code,name', 'user:id,name,email,phone'])->withCount('items')
+                ->where('payment_status', 'paid')->whereIn('location_id', $locationIds)
+                ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
+                ->when($to, fn ($query) => $query->where('created_at', '<=', $to));
+
+            return response()->streamDownload(function () use ($orders) {
+                $output = fopen('php://output', 'w');
+                fwrite($output, "\xEF\xBB\xBF");
+                fputcsv($output, ['Date', 'Store', 'Order number', 'Channel', 'Customer', 'Items', 'Gross sales', 'Discount', 'Shipping', 'Revenue', 'COGS', 'Gross profit']);
+                $orders->orderBy('id')->chunkById(500, function ($rows) use ($output) {
+                    $costs = OrderItem::query()->whereIn('order_id', $rows->pluck('id'))
+                        ->selectRaw('order_id, COALESCE(SUM((cost_price * quantity) + foc_cost_price), 0) as cost')
+                        ->groupBy('order_id')->pluck('cost', 'order_id');
+                    foreach ($rows as $order) {
+                        $cost = (float) ($costs[$order->id] ?? 0);
+                        fputcsv($output, [$order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->order_number, $order->sales_channel, $order->user?->name, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $cost, round((float) $order->final_amount - $cost, 2)]);
+                    }
+                });
+                fclose($output);
+            }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
+
         $report = $view === 'inventory'
             ? $operations->inventory($request->user(), $filters)
             : $operations->pos($request->user(), $filters);
 
         return response()->streamDownload(function () use ($view, $report) {
             $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
             if ($view === 'inventory') {
                 fputcsv($output, ['Warehouse', 'Product', 'Product code', 'On hand (base)', 'Reserved (base)', 'Available (base)', 'Minimum quantity', 'Cost value', 'Default retail price']);
                 foreach ($report['stock_rows'] as $row) {

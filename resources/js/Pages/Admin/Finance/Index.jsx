@@ -11,6 +11,7 @@ import { formatMoney } from '@/Utils/pricing';
 const money = formatMoney;
 
 const emptyEntry = {
+    location_id: '',
     type: 'expense',
     category: 'inventory',
     title: '',
@@ -241,7 +242,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const [editing, setEditing] = useState(null);
     const [search, setSearch] = useState(filters.q ?? '');
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(
-        Boolean(filters.from || filters.to || filters.type || filters.status || filters.category),
+        Boolean(filters.from || filters.to || filters.location_id || filters.type || filters.status || filters.category),
     );
     const form = useForm({ ...emptyEntry });
 
@@ -271,6 +272,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         form.setData(
             entry
                 ? {
+                      location_id: entry.location_id || '',
                       type: entry.type,
                       category: entry.category,
                       title: entry.title,
@@ -281,7 +283,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                       status: entry.status,
                       notes: entry.notes || '',
                   }
-                : { ...emptyEntry },
+                : { ...emptyEntry, location_id: filters.location_id || options.locations?.[0]?.id || '' },
         );
         setOpen(true);
     };
@@ -292,13 +294,24 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         form.reset();
     };
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
-        const options = { preserveScroll: true, onSuccess: closeModal };
+        let failed = false;
+        const options = {
+            preserveScroll: true,
+            onError: () => {
+                failed = true;
+            },
+        };
+
         if (editing) {
-            form.patch(routeWithBase(`/admin/finance/entries/${editing.id}`, app_base), options);
+            await form.patch(routeWithBase(`/admin/finance/entries/${editing.id}`, app_base), options);
         } else {
-            form.post(routeWithBase('/admin/finance/entries', app_base), options);
+            await form.post(routeWithBase('/admin/finance/entries', app_base), options);
+        }
+
+        if (!failed) {
+            closeModal();
         }
     };
 
@@ -308,6 +321,8 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     };
 
     const resetFilters = () => router.get(routeWithBase('/admin/finance', app_base));
+    const exportQuery = new URLSearchParams();
+    Object.entries(filters || {}).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
 
     return (
         <AdminLayout
@@ -325,11 +340,12 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
 
             <div className="metrics-grid six compact-kpi-strip finance-kpi-strip">
                 <MetricCard label="Order revenue" value={money(summary.order_revenue)} icon="receipt" />
+                <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} icon="box" tone="danger" />
+                <MetricCard label="Stock purchases" value={money(summary.stock_purchases)} icon="receipt" />
                 <MetricCard label="Manual income" value={money(summary.manual_income)} icon="wallet" />
-                <MetricCard label="Expenses" value={money(summary.expenses)} icon="card" tone="danger" />
+                <MetricCard label="Operating expenses" value={money(summary.expenses)} icon="card" tone="danger" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} icon="chart" tone={summary.net_profit < 0 ? 'danger' : 'success'} />
                 <MetricCard label="Paid orders" value={summary.paid_orders} icon="check" />
-                <MetricCard label="Pending review" value={money(Number(summary.pending_income) + Number(summary.pending_expenses))} icon="bell" />
             </div>
 
             <section className="panel glass finance-filter-panel">
@@ -350,8 +366,13 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                             {t('More filters')}
                         </button>
                         <button type="submit" className="btn primary">{t('Search')}</button>
+                        <a className="btn secondary" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
                     </div>
                     {showAdvancedFilters && <div className="finance-filter-row controls-row">
+                        <select value={filters.location_id || ''} onChange={(e) => applyFilters({ location_id: e.target.value || undefined })}>
+                            <option value="">{t('All stores')}</option>
+                            {options.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                        </select>
                         <label className="form-field inline">
                             <span>{t('From')}</span>
                             <input type="date" value={filters.from || ''} onChange={(e) => applyFilters({ from: e.target.value || undefined })} />
@@ -401,6 +422,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                             <tr>
                                 <th>{t('Date')}</th>
                                 <th>{t('Entry')}</th>
+                                <th>{t('Store')}</th>
                                 <th>{t('Type')}</th>
                                 <th className="numeric-cell">{t('Amount')}</th>
                                 <th>{t('Status')}</th>
@@ -410,9 +432,9 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                         </thead>
                         <tbody>
                             {entries.data.length === 0 ? (
-                                <tr><td colSpan={7}><span className="muted">{t('No manual finance entries match your filters.')}</span></td></tr>
+                                <tr><td colSpan={8}><span className="muted">{t('No manual finance entries match your filters.')}</span></td></tr>
                             ) : entries.data.map((entry) => {
-                                const isStockReceiptEntry = entry.is_stock_receipt_entry || entry.category === 'stock_receipt';
+                                const isManagedEntry = entry.is_system_managed || entry.is_stock_receipt_entry || entry.category === 'stock_receipt';
 
                                 return (
                                     <tr key={entry.id}>
@@ -424,13 +446,14 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                                 {entry.reference ? ` / ${entry.reference}` : ''}
                                             </small>
                                         </td>
+                                        <td>{entry.location?.name || t('Unassigned')}</td>
                                         <td><StatusBadge status={entry.type === 'income' ? 'success' : 'warning'} label={t(entry.type)} /></td>
                                         <td className="money-cell"><strong>{money(entry.amount)}</strong></td>
                                         <td><StatusBadge status={entry.status} label={t(entry.status)} /></td>
                                         <td>{entry.recorder?.name || t('System')}</td>
                                         <td className="table-actions-column">
-                                            {isStockReceiptEntry ? (
-                                                <span className="muted">{t('Managed by receipt')}</span>
+                                            {isManagedEntry ? (
+                                                <span className="muted">{t('Managed by inventory')}</span>
                                             ) : (
                                                 <div className="inline-actions">
                                                     <button type="button" className="icon-btn small" onClick={() => openModal(entry)} aria-label={t('Edit entry')} title={t('Edit entry')}>
@@ -468,6 +491,13 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                         </div>
 
                         <div className="crud-grid admin-form-grid">
+                            <label className="form-field">
+                                <span>{t('Store')}</span>
+                                <select value={form.data.location_id} onChange={(e) => form.setData('location_id', e.target.value)} required>
+                                    <option value="">{t('Choose store')}</option>
+                                    {options.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                                </select>
+                            </label>
                             <label className="form-field">
                                 <span>{t('Type')}</span>
                                 <select

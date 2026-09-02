@@ -5,6 +5,7 @@ import { AdminFlash } from '@/Components/Admin/AdminFlash';
 import { routeWithBase } from '@/Utils/url';
 import useInventoryRealtime from '@/Utils/useInventoryRealtime';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatMoney } from '@/Utils/pricing';
 
 function formatDateTime(value) {
     if (!value) return '-';
@@ -125,6 +126,14 @@ export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 2
                         <small>{t('Reference')}</small>
                         <strong>{transfer.transfer_number}</strong>
                     </div>
+                    <div>
+                        <small>{t('Transfer value')}</small>
+                        <strong>{formatMoney(transfer.total_amount)}</strong>
+                    </div>
+                    <div>
+                        <small>{t('Finance impact')}</small>
+                        <strong>{t('None')}</strong>
+                    </div>
                 </div>
 
                 <div className="transfer-lines-heading">
@@ -142,6 +151,8 @@ export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 2
                                 <th className="transfer-line-number">#</th>
                                 <th>{t('Product / unit')}</th>
                                 <th className="numeric-cell">{t('Moved')}</th>
+                                <th className="numeric-cell">{t('Unit cost')}</th>
+                                <th className="numeric-cell">{t('Amount')}</th>
                                 <th className="numeric-cell">{transfer.source_location.code}</th>
                                 <th className="numeric-cell">{transfer.destination_location.code}</th>
                             </tr>
@@ -162,6 +173,8 @@ export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 2
                                     <td className="numeric-cell">
                                         <span className="transfer-quantity-badge moved">{Number(item.requested_quantity).toLocaleString()}</span>
                                     </td>
+                                    <td className="numeric-cell">{formatMoney(item.unit_cost)}</td>
+                                    <td className="numeric-cell"><strong>{formatMoney(item.line_total)}</strong></td>
                                     <td className="numeric-cell">
                                         <span className="transfer-quantity-badge negative">−{Number(item.requested_quantity).toLocaleString()}</span>
                                     </td>
@@ -175,6 +188,8 @@ export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 2
                             <tr>
                                 <td colSpan="2">{t('Transfer total')}</td>
                                 <td className="numeric-cell">{totalUnits.toLocaleString()}</td>
+                                <td />
+                                <td className="numeric-cell"><strong>{formatMoney(transfer.total_amount)}</strong></td>
                                 <td className="numeric-cell quantity-negative">−{totalUnits.toLocaleString()}</td>
                                 <td className="numeric-cell quantity-positive">+{totalUnits.toLocaleString()}</td>
                             </tr>

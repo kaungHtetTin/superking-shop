@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\FlashSalePricingService;
 use App\Services\Inventory\InventoryService;
 use App\Services\Inventory\StorefrontInventoryService;
+use App\Services\Inventory\StockTransferService;
 use App\Services\POS\PosCheckoutService;
 use App\Services\OrderManagementService;
 use Illuminate\Database\QueryException;
@@ -402,6 +403,29 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame('cancelled', $order->fresh()->payment_status);
         $this->assertSame(0.0, (float) $customer->creditTransactions()->latest()->first()->balance_after);
         $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
+    }
+
+    public function test_stock_transfer_records_value_without_changing_finance(): void
+    {
+        [$product, , $box] = $this->productWithUnits();
+        $source = $this->location();
+        $destination = $this->location();
+        $actor = User::factory()->create(['role' => 'super_admin']);
+        app(InventoryService::class)->receive($source, $product, 24, idempotencyKey: 'valued-transfer-stock');
+
+        $transfer = app(StockTransferService::class)->transferNow(
+            $source,
+            $destination,
+            [['product_unit_id' => $box->id, 'requested_quantity' => 2]],
+            $actor,
+        );
+
+        $this->assertSame(192.0, (float) $transfer->total_amount);
+        $this->assertSame(96.0, (float) $transfer->items->sole()->unit_cost);
+        $this->assertSame(192.0, (float) $transfer->items->sole()->line_total);
+        $this->assertSame(0.0, (float) InventoryBalance::whereBelongsTo($source)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertSame(24.0, (float) InventoryBalance::whereBelongsTo($destination)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertDatabaseCount('financial_entries', 0);
     }
 
     /** @return array{Product, ProductUnit, ProductUnit} */

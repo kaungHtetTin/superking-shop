@@ -17,6 +17,8 @@ class StockTransferItem extends Model
         'conversion_factor',
         'requested_quantity',
         'requested_base_quantity',
+        'unit_cost',
+        'line_total',
         'shipped_quantity',
         'received_quantity',
         'discrepancy_reason',
@@ -29,6 +31,8 @@ class StockTransferItem extends Model
         'conversion_factor' => 'decimal:6',
         'requested_quantity' => 'decimal:4',
         'requested_base_quantity' => 'decimal:4',
+        'unit_cost' => 'decimal:2',
+        'line_total' => 'decimal:2',
         'shipped_quantity' => 'decimal:4',
         'received_quantity' => 'decimal:4',
     ];

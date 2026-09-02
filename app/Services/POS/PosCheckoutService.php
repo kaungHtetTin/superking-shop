@@ -206,6 +206,7 @@ class PosCheckoutService
             if ($paidNow > 0) {
                 FinancialEntry::create([
                 'recorded_by' => $cashier->id,
+                'location_id' => $location->id,
                 'type' => 'income',
                 'category' => FinancialEntry::CATEGORY_POS_SALE,
                 'title' => "POS sale {$order->receipt_number}",

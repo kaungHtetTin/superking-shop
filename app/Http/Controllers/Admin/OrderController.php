@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Location;
 use App\Services\OrderManagementService;
 use App\Services\OrderPaymentService;
 use App\Services\OrderVoucherService;
@@ -19,8 +20,13 @@ class OrderController extends Controller
         $paymentStatus = $request->string('payment_status')->toString();
         $search = trim($request->string('q')->toString());
         $tab = $request->string('tab')->toString();
+        $from = $request->date('from');
+        $to = $request->date('to');
+        $locationId = $request->integer('location_id');
+        $accessibleLocationIds = array_map('intval', $request->user()->accessibleLocationIds());
+        abort_if($locationId && ! in_array($locationId, $accessibleLocationIds, true), 403);
 
-        $query = Order::query()
+        $query = Order::query()->whereIn('location_id', $locationId ? [$locationId] : $accessibleLocationIds)
             ->with(['user:id,name,email,phone', 'items'])
             ->withCount('items');
 
@@ -35,6 +41,8 @@ class OrderController extends Controller
         $orders = $query
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when($paymentStatus, fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))
             ->when($search, function ($q) use ($search) {
                 $like = '%'.$search.'%';
                 $q->where(function ($inner) use ($like) {
@@ -54,17 +62,80 @@ class OrderController extends Controller
 
         return Spa::render('Admin/Orders/Index', [
             'orders' => $orders,
-            'stats' => $orderManagementService->stats(),
+            'stats' => $this->orderStats($locationId ? [$locationId] : $accessibleLocationIds),
             'filters' => [
                 'status' => $status ?: null,
                 'payment_status' => $paymentStatus ?: null,
                 'q' => $search ?: null,
                 'tab' => $tab ?: null,
+                'location_id' => $locationId ?: null,
+                'from' => $from?->toDateString(),
+                'to' => $to?->toDateString(),
             ],
+            'locations' => Location::query()->whereIn('id', $accessibleLocationIds)->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
             'canReviewPayments' => $user->hasAdminPermission('orders.review_payment'),
             'canManageOrders' => $user->hasAdminPermission('orders.manage'),
             'canCancelOrders' => $user->hasAdminPermission('orders.cancel'),
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $locationId = $request->integer('location_id');
+        $accessibleLocationIds = array_map('intval', $request->user()->accessibleLocationIds());
+        abort_if($locationId && ! in_array($locationId, $accessibleLocationIds, true), 403);
+
+        $query = Order::query()
+            ->whereIn('location_id', $locationId ? [$locationId] : $accessibleLocationIds)
+            ->with(['user:id,name,email,phone', 'location:id,code,name'])
+            ->withCount('items');
+        $this->applyFilters($query, $request);
+
+        return response()->streamDownload(function () use ($query) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Order number', 'Date', 'Store', 'Channel', 'Customer', 'Phone', 'Email', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment method', 'Payment status', 'Fulfillment status']);
+            $query->orderBy('id')->chunkById(500, function ($orders) use ($output) {
+                foreach ($orders as $order) {
+                    fputcsv($output, [$order->order_number, $order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->sales_channel, $order->user?->name, $order->user?->phone, $order->user?->email, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $order->payment_method, $order->payment_status, $order->status]);
+                }
+            });
+            fclose($output);
+        }, 'orders-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function applyFilters($query, Request $request): void
+    {
+        $status = $request->string('status')->toString();
+        $paymentStatus = $request->string('payment_status')->toString();
+        $search = trim($request->string('q')->toString());
+        $tab = $request->string('tab')->toString();
+        $from = $request->date('from');
+        $to = $request->date('to');
+        if ($tab === 'payments') $query->where('payment_status', 'pending_review');
+        elseif ($tab === 'fulfillment') $query->where('payment_status', 'paid')->whereIn('status', ['processing', 'shipped']);
+        elseif ($tab === 'completed') $query->where('status', 'delivered');
+        $query->when($status, fn ($q) => $q->where('status', $status))
+            ->when($paymentStatus, fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))
+            ->when($search, function ($q) use ($search) {
+                $like = '%'.$search.'%';
+                $q->where(fn ($inner) => $inner->where('order_number', 'like', $like)->orWhereHas('user', fn ($u) => $u->where('name', 'like', $like)->orWhere('email', 'like', $like)->orWhere('phone', 'like', $like)));
+            });
+    }
+
+    private function orderStats(array $locationIds): array
+    {
+        $orders = Order::query()->whereIn('location_id', $locationIds);
+        return [
+            'total' => (clone $orders)->count(),
+            'pending_payment' => (clone $orders)->whereIn('payment_status', ['pending', 'pending_review'])->count(),
+            'processing' => (clone $orders)->where('status', 'processing')->count(),
+            'shipped' => (clone $orders)->where('status', 'shipped')->count(),
+            'delivered' => (clone $orders)->where('status', 'delivered')->count(),
+            'revenue_paid' => (float) (clone $orders)->where('payment_status', 'paid')->sum('final_amount'),
+        ];
     }
 
     public function show(Request $request, Order $order, OrderVoucherService $voucherService)
