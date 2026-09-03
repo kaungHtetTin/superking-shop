@@ -48,4 +48,34 @@ class PasswordUpdateTest extends TestCase
             ->assertSessionHasErrors('current_password')
             ->assertRedirect('/profile');
     }
+
+    public function test_admin_can_update_password_and_login_again_with_the_new_password(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'super_admin',
+            'status' => 'active',
+            'password' => Hash::make('password'),
+        ]);
+
+        $this->actingAs($admin)
+            ->from('/admin/profile')
+            ->put('/admin/profile/password', [
+                'current_password' => 'password',
+                'password' => 'new-password',
+                'password_confirmation' => 'new-password',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/admin/profile?saved=password');
+
+        $this->assertTrue(Hash::check('new-password', $admin->fresh()->password));
+
+        auth()->logout();
+
+        $this->post('/admin/login', [
+            'email' => $admin->email,
+            'password' => 'new-password',
+        ])->assertRedirect('/admin/dashboard');
+
+        $this->assertAuthenticatedAs($admin->fresh());
+    }
 }

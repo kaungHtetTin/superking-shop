@@ -664,6 +664,14 @@
   font-size: 11px;
   font-weight: 900;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.app-root .profile-menu-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .app-root .profile-menu-copy {
@@ -4490,11 +4498,12 @@
   --wizard-console-muted: var(--color-muted);
   --wizard-console-accent: var(--color-primary);
   --wizard-console-code: color-mix(in srgb, var(--color-primary) 82%, var(--color-text));
+  --wizard-document-columns: minmax(180px, 1.35fr) minmax(120px, .8fr) minmax(110px, .72fr) minmax(120px, .8fr) minmax(140px, 1fr) 40px;
 }
 
 .app-root .wizard-qty-list-head {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) repeat(var(--wizard-qty-fields, 4), var(--wizard-qty-unit, 112px)) 40px;
+  grid-template-columns: var(--wizard-document-columns);
   gap: 10px;
   min-height: 34px;
   align-items: center;
@@ -4547,7 +4556,8 @@
 
 .app-root .wizard-console-lines .wizard-console-line {
   position: relative;
-  align-items: center;
+  grid-template-columns: var(--wizard-document-columns);
+  align-items: start;
   padding: 10px 10px 10px 28px;
   border: 0;
   border-bottom: 1px solid var(--wizard-console-border);
@@ -4587,6 +4597,14 @@
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 12px;
   font-weight: 650;
+}
+
+.app-root .wizard-console-line .line-product-identity {
+  align-self: center;
+}
+
+.app-root .wizard-console-line .form-field {
+  align-self: start;
 }
 
 .app-root .wizard-console-line .line-product-identity small,
@@ -4645,7 +4663,10 @@
 .app-root .wizard-console-line .form-field select,
 .app-root .wizard-console-line .form-field input[readonly],
 .app-root .wizard-console-line .form-field input:disabled {
-  min-height: 36px;
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--color-surface);
@@ -4655,6 +4676,11 @@
   font-size: 12px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+}
+
+.app-root .wizard-console-line .form-field select {
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .app-root .wizard-console-line .form-field input {
@@ -4713,10 +4739,13 @@
 }
 
 .app-root .wizard-console-line .wizard-qty-remove {
-  width: 36px;
-  min-width: 36px;
-  min-height: 36px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
   margin: 0;
+  align-self: start;
+  justify-self: center;
   border: 1px solid color-mix(in srgb, var(--color-danger) 28%, var(--color-border));
   border-radius: 4px;
   background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
@@ -5156,6 +5185,56 @@
   background: rgb(183 119 0 / 12%);
   color: #b77700;
   border: 1px solid rgb(183 119 0 / 22%);
+}
+
+.app-root .admin-global-notice {
+  position: fixed;
+  z-index: 1500;
+  top: calc(var(--admin-topbar-height) + 12px);
+  right: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px 8px 11px;
+  border: 1px solid rgb(22 130 85 / 28%);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: #168255;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 18%);
+}
+
+.app-root .admin-global-notice-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(22 130 85 / 12%);
+}
+
+.app-root .admin-global-notice strong {
+  flex: 1;
+  font-size: 12px;
+}
+
+.app-root .admin-global-notice > button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.app-root .admin-global-notice > button:hover {
+  background: var(--color-soft);
 }
 
 /* ── Back link ───────────────────────────────────────────────── */
@@ -8362,7 +8441,8 @@
   color: var(--color-text);
 }
 
-.app-root .settings-section-nav > button {
+.app-root .settings-section-nav > button,
+.app-root .settings-section-nav > a {
   width: 100%;
   min-height: 44px;
   display: grid;
@@ -8377,10 +8457,13 @@
   text-align: left;
   font-family: inherit;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .app-root .settings-section-nav > button:hover,
-.app-root .settings-section-nav > button.active {
+.app-root .settings-section-nav > button.active,
+.app-root .settings-section-nav > a:hover,
+.app-root .settings-section-nav > a.active {
   color: var(--color-primary);
   border-color: color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
   background: var(--color-primary-soft);
@@ -8397,19 +8480,29 @@
 }
 
 .app-root .settings-section-nav button strong,
-.app-root .settings-section-nav button small {
+.app-root .settings-section-nav button small,
+.app-root .settings-section-nav a strong,
+.app-root .settings-section-nav a small {
   display: block;
 }
 
-.app-root .settings-section-nav button strong {
+.app-root .settings-section-nav button strong,
+.app-root .settings-section-nav a strong {
   font-size: 12px;
   line-height: 1.2;
 }
 
-.app-root .settings-section-nav button small {
+.app-root .settings-section-nav button small,
+.app-root .settings-section-nav a small {
   margin-top: 2px;
   font-size: 9px;
   line-height: 1.2;
+}
+
+.app-root .settings-nav-divider {
+  height: 1px;
+  margin: 8px 7px;
+  background: var(--color-border);
 }
 
 .app-root .settings-work-surface {
@@ -8419,6 +8512,29 @@
 
 .app-root .settings-section-content {
   max-width: 960px;
+}
+
+.app-root .profile-settings-content > section {
+  max-width: 720px;
+}
+
+/* MUI already draws its own outlined/focused field state. Avoid the admin-wide
+   native control outline stacking on top of it in profile settings. */
+.app-root .profile-settings-content .MuiInputBase-input:focus,
+.app-root .profile-settings-content .MuiInputBase-input:focus-visible,
+.app-root .profile-settings-content textarea.MuiInputBase-input:focus,
+.app-root .profile-settings-content textarea.MuiInputBase-input:focus-visible {
+  outline: 0;
+  outline-offset: 0;
+}
+
+.app-root .profile-settings-content .MuiOutlinedInput-root {
+  border-radius: var(--radius-sm);
+}
+
+.app-root .profile-settings-content .MuiFormHelperText-root {
+  margin: 3px 2px 0;
+  line-height: 1.35;
 }
 
 .app-root .settings-section-description {
@@ -9460,8 +9576,13 @@
     display: none;
   }
 
-  .app-root .settings-section-nav > button {
+  .app-root .settings-section-nav > button,
+  .app-root .settings-section-nav > a {
     min-width: 132px;
+  }
+
+  .app-root .settings-nav-divider {
+    display: none;
   }
 
   .app-root .storefront-outline-group {
@@ -10277,6 +10398,7 @@
   .app-root .segmented button,
   .app-root .preview-device-toggle button,
   .app-root .settings-section-nav > button,
+  .app-root .settings-section-nav > a,
   .app-root .storefront-outline-group button,
   .app-root .column-visibility-menu label {
     min-height: 40px;

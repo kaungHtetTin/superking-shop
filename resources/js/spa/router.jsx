@@ -329,10 +329,11 @@ export const router = {
                 return null;
             }
 
+            const refreshRedirected = options.refreshRedirected !== false;
             const page = await parseSpaResponse(response, {
                 ...options,
                 // Defer success until the follow-up GET when a mutation redirected.
-                onSuccess: (!isGet && response.redirected && response.url) ? undefined : options.onSuccess,
+                onSuccess: (!isGet && response.redirected && response.url && refreshRedirected) ? undefined : options.onSuccess,
             });
             const redirectedPageErrors = flattenErrors(page?.props?.errors || {});
             const redirectedWithErrors = !isGet
@@ -346,7 +347,7 @@ export const router = {
                 // Mutations that redirect can leave stale props; refresh with an explicit GET.
                 // A validation redirect already contains the flashed errors and must not be
                 // followed by another GET, which would consume them and report false success.
-                if (!isGet && page?.component && !redirectedWithErrors) {
+                if (!isGet && page?.component && !redirectedWithErrors && refreshRedirected) {
                     return this.visit(redirectedUrl.pathname + redirectedUrl.search, {
                         method: 'get',
                         replace: true,
@@ -401,7 +402,7 @@ export const router = {
     },
 
     delete(url, data = {}, options = {}) {
-        const optionKeys = ['preserveScroll', 'preserveState', 'replace', 'onSuccess', 'onError', 'onFinish', 'onStart', 'only'];
+        const optionKeys = ['preserveScroll', 'preserveState', 'replace', 'refreshRedirected', 'onSuccess', 'onError', 'onFinish', 'onStart', 'only'];
         const dataLooksLikeOptions = options && Object.keys(options).length === 0
             && data
             && typeof data === 'object'

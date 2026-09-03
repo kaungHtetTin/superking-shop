@@ -201,6 +201,34 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(11.0, (float) $balance->on_hand_qty);
     }
 
+    public function test_pos_derives_a_missing_unit_price_from_the_base_unit_and_conversion(): void
+    {
+        [$product, $piece, $box] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        app(InventoryService::class)->receive($location, $product, 24, idempotencyKey: 'pos-derived-price-opening');
+
+        $box->priceFor('retail')->update(['price' => 0]);
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'customer_name' => 'Walk-in customer',
+            'items' => [[
+                'product_unit_id' => $box->id,
+                'quantity' => 2,
+                'price_type' => 'retail',
+            ]],
+            'tender_type' => 'cash',
+            'amount_tendered' => 240,
+        ], $cashier);
+
+        $line = $order->items->sole();
+
+        $this->assertSame(120.0, (float) $line->unit_price);
+        $this->assertSame(240.0, (float) $line->total_price);
+        $this->assertSame(240.0, (float) $order->final_amount);
+    }
+
     public function test_pos_foc_requires_discount_permission(): void
     {
         [$product, $piece] = $this->productWithUnits();

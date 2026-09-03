@@ -201,7 +201,10 @@ if (el && window.__SPA_PAGE__) {
                                 <UserPersistentShell active={userShellActive}>
                                     {loading
                                         ? <PageSkeleton url={pendingUrl || page.url} appBase={page.props.app_base || ''} />
-                                        : <Component {...page.props} />}
+                                        : <Component
+                                            key={page.component === 'Profile/Edit' ? `${page.component}:${page.url}` : page.component}
+                                            {...page.props}
+                                        />}
                                 </UserPersistentShell>
                             </AdminPersistentShell>
                         </ThemeProvider>

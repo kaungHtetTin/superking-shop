@@ -6,7 +6,7 @@ import { AdminLogo, ThemeControl } from '@/Components/Admin/shared';
 import LanguageSwitcher from '@/Components/LanguageSwitcher';
 import { usePhraseTranslation, useTranslation } from '@/Utils/i18n';
 import { useStoredState } from '@/Utils/useStoredState';
-import { routeWithBase } from '@/Utils/url';
+import { routeWithBase, storageUrl } from '@/Utils/url';
 
 function normalizeAdminPath(url, appBase) {
     let path = (url || '/').split('?')[0];
@@ -70,6 +70,7 @@ function AdminChrome({ children, mainClassName = '' }) {
     const authUser = props.auth?.user;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
+    const [globalNotice, setGlobalNotice] = useState(null);
     const [theme, setTheme] = useStoredState('larlarpick.admin.theme', 'light');
     const [density, setDensity] = useStoredState('larlarpick.admin.density', 'compact');
     const [sidebarCollapsed, setSidebarCollapsed] = useStoredState('larlarpick.admin.sidebar.collapsed', false);
@@ -90,6 +91,7 @@ function AdminChrome({ children, mainClassName = '' }) {
     };
     const storefrontHref = app_url || routeWithBase('/', app_base);
     const roleLabel = authUser?.role_label || (authUser?.role || 'staff').replace(/_/g, ' ');
+    const avatarUrl = authUser?.avatar ? storageUrl(authUser.avatar, app_url) : null;
     const can = (permission) => is_super_admin || (authUser?.permissions || []).includes(permission);
     const canManageBusiness = ['manage_coupons', 'manage_flash_sales', 'manage_blogs', 'manage_payment_methods', 'manage_finance', 'view_reports', 'reports.sales', 'reports.inventory', 'moderate_reviews', 'view_customers'].some(can);
     const initials = (authUser?.name || 'A')
@@ -102,6 +104,21 @@ function AdminChrome({ children, mainClassName = '' }) {
     useEffect(() => {
         setBrand(app_settings?.theme_color || '#087f74');
     }, [app_settings?.theme_color]);
+
+    useEffect(() => {
+        const showNotice = (event) => {
+            const message = String(event.detail?.message || '').trim();
+            if (message) setGlobalNotice({ message, type: event.detail?.type || 'success' });
+        };
+        window.addEventListener('admin:notice', showNotice);
+        return () => window.removeEventListener('admin:notice', showNotice);
+    }, []);
+
+    useEffect(() => {
+        if (!globalNotice) return undefined;
+        const timeout = window.setTimeout(() => setGlobalNotice(null), 4000);
+        return () => window.clearTimeout(timeout);
+    }, [globalNotice]);
 
     useEffect(() => {
         if (!profileOpen) return undefined;
@@ -530,7 +547,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                         setProfileOpen((open) => !open);
                                     }}
                                 >
-                                    <span className="profile-menu-avatar">{initials}</span>
+                                    <span className="profile-menu-avatar">{avatarUrl ? <img src={avatarUrl} alt="" /> : initials}</span>
                                     <span className="profile-menu-copy">
                                         <strong>{authUser?.name || t('admin.admin', 'Admin')}</strong>
                                         <small>{roleLabel}</small>
@@ -540,7 +557,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                 {profileOpen && (
                                     <div className="profile-dropdown glass" role="menu">
                                         <div className="profile-dropdown-head">
-                                            <span className="profile-menu-avatar">{initials}</span>
+                                            <span className="profile-menu-avatar">{avatarUrl ? <img src={avatarUrl} alt="" /> : initials}</span>
                                             <div>
                                                 <strong>{authUser?.name || t('admin.admin', 'Admin')}</strong>
                                                 <small>{authUser?.email || roleLabel}</small>
@@ -571,6 +588,16 @@ function AdminChrome({ children, mainClassName = '' }) {
                             </div>
                         </div>
                     </header>
+
+                    {globalNotice && (
+                        <div className={`admin-global-notice ${globalNotice.type}`} role="status" aria-live="polite">
+                            <span className="admin-global-notice-icon"><Icon name="check" size={14} /></span>
+                            <strong>{globalNotice.message}</strong>
+                            <button type="button" aria-label={t('Close')} onClick={() => setGlobalNotice(null)}>
+                                <Icon name="close" size={13} />
+                            </button>
+                        </div>
+                    )}
 
                     {children}
                 </main>

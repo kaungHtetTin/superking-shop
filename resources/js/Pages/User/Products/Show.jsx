@@ -33,6 +33,7 @@ import { productListGridSx } from '@/Utils/productListGrid';
 import { useCartStore } from '@/stores/cartStore';
 import { useWishlistStore } from '@/stores/wishlistStore';
 import { formatMoney, hasFlashSale, unitOriginalPrice, unitPrice } from '@/Utils/pricing';
+import { formatUnitWithConversion } from '@/Utils/unitLabel';
 import { pickDefaultUnitForProduct } from '@/Utils/pickDefaultUnit';
 import {
     eyebrowSxForTheme,
@@ -154,6 +155,8 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                 flashSale: unit.flash_sale || null,
                 imagePath: unit.image?.image_path || img,
                 maxQty: Number(unit.available_qty || 0),
+                conversionFactor: Number(unit.conversion_factor || 1),
+                isBase: Boolean(unit.is_base),
             })),
             isPreorder: false,
             qty: Math.min(quantity, Number(selectedUnit.available_qty ?? 1)),
@@ -426,7 +429,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                         <ToggleButton key={unit.id} value={unit.id}>
                                             <Stack spacing={0.25} alignItems="flex-start">
                                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                                    {unit.name || unit.code}
+                                                    {formatUnitWithConversion(unit, buyableUnits)}
                                                 </Typography>
                                                 <Typography variant="caption" color={hasFlashSale(unit) ? 'error.main' : 'text.secondary'} sx={{ fontWeight: 700 }}>
                                                     {formatMoney(unitPrice(unit))}

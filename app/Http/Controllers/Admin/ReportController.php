@@ -80,11 +80,12 @@ class ReportController extends Controller
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
-            ->sum('order_items.quantity');
+            ->sum('order_items.base_quantity');
         $repeatCustomerCount = DB::query()
             ->fromSub(
                 Order::query()
                     ->where('payment_status', 'paid')
+                    ->whereNotNull('user_id')
                     ->whereIn('location_id', $locationIds)
                     ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
                     ->when($to, fn ($query) => $query->where('created_at', '<=', $to))
@@ -103,12 +104,12 @@ class ReportController extends Controller
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->groupBy('products.id', 'products.name')
-            ->orderByDesc(DB::raw('SUM(order_items.quantity)'))
+            ->orderByDesc(DB::raw('SUM(order_items.base_quantity)'))
             ->limit(10)
             ->get([
                 'products.id',
                 'products.name',
-                DB::raw('SUM(order_items.quantity) as units'),
+                DB::raw('SUM(order_items.base_quantity) as units'),
                 DB::raw('SUM(order_items.total_price) as revenue'),
             ]);
 
@@ -138,7 +139,7 @@ class ReportController extends Controller
                 'categories.name',
                 DB::raw('COUNT(DISTINCT orders.id) as orders'),
                 DB::raw('COUNT(DISTINCT products.id) as products'),
-                DB::raw('SUM(order_items.quantity) as units'),
+                DB::raw('SUM(order_items.base_quantity) as units'),
                 DB::raw('SUM(order_items.total_price) as revenue'),
             ]);
 
@@ -186,7 +187,7 @@ class ReportController extends Controller
             ->get([
                 DB::raw("CONCAT(first_products.name, ' + ', second_products.name) as pair"),
                 DB::raw('COUNT(DISTINCT orders.id) as orders'),
-                DB::raw('SUM(first_items.quantity + second_items.quantity) as units'),
+                DB::raw('SUM(first_items.base_quantity + second_items.base_quantity) as units'),
             ]);
 
         $couponPerformance = Coupon::query()

@@ -111,10 +111,69 @@ class InventoryController extends Controller
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'paginated' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'group_by_product' => ['nullable', 'boolean'],
         ]);
         $location = Location::findOrFail($validated['location_id']);
         abort_unless($request->user()->canAccessLocation($location), 403);
         $term = trim($validated['q'] ?? '');
+
+        if ($request->boolean('group_by_product')) {
+            $products = Product::query()
+                ->where('is_active', true)
+                ->whereHas('units', fn ($scope) => $scope->where('is_active', true)->where('is_base', true))
+                ->with([
+                    'primaryImage:id,product_id,image_path',
+                    'inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id),
+                    'units' => fn ($scope) => $scope->where('is_active', true)->with('prices')->orderByDesc('is_base')->orderBy('sort_order'),
+                ])
+                ->when($term !== '', fn ($scope) => $scope->where(fn ($inner) => $inner
+                    ->where('name', 'like', "%{$term}%")
+                    ->orWhere('product_code', 'like', "%{$term}%")
+                    ->orWhere('barcode', 'like', "%{$term}%")
+                    ->orWhereHas('units', fn ($units) => $units->where('is_active', true)->where(fn ($unit) => $unit
+                        ->where('name', 'like', "%{$term}%")
+                        ->orWhere('code', 'like', "%{$term}%")))))
+                ->when(! empty($validated['category_id']), fn ($scope) => $scope->where('category_id', $validated['category_id']))
+                ->orderBy('name');
+
+            $mapProduct = function (Product $product) {
+                $balance = $product->inventoryBalances->first();
+                $baseAvailable = (float) ($balance?->available_qty ?? 0);
+                $baseOnHand = (float) ($balance?->on_hand_qty ?? 0);
+                $baseUnit = $product->units->firstWhere('is_base', true);
+
+                $unitPayload = fn (ProductUnit $unit) => [
+                    'id' => $unit->id,
+                    'product_unit_id' => $unit->id,
+                    'product_id' => $product->id,
+                    'product_code' => $product->product_code,
+                    'barcode' => $product->barcode,
+                    'product_name' => $product->name,
+                    'unit_name' => $unit->name,
+                    'unit_code' => $unit->code,
+                    'name' => $unit->name,
+                    'code' => $unit->code,
+                    'conversion_factor' => (float) $unit->conversion_factor,
+                    'is_base' => (bool) $unit->is_base,
+                    'is_default_selling' => (bool) $unit->is_default_selling,
+                    'image_path' => $product->primaryImage?->image_path,
+                    'original_price' => (float) $product->original_price,
+                    'prices' => $unit->prices->map(fn ($price) => ['price_type' => $price->price_type, 'price' => (float) $price->price])->values(),
+                    'on_hand_qty' => $unit->fromBaseQuantity($baseOnHand),
+                    'available_base_qty' => $baseAvailable,
+                    'available_qty' => $unit->fromBaseQuantity($baseAvailable),
+                ];
+
+                return array_merge($unitPayload($baseUnit), [
+                    'unit_options' => $product->units->map($unitPayload)->values(),
+                ]);
+            };
+
+            return $request->boolean('paginated')
+                ? $products->paginate((int) ($validated['per_page'] ?? 10))->withQueryString()->through($mapProduct)
+                : $products->limit(20)->get()->map($mapProduct);
+        }
+
         $query = ProductUnit::query()
             ->where('is_active', true)
             ->with(['prices', 'product:id,name,product_code,barcode,original_price,category_id', 'product.primaryImage:id,product_id,image_path', 'product.inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id)])

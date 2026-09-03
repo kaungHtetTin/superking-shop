@@ -1,5 +1,4 @@
 import { Link, useForm, usePage } from '@/spa/router';
-import { Transition } from '@headlessui/react';
 import {
     Alert,
     Avatar,
@@ -17,7 +16,7 @@ import { useEffect, useState } from 'react';
 import CropImageModal from '@/Components/Admin/CropImageModal';
 import { usePhraseTranslation } from '@/Utils/i18n';
 
-export default function UpdateProfileInformation({ mustVerifyEmail, status, className }) {
+export default function UpdateProfileInformation({ mustVerifyEmail, status, className, showHeading = true }) {
     const { url, props } = usePage();
     const t = usePhraseTranslation();
     const { auth, app_base, app_url } = props;
@@ -35,9 +34,11 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
     });
     const [croppingImage, setCroppingImage] = useState(null);
     const [avatarPreview, setAvatarPreview] = useState(avatarSrc);
+    const [showSuccess, setShowSuccess] = useState(status === 'profile-updated');
 
     const submit = (e) => {
         e.preventDefault();
+        setShowSuccess(false);
         if (data.avatar instanceof File) {
             // Multipart + PATCH can drop fields in some PHP setups; use POST method spoof.
             transform((form) => ({
@@ -46,7 +47,12 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
             }));
             post(profileEndpoint, {
                 preserveScroll: true,
+                refreshRedirected: false,
                 forceFormData: true,
+                onSuccess: () => {
+                    if (isAdminContext) window.dispatchEvent(new CustomEvent('admin:notice', { detail: { type: 'success', message: t('Profile updated successfully.') } }));
+                    setShowSuccess(true);
+                },
                 onFinish: () => transform((form) => form),
             });
             return;
@@ -54,8 +60,23 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
 
         patch(profileEndpoint, {
             preserveScroll: true,
+            refreshRedirected: false,
+            onSuccess: () => {
+                if (isAdminContext) window.dispatchEvent(new CustomEvent('admin:notice', { detail: { type: 'success', message: t('Profile updated successfully.') } }));
+                setShowSuccess(true);
+            },
         });
     };
+
+    useEffect(() => {
+        if (status === 'profile-updated') setShowSuccess(true);
+    }, [status]);
+
+    useEffect(() => {
+        if (!showSuccess) return undefined;
+        const timeout = window.setTimeout(() => setShowSuccess(false), 4000);
+        return () => window.clearTimeout(timeout);
+    }, [showSuccess]);
 
     useEffect(() => {
         if (!(data.avatar instanceof File)) {
@@ -95,19 +116,18 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
 
     return (
         <Box component="section" className={className}>
-            <Stack spacing="6px">
+            {showHeading && <Stack spacing="6px">
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {t('Profile Information')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {t("Update your account's profile information and email address.")}
                 </Typography>
-            </Stack>
+            </Stack>}
 
-            <Box component="form" onSubmit={submit} sx={{ mt: '20px' }}>
+            <Box component="form" onSubmit={submit} sx={{ mt: showHeading ? '20px' : 0 }}>
                 <Stack spacing="16px">
-                    {!isAdminContext && (
-                        <Stack spacing="8px">
+                    <Stack spacing="8px">
                             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                 {t('Profile photo')}
                             </Typography>
@@ -218,8 +238,7 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                                     {errors.avatar}
                                 </Typography>
                             )}
-                        </Stack>
-                    )}
+                    </Stack>
 
                     <TextField
                         id="name"
@@ -300,16 +319,11 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                         <Button type="submit" variant="contained" disabled={processing}>
                             {t('Save')}
                         </Button>
-                        <Transition
-                            show={recentlySuccessful}
-                            enterFrom="opacity-0"
-                            leaveTo="opacity-0"
-                            className="transition ease-in-out"
-                        >
-                            <Typography variant="body2" color="text.secondary">
-                                {t('Saved.')}
-                            </Typography>
-                        </Transition>
+                        {(showSuccess || recentlySuccessful) && (
+                            <Alert severity="success" variant="outlined" sx={{ py: 0, alignItems: 'center' }}>
+                                {t('Profile updated successfully.')}
+                            </Alert>
+                        )}
                     </Stack>
                 </Stack>
             </Box>

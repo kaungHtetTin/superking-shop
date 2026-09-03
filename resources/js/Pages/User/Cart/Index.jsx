@@ -23,6 +23,7 @@ import UserBrandHead from '@/Components/User/UserBrandHead';
 import { routeWithBase, storageUrl } from '@/Utils/url';
 import { useCartStore } from '@/stores/cartStore';
 import { formatMoney, unitOriginalPrice, unitPrice } from '@/Utils/pricing';
+import { formatUnitWithConversion } from '@/Utils/unitLabel';
 import {
     eyebrowSxForTheme,
     getMusicStoreColors,
@@ -61,6 +62,8 @@ export default function CartIndex() {
                         originalPrice: unitOriginalPrice(unit),
                         flashSale: unit.flash_sale || null,
                         maxQty: Number(unit.available_qty || 0),
+                        conversionFactor: Number(unit.conversion_factor || 1),
+                        isBase: Boolean(unit.is_base),
                     })));
                 });
             })
@@ -165,7 +168,7 @@ export default function CartIndex() {
                                             >
                                                 {line.unitOptions.map((unit) => (
                                                     <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.maxQty || 0) <= 0}>
-                                                        {unit.name || unit.code} · {formatMoney(unit.price)}
+                                                        {formatUnitWithConversion(unit, line.unitOptions)} · {formatMoney(unit.price)}
                                                     </MenuItem>
                                                 ))}
                                             </TextField>

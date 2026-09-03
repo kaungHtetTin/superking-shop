@@ -361,14 +361,15 @@ class FinanceController extends Controller
         while ($cursor->lte($to) && count($days) < 45) {
             $day = $cursor->toDateString();
             $income = (float) ($dailyOrders[$day] ?? 0) + (float) ($entryMap[$day]['income'] ?? 0);
-            $expenses = (float) ($entryMap[$day]['expense'] ?? 0);
+            $operatingExpenses = (float) ($entryMap[$day]['expense'] ?? 0);
             $costOfGoods = (float) ($dailyCosts[$day] ?? 0);
+            $expenses = $operatingExpenses + $costOfGoods;
 
             $days[] = [
                 'day' => $day,
                 'income' => round($income, 2),
                 'expenses' => round($expenses, 2),
-                'net' => round($income - $costOfGoods - $expenses, 2),
+                'net' => round($income - $expenses, 2),
             ];
 
             $cursor->addDay();

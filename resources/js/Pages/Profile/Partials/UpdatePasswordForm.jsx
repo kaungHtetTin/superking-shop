@@ -1,17 +1,24 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useForm, usePage } from '@/spa/router';
-import { Transition } from '@headlessui/react';
-import { Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, IconButton, InputAdornment, Stack, TextField, Typography } from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 
-export default function UpdatePasswordForm({ className }) {
-    const { app_base } = usePage().props;
+export default function UpdatePasswordForm({ className, showHeading = true }) {
+    const { url, props } = usePage();
+    const { app_base } = props;
     const t = usePhraseTranslation();
+    const isAdminContext = typeof url === 'string' && url.includes('/admin');
+    const passwordEndpoint = routeWithBase(isAdminContext ? '/admin/profile/password' : '/password', app_base);
     const passwordInput = useRef();
     const currentPasswordInput = useRef();
-
-    const { data, setData, errors, put, reset, processing, recentlySuccessful } = useForm({
+    const [passwordVisibility, setPasswordVisibility] = useState({
+        current_password: false,
+        password: false,
+        password_confirmation: false,
+    });
+    const { data, setData, errors, put, reset, processing } = useForm({
         current_password: '',
         password: '',
         password_confirmation: '',
@@ -20,39 +27,61 @@ export default function UpdatePasswordForm({ className }) {
     const updatePassword = (e) => {
         e.preventDefault();
 
-        put(routeWithBase('/password', app_base), {
+        put(passwordEndpoint, {
             preserveScroll: true,
-            onSuccess: () => reset(),
-            onError: () => {
-                if (errors.password) {
+            refreshRedirected: false,
+            onSuccess: () => {
+                reset();
+                setPasswordVisibility({ current_password: false, password: false, password_confirmation: false });
+            },
+            onError: (nextErrors) => {
+                if (nextErrors.password) {
                     reset('password', 'password_confirmation');
-                    passwordInput.current.focus();
+                    passwordInput.current?.focus();
                 }
 
-                if (errors.current_password) {
+                if (nextErrors.current_password) {
                     reset('current_password');
-                    currentPasswordInput.current.focus();
+                    currentPasswordInput.current?.focus();
                 }
             },
         });
     };
 
+    const visibilityControl = (field, label) => ({
+        endAdornment: (
+            <InputAdornment position="end">
+                <IconButton
+                    type="button"
+                    edge="end"
+                    size="small"
+                    aria-label={t(passwordVisibility[field] ? `Hide ${label}` : `Show ${label}`)}
+                    aria-pressed={passwordVisibility[field]}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setPasswordVisibility((current) => ({ ...current, [field]: !current[field] }))}
+                >
+                    {passwordVisibility[field] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
+            </InputAdornment>
+        ),
+    });
+
     return (
         <Box component="section" className={className}>
-            <Stack spacing="6px">
+            {showHeading && <Stack spacing="6px">
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {t('Update Password')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {t('Ensure your account is using a long, random password to stay secure.')}
                 </Typography>
-            </Stack>
+            </Stack>}
 
-            <Box component="form" onSubmit={updatePassword} sx={{ mt: '20px' }}>
-                <Stack spacing="16px">
+            <Box component="form" onSubmit={updatePassword} sx={{ mt: showHeading ? '20px' : 0 }}>
+                <Stack spacing={isAdminContext ? '12px' : '16px'}>
                     <TextField
                         id="current_password"
-                        type="password"
+                        type={passwordVisibility.current_password ? 'text' : 'password'}
                         label={t('Current Password')}
                         fullWidth
                         inputRef={currentPasswordInput}
@@ -61,11 +90,12 @@ export default function UpdatePasswordForm({ className }) {
                         onChange={(e) => setData('current_password', e.target.value)}
                         error={Boolean(errors.current_password)}
                         helperText={errors.current_password}
+                        slotProps={{ input: visibilityControl('current_password', 'current password') }}
                     />
 
                     <TextField
                         id="password"
-                        type="password"
+                        type={passwordVisibility.password ? 'text' : 'password'}
                         label={t('New Password')}
                         fullWidth
                         inputRef={passwordInput}
@@ -74,11 +104,12 @@ export default function UpdatePasswordForm({ className }) {
                         onChange={(e) => setData('password', e.target.value)}
                         error={Boolean(errors.password)}
                         helperText={errors.password}
+                        slotProps={{ input: visibilityControl('password', 'new password') }}
                     />
 
                     <TextField
                         id="password_confirmation"
-                        type="password"
+                        type={passwordVisibility.password_confirmation ? 'text' : 'password'}
                         label={t('Confirm Password')}
                         fullWidth
                         autoComplete="new-password"
@@ -86,17 +117,13 @@ export default function UpdatePasswordForm({ className }) {
                         onChange={(e) => setData('password_confirmation', e.target.value)}
                         error={Boolean(errors.password_confirmation)}
                         helperText={errors.password_confirmation}
+                        slotProps={{ input: visibilityControl('password_confirmation', 'password confirmation') }}
                     />
 
                     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                         <Button type="submit" variant="contained" disabled={processing}>
                             {t('Save')}
                         </Button>
-                        <Transition show={recentlySuccessful} enterFrom="opacity-0" leaveTo="opacity-0" className="transition ease-in-out">
-                            <Typography variant="body2" color="text.secondary">
-                                {t('Saved.')}
-                            </Typography>
-                        </Transition>
                     </Stack>
                 </Stack>
             </Box>

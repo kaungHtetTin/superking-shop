@@ -74,6 +74,7 @@ class StockReceiptController extends Controller
         $receipt->load([
             'items.product:id,name,product_code,barcode,original_price',
             'items.product.inventoryBalances' => fn ($query) => $query->where('location_id', $receipt->location_id),
+            'items.product.units' => fn ($query) => $query->where('is_active', true)->with('prices')->orderByDesc('is_base')->orderBy('sort_order'),
             'items.unit.prices',
         ]);
 
@@ -89,7 +90,7 @@ class StockReceiptController extends Controller
                     'product_unit_id' => $item->product_unit_id,
                     'received_quantity' => $item->received_quantity,
                     'unit_cost' => $item->unit_cost,
-                    'unit' => $this->receiptUnitPayload($item->unit),
+                    'unit' => $this->receiptUnitPayload($item->unit, $item->product),
                 ])->values(),
             ],
             'locations' => Location::query()->whereIn('id', $request->user()->accessibleLocationIds())->orderBy('name')->get(['id', 'code', 'name', 'type']),
@@ -143,23 +144,33 @@ class StockReceiptController extends Controller
         ];
     }
 
-    private function receiptUnitPayload(ProductUnit $unit): array
+    private function receiptUnitPayload(ProductUnit $unit, \App\Models\Product $product): array
     {
-        $balance = $unit->product->inventoryBalances->first();
+        $balance = $product->inventoryBalances->first();
 
-        return [
-            'id' => $unit->id,
-            'product_id' => $unit->product_id,
-            'product_code' => $unit->product->product_code,
-            'barcode' => $unit->product->barcode,
-            'product_name' => $unit->product->name,
-            'unit_name' => $unit->name,
-            'unit_code' => $unit->code,
-            'conversion_factor' => (float) $unit->conversion_factor,
-            'original_price' => (float) $unit->product->original_price,
-            'prices' => $unit->prices,
-            'on_hand_qty' => (float) ($balance?->on_hand_qty ?? 0),
-            'available_qty' => (float) ($balance?->available_qty ?? 0),
+        $mapUnit = fn (ProductUnit $option) => [
+            'id' => $option->id,
+            'product_unit_id' => $option->id,
+            'product_id' => $option->product_id,
+            'product_code' => $product->product_code,
+            'barcode' => $product->barcode,
+            'product_name' => $product->name,
+            'unit_name' => $option->name,
+            'unit_code' => $option->code,
+            'name' => $option->name,
+            'code' => $option->code,
+            'conversion_factor' => (float) $option->conversion_factor,
+            'is_base' => (bool) $option->is_base,
+            'is_default_selling' => (bool) $option->is_default_selling,
+            'original_price' => (float) $product->original_price,
+            'prices' => $option->prices,
+            'on_hand_qty' => $option->fromBaseQuantity((float) ($balance?->on_hand_qty ?? 0)),
+            'available_base_qty' => (float) ($balance?->available_qty ?? 0),
+            'available_qty' => $option->fromBaseQuantity((float) ($balance?->available_qty ?? 0)),
         ];
+
+        return array_merge($mapUnit($unit), [
+            'unit_options' => $product->units->map($mapUnit)->values(),
+        ]);
     }
 }

@@ -4,7 +4,7 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, 
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 
-export default function DeleteUserForm({ className }) {
+export default function DeleteUserForm({ className, showHeading = true }) {
     const { url, props } = usePage();
     const t = usePhraseTranslation();
     const { app_base } = props;
@@ -33,7 +33,11 @@ export default function DeleteUserForm({ className }) {
 
         destroy(profileEndpoint, {
             preserveScroll: true,
-            onSuccess: () => closeModal(),
+            refreshRedirected: false,
+            onSuccess: () => {
+                closeModal();
+                window.location.assign(routeWithBase('/', app_base));
+            },
             onError: () => passwordInput.current.focus(),
             onFinish: () => reset(),
         });
@@ -47,16 +51,16 @@ export default function DeleteUserForm({ className }) {
 
     return (
         <Box component="section" className={className}>
-            <Stack spacing="6px">
+            {showHeading && <Stack spacing="6px">
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {t('Delete Account')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {t('Once your account is deleted, all resources and data will be permanently deleted.')}
                 </Typography>
-            </Stack>
+            </Stack>}
 
-            <Button color="error" variant="outlined" sx={{ mt: '16px' }} onClick={confirmUserDeletion}>
+            <Button color="error" variant="outlined" sx={{ mt: showHeading ? '16px' : 0 }} onClick={confirmUserDeletion}>
                 {t('Delete Account')}
             </Button>
 

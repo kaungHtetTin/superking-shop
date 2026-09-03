@@ -1,4 +1,4 @@
-import { Head, useForm, usePage } from '@/spa/router';
+import { Head, Link, useForm, usePage } from '@/spa/router';
 import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
@@ -225,6 +225,10 @@ export default function SettingsEdit({ settings }) {
                             <p className="eyebrow">{t('Configuration')}</p>
                             <strong>{t('Application')}</strong>
                         </div>
+                        <Link href={routeWithBase('/admin/profile', app_base)}>
+                            <span className="settings-nav-icon"><Icon name="user" size={15} /></span>
+                            <span><strong>{t('Edit profile')}</strong><small>{t('Personal information')}</small></span>
+                        </Link>
                         {[
                             { id: 'general', label: 'General', description: 'Name and currency', icon: 'settings' },
                             { id: 'branding', label: 'Branding', description: 'Color and assets', icon: 'palette' },

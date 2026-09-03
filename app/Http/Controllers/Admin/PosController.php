@@ -77,6 +77,7 @@ class PosController extends Controller
 
         $products = ProductUnit::query()
             ->where('is_active', true)
+            ->where('is_default_selling', true)
             ->with([
                 'prices',
                 'product:id,product_code,barcode,name,status,is_active,category_id',
@@ -102,7 +103,10 @@ class PosController extends Controller
                         ->orWhereHas('product', fn ($product) => $product
                             ->where('name', 'like', "%{$term}%")
                             ->orWhere('product_code', 'like', "%{$term}%")
-                            ->orWhere('barcode', 'like', "%{$term}%"));
+                            ->orWhere('barcode', 'like', "%{$term}%")
+                            ->orWhereHas('units', fn ($units) => $units->where('is_active', true)->where(fn ($unit) => $unit
+                                ->where('name', 'like', "%{$term}%")
+                                ->orWhere('code', 'like', "%{$term}%"))));
                 });
             })
             ->whereHas('product', fn ($product) => $product->where('status', 'active')->where('is_active', true))
@@ -122,6 +126,23 @@ class PosController extends Controller
                 $balance = $unit->product->inventoryBalances->first();
                 $availableBaseQuantity = (float) ($balance?->available_qty ?? 0);
                 $factor = max((float) $unit->conversion_factor, 0.000001);
+                $baseUnit = $unit->product->units->firstWhere('is_base', true);
+                $basePrices = $baseUnit?->prices?->keyBy('price_type') ?? collect();
+                $effectivePrices = function (ProductUnit $option) use ($basePrices) {
+                    $factor = max((float) $option->conversion_factor, 0.000001);
+
+                    return $option->prices->map(function ($price) use ($basePrices, $factor) {
+                        $configured = (float) $price->price;
+                        $basePrice = (float) ($basePrices->get($price->price_type)?->price ?? 0);
+
+                        return [
+                            'price_type' => $price->price_type,
+                            'price' => $configured > 0 ? $configured : round($basePrice * $factor, 2),
+                            'is_derived' => $configured <= 0 && $basePrice > 0,
+                        ];
+                    })->values();
+                };
+                $unitPrices = $effectivePrices($unit);
 
                 return [
                     'id' => $unit->id,
@@ -132,14 +153,15 @@ class PosController extends Controller
                     'unit_name' => $unit->name,
                     'unit_code' => $unit->code,
                     'conversion_factor' => (float) $unit->conversion_factor,
+                    'is_base' => (bool) $unit->is_base,
                     'is_default_selling' => $unit->is_default_selling,
                     'product_name' => $unit->product->name,
                     'image_path' => $unit->product->primaryImage?->image_path,
-                    'prices' => $unit->prices->map(fn ($price) => ['price_type' => $price->price_type, 'price' => (float) $price->price])->values(),
-                    'price' => (float) ($unit->priceFor('retail')?->price ?? 0),
+                    'prices' => $unitPrices,
+                    'price' => (float) ($unitPrices->firstWhere('price_type', 'retail')['price'] ?? 0),
                     'available_base_qty' => $availableBaseQuantity,
                     'available_qty' => floor((($availableBaseQuantity / $factor) + 0.0000001) * 10000) / 10000,
-                    'unit_options' => $unit->product->units->map(function (ProductUnit $option) use ($availableBaseQuantity) {
+                    'unit_options' => $unit->product->units->map(function (ProductUnit $option) use ($availableBaseQuantity, $effectivePrices) {
                         $optionFactor = max((float) $option->conversion_factor, 0.000001);
 
                         return [
@@ -150,10 +172,7 @@ class PosController extends Controller
                             'is_base' => $option->is_base,
                             'is_default_selling' => $option->is_default_selling,
                             'available_qty' => floor((($availableBaseQuantity / $optionFactor) + 0.0000001) * 10000) / 10000,
-                            'prices' => $option->prices->map(fn ($price) => [
-                                'price_type' => $price->price_type,
-                                'price' => (float) $price->price,
-                            ])->values(),
+                            'prices' => $effectivePrices($option),
                         ];
                     })->values(),
                     'sold_qty' => (float) ($unit->pos_sold_qty ?? 0),

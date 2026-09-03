@@ -10,6 +10,7 @@ import { formatMoney, hasFlashSale, unitOriginalPrice, unitPrice } from '@/Utils
 import { useTheme } from '@mui/material/styles';
 import { getMusicStoreColors } from '@/Components/User/musicStoreDesign';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatUnitWithConversion } from '@/Utils/unitLabel';
 
 const formatUnitLabel = (unit) => {
     return unit?.name || unit?.code || 'Unit';
@@ -154,6 +155,18 @@ const ProductCard = ({ product, returnTo = null }) => {
                     flashSale: unit.flash_sale || null,
                     imagePath,
                     maxQty: Number(unit.available_qty ?? 0),
+                    unitOptions: purchasableUnits.map((option) => ({
+                        id: option.id,
+                        name: option.name || option.code,
+                        code: option.code || null,
+                        price: unitPrice(option),
+                        originalPrice: unitOriginalPrice(option),
+                        flashSale: option.flash_sale || null,
+                        imagePath: option.image?.image_path || imagePath,
+                        maxQty: Number(option.available_qty || 0),
+                        conversionFactor: Number(option.conversion_factor || 1),
+                        isBase: Boolean(option.is_base),
+                    })),
                     isPreorder: false,
                     qty: addQty,
                 });
@@ -162,7 +175,7 @@ const ProductCard = ({ product, returnTo = null }) => {
             setUnitDialogOpen(false);
             showToast(t('Added to cart'), 'success');
         },
-        [selectedCartUnits, product, addToCart, showToast, getUnitQuantity, t]
+        [selectedCartUnits, product, purchasableUnits, addToCart, showToast, getUnitQuantity, t]
     );
 
     return (
@@ -400,7 +413,7 @@ const ProductCard = ({ product, returnTo = null }) => {
                                             : <RadioButtonUncheckedRounded color="disabled" sx={{ fontSize: 21 }} />}
                                         <Box sx={{ minWidth: 0, textAlign: 'left' }}>
                                             <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.3 }} title={formatUnitLabel(unit)}>
-                                                {formatUnitLabel(unit)}
+                                                {formatUnitWithConversion(unit, purchasableUnits)}
                                             </Typography>
                                         </Box>
                                         <Typography variant="body2" color="primary" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>

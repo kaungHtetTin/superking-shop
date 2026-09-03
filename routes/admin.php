@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\PointConfigurationController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\StorefrontController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -300,5 +301,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update.post');
+    Route::put('/profile/password', [PasswordController::class, 'update'])->name('profile.password.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

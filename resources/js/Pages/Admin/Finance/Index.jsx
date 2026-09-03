@@ -103,7 +103,11 @@ function DailyFinanceChart({ trend }) {
             ticks,
             labelStep,
             zeroY: yFor(0),
-            latest: rows[rows.length - 1],
+            totals: rows.reduce((totals, row) => ({
+                income: totals.income + row.income,
+                expenses: totals.expenses + row.expenses,
+                net: totals.net + row.net,
+            }), { income: 0, expenses: 0, net: 0 }),
         };
     }, [trend]);
 
@@ -117,7 +121,7 @@ function DailyFinanceChart({ trend }) {
 
     const series = [
         { key: 'income', label: 'Income', className: 'income' },
-        { key: 'expenses', label: 'Expenses', className: 'expenses' },
+        { key: 'expenses', label: 'Costs & expenses', className: 'expenses' },
         { key: 'net', label: 'Net', className: 'net' },
     ];
 
@@ -128,7 +132,7 @@ function DailyFinanceChart({ trend }) {
                     <div key={item.key}>
                         <span className={`chart-dot ${item.className}`} />
                         <small>{t(item.label)}</small>
-                        <strong>{money(chart.latest[item.key])}</strong>
+                        <strong>{money(chart.totals[item.key])}</strong>
                     </div>
                 ))}
             </div>

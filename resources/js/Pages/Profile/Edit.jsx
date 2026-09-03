@@ -12,28 +12,74 @@ import { routeWithBase, storageUrl } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import Footer from '@/Components/User/Footer';
 import { storefrontBackgroundSx } from '@/Components/User/musicStoreDesign';
+import { useEffect, useState } from 'react';
+import Icon from '@/Components/Admin/icons';
+import { PanelHeading } from '@/Components/Admin/shared';
+import { AdminFlash } from '@/Components/Admin/AdminFlash';
 
-export default function Edit({ auth, mustVerifyEmail, status }) {
+export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) {
     const theme = useTheme();
     const { url, props } = usePage();
     const { app_base, app_url } = props;
     const t = usePhraseTranslation();
     const isAdminContext = typeof url === 'string' && url.includes('/admin');
+    const [adminSection, setAdminSection] = useState(status === 'password-updated' ? 'security' : 'general');
+    const adminRoleLabel = auth?.user?.role_label || String(auth?.user?.role || 'admin').replaceAll('_', ' ');
+
+    useEffect(() => {
+        if (!isAdminContext || typeof window === 'undefined') return;
+        const current = new URL(window.location.href);
+        if (!current.searchParams.has('saved')) return;
+        current.searchParams.delete('saved');
+        window.history.replaceState({}, '', `${current.pathname}${current.search}${current.hash}`);
+    }, [isAdminContext, status]);
 
     const inner = (
         <>
             <Head title={t('Profile')} />
             {isAdminContext ? (
-                <div className="stack-sm">
-                    <section className="panel glass">
-                        <UpdateProfileInformationForm mustVerifyEmail={mustVerifyEmail} status={status} className="max-w-xl" />
+                <div className="profile-settings-page">
+                <AdminFlash flash={{ success: status === 'password-updated' ? t('Password updated successfully.') : profileSuccess }} />
+                <div className="settings-workspace profile-settings-workspace">
+                    <aside className="settings-section-nav" aria-label={t('Profile sections')}>
+                        <div className="settings-nav-heading">
+                            <p className="eyebrow">{t('Account')}</p>
+                            <strong>{t(adminRoleLabel)}</strong>
+                        </div>
+                        {[
+                            { id: 'general', label: 'General', description: 'Personal information', icon: 'user' },
+                            { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
+                            { id: 'danger', label: 'Account actions', description: 'Delete account', icon: 'trash' },
+                        ].map((section) => (
+                            <button key={section.id} type="button" className={adminSection === section.id ? 'active' : ''} onClick={() => setAdminSection(section.id)} aria-current={adminSection === section.id ? 'page' : undefined}>
+                                <span className="settings-nav-icon"><Icon name={section.icon} size={15} /></span>
+                                <span><strong>{t(section.label)}</strong><small>{t(section.description)}</small></span>
+                            </button>
+                        ))}
+                        <div className="settings-nav-divider" />
+                        <Link href={routeWithBase('/admin/settings', app_base)}>
+                            <span className="settings-nav-icon"><Icon name="settings" size={15} /></span>
+                            <span><strong>{t('Application settings')}</strong><small>{t('General, branding and contacts')}</small></span>
+                        </Link>
+                    </aside>
+                    <section className="settings-work-surface">
+                        {adminSection === 'general' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('General')} title={t('Edit profile')} />
+                            <p className="settings-section-description">{t('Update your name, email address, and profile photo.')}</p>
+                            <UpdateProfileInformationForm mustVerifyEmail={mustVerifyEmail} status={status} showHeading={false} />
+                        </div>}
+                        {adminSection === 'security' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('Security')} title={t('Update password')} />
+                            <p className="settings-section-description">{t('Use a strong, unique password to protect your administrator account.')}</p>
+                            <UpdatePasswordForm showHeading={false} />
+                        </div>}
+                        {adminSection === 'danger' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('Account actions')} title={t('Delete account')} />
+                            <p className="settings-section-description">{t('Permanently remove this account and its access. This action cannot be undone.')}</p>
+                            <DeleteUserForm showHeading={false} />
+                        </div>}
                     </section>
-                    <section className="panel glass">
-                        <UpdatePasswordForm className="max-w-xl" />
-                    </section>
-                    <section className="panel glass">
-                        <DeleteUserForm className="max-w-xl" />
-                    </section>
+                </div>
                 </div>
             ) : (
                 <Stack spacing={{ xs: '16px', md: '20px' }}>

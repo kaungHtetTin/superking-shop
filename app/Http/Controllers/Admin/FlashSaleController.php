@@ -397,6 +397,8 @@ class FlashSaleController extends Controller
                     'id' => $unit->id,
                     'code' => $unit->code,
                     'name' => $unit->name,
+                    'conversion_factor' => (float) $unit->conversion_factor,
+                    'is_base' => (bool) $unit->is_base,
                     'price' => (float) ($unit->priceFor('retail')?->price ?? 0),
                     'available_qty' => $unit->available_qty,
                 ])->values(),

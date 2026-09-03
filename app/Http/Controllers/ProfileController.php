@@ -21,7 +21,16 @@ class ProfileController extends Controller
     {
         return Spa::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
-            'status' => session('status'),
+            'status' => match ($request->query('saved')) {
+                'password' => 'password-updated',
+                'profile' => 'profile-updated',
+                default => session('status'),
+            },
+            'profileSuccess' => match ($request->query('saved')) {
+                'password' => 'Password updated successfully.',
+                'profile' => 'Profile updated successfully.',
+                default => null,
+            },
         ]);
     }
 
@@ -48,7 +57,11 @@ class ProfileController extends Controller
 
         $user->save();
 
-        return Redirect::back();
+        if ($request->routeIs('admin.profile.update', 'admin.profile.update.post')) {
+            return Redirect::route('admin.profile.edit', ['saved' => 'profile']);
+        }
+
+        return Redirect::back()->with('status', 'profile-updated');
     }
 
     /**

@@ -38,7 +38,11 @@ class PosCheckoutService
             $units = ProductUnit::query()
                 ->whereIn('id', $unitIds)
                 ->where('is_active', true)
-                ->with(['prices', 'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true)])
+                ->with([
+                    'prices',
+                    'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true),
+                    'product.baseUnit.prices',
+                ])
                 ->get()
                 ->keyBy('id');
             $subtotal = 0.0;
@@ -74,7 +78,19 @@ class PosCheckoutService
                     }
                     $focBaseQuantity = $focUnit->toBaseQuantity($focQuantity);
                 }
-                $unitPrice = round((float) $price->price, 2);
+                $configuredPrice = (float) $price->price;
+                $basePrice = (float) ($unit->product->baseUnit?->priceFor($priceType)?->price ?? 0);
+                $unitPrice = round(
+                    $configuredPrice > 0
+                        ? $configuredPrice
+                        : ($basePrice > 0 ? $basePrice * (float) $unit->conversion_factor : 0),
+                    2
+                );
+                if ($unitPrice <= 0) {
+                    throw ValidationException::withMessages([
+                        'items' => "{$unit->product->name} has no positive {$priceType} selling price for {$unit->name} or its base unit.",
+                    ]);
+                }
                 $lineTotal = round($unitPrice * $quantity, 2);
                 $baseQuantity = $unit->toBaseQuantity($quantity);
                 $subtotal += $lineTotal;

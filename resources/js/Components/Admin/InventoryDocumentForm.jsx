@@ -6,6 +6,7 @@ import WizardProductUnitCatalog from '@/Components/Admin/WizardProductUnitCatalo
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
+import { formatUnitWithConversion } from '@/Utils/unitLabel';
 
 const steps = [
     { key: 'basic', label: 'Basic' },
@@ -40,7 +41,7 @@ export default function InventoryDocumentForm({ locations, categories = [], init
     });
 
     const addUnit = (unit) => {
-        if (form.data.items.some((item) => Number(item.product_unit_id) === Number(unit.id))) return;
+        if (form.data.items.some((item) => Number(item.product_id) === Number(unit.product_id))) return;
         form.clearErrors('items');
         form.setData('items', [...form.data.items, {
             product_id: unit.product_id,
@@ -52,8 +53,18 @@ export default function InventoryDocumentForm({ locations, categories = [], init
         }]);
     };
     const patchItem = (index, patch) => form.setData('items', form.data.items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
-    const removeItem = (unitId) => form.setData('items', form.data.items.filter((item) => Number(item.product_unit_id) !== Number(unitId)));
-    const toggleUnit = (unit, selected) => selected ? addUnit(unit) : removeItem(unit.id);
+    const removeItem = (productId) => form.setData('items', form.data.items.filter((item) => Number(item.product_id) !== Number(productId)));
+    const toggleUnit = (unit, selected) => selected ? addUnit(unit) : removeItem(unit.product_id);
+    const changeItemUnit = (index, unitId) => {
+        const item = form.data.items[index];
+        const unit = (item.unit?.unit_options || []).find((option) => Number(option.id) === Number(unitId));
+        if (!unit) return;
+        patchItem(index, {
+            product_unit_id: unit.id,
+            unit: { ...unit, unit_options: item.unit.unit_options },
+            unit_cost: Number(unit.original_price || 0) * Number(unit.conversion_factor || 1),
+        });
+    };
     const selectedIds = useMemo(() => new Set(form.data.items.map((item) => Number(item.product_unit_id))), [form.data.items]);
     const selectedLocation = locations.find((location) => String(location.id) === String(form.data.location_id));
     const totalSelectedQuantity = useMemo(() => form.data.items.reduce((sum, item) => sum + Number(item.received_quantity || 0), 0), [form.data.items]);
@@ -94,13 +105,13 @@ export default function InventoryDocumentForm({ locations, categories = [], init
                     <label className="form-field receipt-wide-field"><span>{t('Document note')}</span><textarea name="notes" rows="5" value={form.data.notes} onChange={(event) => form.setData('notes', event.target.value)} placeholder={t('Delivery condition or internal notes')} /></label>
                 </div></>}
 
-                {step === 1 && <><PanelHeading eyebrow={t('Step 2')} title={t('Select product units')} action={<small className="muted">{form.data.items.length} {t('selected')}</small>} /><WizardProductUnitCatalog locationId={form.data.location_id} categories={categories} selectedUnitIds={[...selectedIds]} onToggle={toggleUnit} /></>}
+                {step === 1 && <><PanelHeading eyebrow={t('Step 2')} title={t('Select products')} action={<small className="muted">{form.data.items.length} {t('selected')}</small>} /><WizardProductUnitCatalog locationId={form.data.location_id} categories={categories} selectedUnitIds={[...selectedIds]} selectedProductIds={form.data.items.map((item) => item.product_id)} onToggle={toggleUnit} /></>}
 
                 {step === 2 && <><PanelHeading eyebrow={t('Step 3')} title={t('Quantities and cost')} action={<small className="muted">{t('Inventory is stored in base units.')}</small>} />
-                    <div className="wizard-qty-table" style={{ '--wizard-qty-fields': 3, '--wizard-qty-unit': '150px' }}><div className="wizard-qty-list-head" aria-hidden="true"><span>{t('Product / Unit')}</span><span>{t('Received')}</span><span>{t('Unit cost')}</span><span>{t('Line note')}</span><span>{t('Action')}</span></div><div className="receipt-price-lines wizard-console-lines">{form.data.items.map((item, index) => { const unit = item.unit; const baseQuantity = Number(item.received_quantity || 0) * Number(unit?.conversion_factor || 1); return <div className="receipt-price-line has-remove wizard-console-line" key={item.product_unit_id}><UnitIdentity unit={unit} /><label className="form-field"><span>{t('Received')}</span><input name={`items.${index}.received_quantity`} type="number" min="0.0001" step="0.0001" value={item.received_quantity} onChange={(event) => patchItem(index, { received_quantity: event.target.value })} required /><small className="wizard-qty-hint">{baseQuantity.toFixed(4)} {t('base')}</small></label><label className="form-field"><span>{t('Cost per unit')}</span><input name={`items.${index}.unit_cost`} type="number" min="0" step="0.01" value={item.unit_cost} onChange={(event) => patchItem(index, { unit_cost: event.target.value })} /></label><label className="form-field"><span>{t('Line note')}</span><input name={`items.${index}.notes`} value={item.notes || ''} onChange={(event) => patchItem(index, { notes: event.target.value })} /></label><button type="button" className="icon-btn small danger wizard-qty-remove" onClick={() => removeItem(item.product_unit_id)} aria-label={t('Remove item')}><Icon name="trash" size={13} /></button></div>; })}</div></div>
+                    <div className="wizard-qty-table" style={{ '--wizard-qty-fields': 4, '--wizard-qty-unit': '140px' }}><div className="wizard-qty-list-head" aria-hidden="true"><span>{t('Product')}</span><span>{t('Unit')}</span><span>{t('Received')}</span><span>{t('Unit cost')}</span><span>{t('Line note')}</span><span>{t('Action')}</span></div><div className="receipt-price-lines wizard-console-lines">{form.data.items.map((item, index) => { const unit = item.unit; const options = unit?.unit_options || [unit]; const baseQuantity = Number(item.received_quantity || 0) * Number(unit?.conversion_factor || 1); return <div className="receipt-price-line has-remove wizard-console-line" key={item.product_id}><UnitIdentity unit={unit} /><label className="form-field"><span>{t('Unit')}</span><select value={item.product_unit_id} onChange={(event) => changeItemUnit(index, event.target.value)}>{options.map((option) => <option key={option.id} value={option.id}>{formatUnitWithConversion(option, options)}</option>)}</select></label><label className="form-field"><span>{t('Received')}</span><input name={`items.${index}.received_quantity`} type="number" min="0.0001" step="0.0001" value={item.received_quantity} onChange={(event) => patchItem(index, { received_quantity: event.target.value })} required /><small className="wizard-qty-hint">{baseQuantity.toFixed(4)} {t('base')}</small></label><label className="form-field"><span>{t('Cost per unit')}</span><input name={`items.${index}.unit_cost`} type="number" min="0" step="0.01" value={item.unit_cost} onChange={(event) => patchItem(index, { unit_cost: event.target.value })} /></label><label className="form-field"><span>{t('Line note')}</span><input name={`items.${index}.notes`} value={item.notes || ''} onChange={(event) => patchItem(index, { notes: event.target.value })} /></label><button type="button" className="icon-btn small danger wizard-qty-remove" onClick={() => removeItem(item.product_id)} aria-label={t('Remove item')}><Icon name="trash" size={13} /></button></div>; })}</div></div>
                 </>}
 
-                {step === 3 && <><PanelHeading eyebrow={t('Step 4')} title={t('Review and submit')} /><div className="metrics-grid compact" style={{ marginBottom: 14 }}><Stat label="Warehouse" value={selectedLocation?.name || '-'} /><Stat label="Lines" value={form.data.items.length} /><Stat label="Selected units" value={totalSelectedQuantity.toFixed(4)} /><Stat label="Base units" value={totalBaseQuantity.toFixed(4)} /><Stat label="Estimated cost" value={formatMoney(totalCost)} /></div><div className="table-wrap"><table><thead><tr><th>{t('Product / Unit')}</th><th className="numeric-cell">{t('Received')}</th><th className="numeric-cell">{t('Base units')}</th><th className="numeric-cell">{t('Unit cost')}</th><th className="numeric-cell">{t('Line total')}</th><th /></tr></thead><tbody>{form.data.items.map((item) => <tr key={item.product_unit_id}><td><strong>{item.unit?.product_name}</strong><small className="muted" style={{ display: 'block' }}>{item.unit?.unit_name} ({item.unit?.unit_code})</small></td><td className="numeric-cell">{item.received_quantity}</td><td className="numeric-cell">{(Number(item.received_quantity || 0) * Number(item.unit?.conversion_factor || 1)).toFixed(4)}</td><td className="numeric-cell">{formatMoney(item.unit_cost || 0)}</td><td className="numeric-cell">{formatMoney(Number(item.received_quantity || 0) * Number(item.unit_cost || 0))}</td><td><button type="button" className="icon-btn small danger" onClick={() => removeItem(item.product_unit_id)} aria-label={t('Remove item')}><Icon name="trash" size={13} /></button></td></tr>)}</tbody></table></div></>}
+            {step === 3 && <><PanelHeading eyebrow={t('Step 4')} title={t('Review and submit')} /><div className="metrics-grid compact" style={{ marginBottom: 14 }}><Stat label="Warehouse" value={selectedLocation?.name || '-'} /><Stat label="Lines" value={form.data.items.length} /><Stat label="Selected units" value={totalSelectedQuantity.toFixed(4)} /><Stat label="Base units" value={totalBaseQuantity.toFixed(4)} /><Stat label="Estimated cost" value={formatMoney(totalCost)} /></div><div className="table-wrap"><table><thead><tr><th>{t('Product / Unit')}</th><th className="numeric-cell">{t('Received')}</th><th className="numeric-cell">{t('Base units')}</th><th className="numeric-cell">{t('Unit cost')}</th><th className="numeric-cell">{t('Line total')}</th><th /></tr></thead><tbody>{form.data.items.map((item) => <tr key={item.product_unit_id}><td><strong>{item.unit?.product_name}</strong><small className="muted" style={{ display: 'block' }}>{item.unit?.unit_name} ({item.unit?.unit_code})</small></td><td className="numeric-cell">{item.received_quantity}</td><td className="numeric-cell">{(Number(item.received_quantity || 0) * Number(item.unit?.conversion_factor || 1)).toFixed(4)}</td><td className="numeric-cell">{formatMoney(item.unit_cost || 0)}</td><td className="numeric-cell">{formatMoney(Number(item.received_quantity || 0) * Number(item.unit_cost || 0))}</td><td><button type="button" className="icon-btn small danger" onClick={() => removeItem(item.product_id)} aria-label={t('Remove item')}><Icon name="trash" size={13} /></button></td></tr>)}</tbody></table></div></>}
             </section>
         </form>
     );

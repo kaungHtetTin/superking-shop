@@ -53,6 +53,7 @@ import {
 } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { formatMoney } from '@/Utils/pricing';
+import { formatUnitWithConversion } from '@/Utils/unitLabel';
 
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const money = formatMoney;
@@ -508,7 +509,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     >
                         {(line.unit_options || []).map((unit) => (
                             <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
-                                {unit.name} ({unit.available_qty} {tp('available')})
+                                {formatUnitWithConversion(unit, line.unit_options)} · {unit.available_qty} {tp('available')}
                             </MenuItem>
                         ))}
                     </TextField>
@@ -566,7 +567,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                             >
                                 {(line.unit_options || []).map((unit) => (
                                     <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
-                                        {unit.name} ({unit.code})
+                                        {formatUnitWithConversion(unit, line.unit_options)}
                                     </MenuItem>
                                 ))}
                             </TextField>
