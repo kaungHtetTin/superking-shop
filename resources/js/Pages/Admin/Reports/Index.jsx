@@ -361,6 +361,7 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} hint="Original product cost at sale" icon="box" />
                 <MetricCard label="Gross profit" value={money(summary.gross_profit)} hint={`${summary.gross_margin}% margin`} icon="chart" tone="success" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} hint="Excludes stock purchases" icon="card" tone="danger" />
+                <MetricCard label="Stock expense" value={money(summary.stock_expenses)} hint="Receipt purchases; shown separately from COGS" icon="receipt" tone="danger" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} hint="After product cost and expenses" icon="wallet" tone={Number(summary.net_profit) < 0 ? 'danger' : 'success'} />
             </div>
 

@@ -59,7 +59,7 @@ class ProfileController extends Controller
         $user->save();
 
         if ($request->routeIs('admin.profile.update', 'admin.profile.update.post')) {
-            return Redirect::route('admin.profile.edit', ['saved' => 'profile']);
+            return Redirect::back()->with('status', 'profile-updated');
         }
 
         return Redirect::back()->with('status', 'profile-updated');

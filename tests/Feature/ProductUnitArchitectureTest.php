@@ -162,13 +162,14 @@ class ProductUnitArchitectureTest extends TestCase
         [$product, $piece, $box] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
         $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 25, idempotencyKey: 'pos-foc-opening');
 
         $order = app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
             'shift_id' => $shift->id,
-            'customer_name' => 'Walk-in customer',
+            'customer_id' => $customer->id,
             'items' => [
                 [
                     'product_unit_id' => $box->id,
@@ -206,13 +207,14 @@ class ProductUnitArchitectureTest extends TestCase
         [$product, $piece, $box] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
         app(InventoryService::class)->receive($location, $product, 24, idempotencyKey: 'pos-derived-price-opening');
 
         $box->priceFor('retail')->update(['price' => 0]);
 
         $order = app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
-            'customer_name' => 'Walk-in customer',
+            'customer_id' => $customer->id,
             'items' => [[
                 'product_unit_id' => $box->id,
                 'quantity' => 2,
@@ -234,6 +236,7 @@ class ProductUnitArchitectureTest extends TestCase
         [$product, $piece] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'staff']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
         $cashier->locations()->attach($location->id, ['is_default' => true]);
         $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'pos-foc-denied-opening');
@@ -242,6 +245,7 @@ class ProductUnitArchitectureTest extends TestCase
         app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
             'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
             'items' => [
                 ['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => 1, 'foc_product_unit_id' => $piece->id],
             ],
@@ -256,6 +260,7 @@ class ProductUnitArchitectureTest extends TestCase
         [, $otherPiece] = $this->productWithUnits();
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
         $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'pos-foc-product-opening');
 
@@ -263,6 +268,7 @@ class ProductUnitArchitectureTest extends TestCase
         app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
             'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
             'items' => [
                 ['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => 1, 'foc_product_unit_id' => $otherPiece->id],
             ],
@@ -433,12 +439,12 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
     }
 
-    public function test_stock_transfer_records_value_without_changing_finance(): void
+    public function test_stock_transfer_records_source_income_and_destination_expense(): void
     {
         [$product, , $box] = $this->productWithUnits();
         $source = $this->location();
         $destination = $this->location();
-        $actor = User::factory()->create(['role' => 'super_admin']);
+        $actor = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
         app(InventoryService::class)->receive($source, $product, 24, idempotencyKey: 'valued-transfer-stock');
 
         $transfer = app(StockTransferService::class)->transferNow(
@@ -453,7 +459,14 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(192.0, (float) $transfer->items->sole()->line_total);
         $this->assertSame(0.0, (float) InventoryBalance::whereBelongsTo($source)->whereBelongsTo($product)->value('on_hand_qty'));
         $this->assertSame(24.0, (float) InventoryBalance::whereBelongsTo($destination)->whereBelongsTo($product)->value('on_hand_qty'));
-        $this->assertDatabaseCount('financial_entries', 0);
+        $this->assertDatabaseHas('financial_entries', ['stock_transfer_id' => $transfer->id, 'location_id' => $source->id, 'type' => 'income', 'category' => 'internal_transfer', 'amount' => 192]);
+        $this->assertDatabaseHas('financial_entries', ['stock_transfer_id' => $transfer->id, 'location_id' => $destination->id, 'type' => 'expense', 'category' => 'stock_receipt', 'amount' => 192]);
+
+        $csv = $this->actingAs($actor)->get('/admin/inventory/transfers/export?source='.$source->id);
+        $csv->assertOk()->assertDownload();
+        $this->assertStringContainsString('FILTERED OVERALL SUMMARY', $csv->streamedContent());
+        $this->assertStringContainsString($transfer->transfer_number, $csv->streamedContent());
+        $this->assertStringContainsString($destination->name, $csv->streamedContent());
     }
 
     /** @return array{Product, ProductUnit, ProductUnit} */

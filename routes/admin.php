@@ -287,6 +287,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/inventory/transfers', [StockTransferController::class, 'index'])->name('inventory.transfers.index');
     Route::get('/inventory/transfers/create', [StockTransferController::class, 'create'])
         ->middleware('admin.permission:inventory.transfer.create')->name('inventory.transfers.create');
+    Route::get('/inventory/transfers/export', [StockTransferController::class, 'export'])->name('inventory.transfers.export');
     Route::post('/inventory/transfers', [StockTransferController::class, 'store'])
         ->middleware('admin.permission:inventory.transfer.create')->name('inventory.transfers.store');
     Route::get('/inventory/transfers/{transfer}', [StockTransferController::class, 'show'])->name('inventory.transfers.show');

@@ -1,4 +1,4 @@
-import { Head, Link, useForm, usePage } from '@/spa/router';
+import { Head, useForm, usePage } from '@/spa/router';
 import { useEffect, useMemo, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
@@ -6,6 +6,9 @@ import { AdminFlash } from '@/Components/Admin/AdminFlash';
 import { PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import UpdateProfileInformationForm from '@/Pages/Profile/Partials/UpdateProfileInformationForm';
+import UpdatePasswordForm from '@/Pages/Profile/Partials/UpdatePasswordForm';
+import DeleteUserForm from '@/Pages/Profile/Partials/DeleteUserForm';
 
 const contactMeta = {
     email: { label: 'Email', type: 'email', placeholder: 'support@example.com' },
@@ -136,10 +139,11 @@ function ContactRows({ type, values, errors, onChange, onAdd, onRemove, t }) {
     );
 }
 
-export default function SettingsEdit({ settings }) {
+export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
-    const [activeSection, setActiveSection] = useState('general');
+    const [activeSection, setActiveSection] = useState(status === 'password-updated' ? 'security' : status === 'profile-updated' ? 'profile' : initialSection);
+    const applicationSections = ['general', 'branding', 'contacts'];
     const initialData = useMemo(() => ({
         app_name: settings.app_name || '',
         currency_label: settings.currency_label || 'MMK',
@@ -218,21 +222,20 @@ export default function SettingsEdit({ settings }) {
 
             <AdminFlash flash={flash} errors={form.errors} />
 
-            <form onSubmit={submit} className="settings-workspace-form">
+            <div className="settings-workspace-form">
                 <div className="settings-workspace">
                     <aside className="settings-section-nav" aria-label={t('Settings sections')}>
                         <div className="settings-nav-heading">
                             <p className="eyebrow">{t('Configuration')}</p>
                             <strong>{t('Application')}</strong>
                         </div>
-                        <Link href={routeWithBase('/admin/profile', app_base)}>
-                            <span className="settings-nav-icon"><Icon name="user" size={15} /></span>
-                            <span><strong>{t('Edit profile')}</strong><small>{t('Personal information')}</small></span>
-                        </Link>
                         {[
                             { id: 'general', label: 'General', description: 'Name and currency', icon: 'settings' },
                             { id: 'branding', label: 'Branding', description: 'Color and assets', icon: 'palette' },
                             { id: 'contacts', label: 'Contacts', description: 'Public channels', icon: 'chat' },
+                            { id: 'profile', label: 'Edit profile', description: 'Personal information', icon: 'user' },
+                            { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
+                            { id: 'danger', label: 'Account deletion', description: 'Delete account', icon: 'trash' },
                         ].map((section) => (
                             <button
                                 key={section.id}
@@ -251,6 +254,7 @@ export default function SettingsEdit({ settings }) {
                     </aside>
 
                     <section className="settings-work-surface">
+                        {applicationSections.includes(activeSection) && <form id="application-settings-form" onSubmit={submit}>
                         {activeSection === 'general' && (
                             <div className="settings-section-content">
                                 <PanelHeading eyebrow={t('General')} title={t('Application identity')} />
@@ -364,10 +368,27 @@ export default function SettingsEdit({ settings }) {
                                 </div>
                             </div>
                         )}
+                        </form>}
+
+                        {activeSection === 'profile' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('Account')} title={t('Edit profile')} />
+                            <p className="settings-section-description">{t('Update your name, email address, phone, address, and profile photo.')}</p>
+                            <UpdateProfileInformationForm mustVerifyEmail={mustVerifyEmail} status={status} showHeading={false} />
+                        </div>}
+                        {activeSection === 'security' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('Security')} title={t('Update password')} />
+                            <p className="settings-section-description">{t('Use a strong, unique password to protect your administrator account.')}</p>
+                            <UpdatePasswordForm showHeading={false} />
+                        </div>}
+                        {activeSection === 'danger' && <div className="settings-section-content profile-settings-content">
+                            <PanelHeading eyebrow={t('Account actions')} title={t('Delete account')} />
+                            <p className="settings-section-description">{t('Permanently remove this account and its access. This action cannot be undone.')}</p>
+                            <DeleteUserForm showHeading={false} />
+                        </div>}
                     </section>
                 </div>
 
-                <div className="editor-action-bar">
+                {applicationSections.includes(activeSection) && <div className="editor-action-bar">
                     <div className="editor-save-state">
                         <span className={hasChanges ? 'is-dirty' : 'is-clean'} />
                         <div>
@@ -379,13 +400,13 @@ export default function SettingsEdit({ settings }) {
                         <button type="button" className="btn secondary" disabled={!hasChanges || form.processing} onClick={() => { form.reset(); form.clearErrors(); }}>
                             {t('Discard changes')}
                         </button>
-                        <button type="submit" className="btn primary" disabled={form.processing || !hasChanges}>
+                        <button type="submit" form="application-settings-form" className="btn primary" disabled={form.processing || !hasChanges}>
                             <Icon name="check" size={14} />
                             {form.processing ? t('Saving...') : t('Save settings')}
                         </button>
                     </div>
-                </div>
-            </form>
+                </div>}
+            </div>
         </AdminLayout>
     );
 }

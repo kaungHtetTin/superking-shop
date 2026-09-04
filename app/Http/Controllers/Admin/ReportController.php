@@ -73,6 +73,7 @@ class ReportController extends Controller
             ->when($to, fn ($query) => $query->where('entry_date', '<=', $to->toDateString()));
         $manualIncome = (float) (clone $financeEntries)->where('type', 'income')->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)->sum('amount');
         $expenses = (float) (clone $financeEntries)->where('type', 'expense')->where('category', '!=', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
+        $stockExpenses = (float) (clone $financeEntries)->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidCustomerCount = (clone $paidOrders)->distinct('user_id')->count('user_id');
         $unitsSold = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
@@ -277,6 +278,7 @@ class ReportController extends Controller
                 'gross_margin' => $paidRevenue > 0 ? round(($grossProfit / $paidRevenue) * 100, 1) : 0,
                 'manual_income' => $manualIncome,
                 'expenses' => $expenses,
+                'stock_expenses' => $stockExpenses,
                 'net_profit' => round($paidRevenue + $manualIncome - $costOfGoods - $expenses, 2),
             ],
             'topProducts' => $topProducts,

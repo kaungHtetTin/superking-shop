@@ -563,7 +563,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                                 <small>{authUser?.email || roleLabel}</small>
                                             </div>
                                         </div>
-                                        <Link href={routeWithBase('/admin/profile', app_base)} role="menuitem" onClick={closeProfile}>
+                                        <Link href={routeWithBase('/admin/settings?section=profile', app_base)} role="menuitem" onClick={closeProfile}>
                                             <Icon name="user" size={14} />
                                             {t('admin.profile_settings', 'Profile settings')}
                                         </Link>

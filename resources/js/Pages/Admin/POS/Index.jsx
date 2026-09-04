@@ -677,6 +677,10 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     const checkout = async (event) => {
         event.preventDefault();
         if (!locationId || !cart.length) return;
+        if (!selectedCustomer) {
+            setScanError(tp('Choose a registered customer before completing the sale.'));
+            return;
+        }
 
         setBusy(true);
         try {
@@ -684,9 +688,9 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 method: 'post',
                 data: {
                     location_id: locationId,
-                    customer_id: selectedCustomer?.id || null,
-                    customer_name: selectedCustomer?.name || 'Walk-in customer',
-                    customer_phone: selectedCustomer?.phone || null,
+                    customer_id: selectedCustomer.id,
+                    customer_name: selectedCustomer.name,
+                    customer_phone: selectedCustomer.phone || null,
                     items: cart.map((item) => ({
                         product_unit_id: item.product_unit_id,
                         quantity: item.quantity,
@@ -727,7 +731,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
                     <Box>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{tp('Customer')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedCustomer?.name || tp('Walk-in customer')}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedCustomer?.name || tp('Customer required')}</Typography>
                     </Box>
                     <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => {
                         setCustomerCreateErrors({});
@@ -762,6 +766,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     renderInput={(params) => <TextField {...params} placeholder={tp('Search customer by name, phone, or email...')} size="small" />}
                 />
             </Box>
+            {!selectedCustomer && <Alert severity="warning">{tp('Choose a registered customer before completing the sale.')}</Alert>}
 
             {can.discount && (
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -884,7 +889,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -904,7 +909,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}

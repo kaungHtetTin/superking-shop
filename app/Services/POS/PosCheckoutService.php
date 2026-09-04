@@ -25,10 +25,25 @@ class PosCheckoutService
 
     public function checkout(array $payload, User $cashier): Order
     {
+        if (empty($payload['customer_id'])) {
+            throw ValidationException::withMessages([
+                'customer_id' => 'Choose a registered customer before completing the sale.',
+            ]);
+        }
+
         return DB::transaction(function () use ($payload, $cashier) {
             $location = Location::query()->where('is_active', true)->findOrFail((int) $payload['location_id']);
             if (! $cashier->canAccessLocation($location)) {
                 throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
+            }
+            $customer = User::query()
+                ->where('role', User::CUSTOMER_ROLE)
+                ->lockForUpdate()
+                ->find((int) $payload['customer_id']);
+            if (! $customer) {
+                throw ValidationException::withMessages([
+                    'customer_id' => 'Choose a registered customer before completing the sale.',
+                ]);
             }
 
             $lines = collect($payload['items']);
@@ -114,7 +129,6 @@ class PosCheckoutService
             $tenderType = $payload['tender_type'] ?? 'cash';
             $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
             $isCredit = $tenderType === 'credit';
-            $customer = null;
             $creditAmount = 0.0;
             $depositMethod = $payload['credit_deposit_method'] ?? 'cash';
 
@@ -125,7 +139,6 @@ class PosCheckoutService
                 if (empty($payload['customer_id'])) {
                     throw ValidationException::withMessages(['customer_id' => 'Choose a registered customer for a credit sale.']);
                 }
-                $customer = User::query()->lockForUpdate()->findOrFail((int) $payload['customer_id']);
                 if ($amountTendered < 0 || $amountTendered >= $final) {
                     throw ValidationException::withMessages(['amount_tendered' => 'Credit deposit must be zero or less than the sale total.']);
                 }
@@ -144,7 +157,7 @@ class PosCheckoutService
             $paymentStatus = $isCredit ? ($amountTendered > 0 ? 'partially_paid' : 'unpaid') : 'paid';
             $dueDate = $isCredit ? now()->addDays(max(1, (int) $customer->credit_terms_days))->toDateString() : null;
             $order = Order::create([
-                'user_id' => $payload['customer_id'] ?? null,
+                'user_id' => $payload['customer_id'],
                 'order_number' => $this->number('POS'),
                 'receipt_number' => $this->number('RCT'),
                 'sales_channel' => 'pos',
@@ -167,8 +180,8 @@ class PosCheckoutService
                 'paid_amount' => $isCredit ? $amountTendered : $final,
                 'payment_method' => $tenderType,
                 'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue, 'credit_amount' => $creditAmount, 'deposit_method' => $isCredit ? $depositMethod : null],
-                'receiver_name' => $payload['customer_name'] ?? 'Walk-in customer',
-                'receiver_phone' => $payload['customer_phone'] ?? null,
+                'receiver_name' => $customer->name,
+                'receiver_phone' => $customer->phone,
                 'order_notes' => $payload['notes'] ?? null,
                 'status_updated_at' => now(),
             ]);

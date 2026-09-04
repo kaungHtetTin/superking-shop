@@ -9,13 +9,23 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use App\Support\Spa;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 
 class SettingController extends Controller
 {
-    public function edit(AppSettingsService $settings)
+    public function edit(Request $request, AppSettingsService $settings)
     {
         return Spa::render('Admin/Settings/Edit', [
             'settings' => $settings->publicSettings(),
+            'initialSection' => in_array($request->query('section'), ['general', 'branding', 'contacts', 'profile', 'security', 'danger'], true)
+                ? $request->query('section')
+                : 'general',
+            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+            'status' => match ($request->query('saved')) {
+                'password' => 'password-updated',
+                'profile' => 'profile-updated',
+                default => session('status'),
+            },
         ]);
     }
 

@@ -14,12 +14,15 @@ class FinancialEntry extends Model
 
     public const CATEGORY_POS_SALE = 'pos_sale';
 
+    public const CATEGORY_INTERNAL_TRANSFER = 'internal_transfer';
+
     public const TYPES = ['income', 'expense'];
 
     public const STATUSES = ['pending', 'approved', 'void'];
 
     public const INCOME_CATEGORIES = [
         self::CATEGORY_POS_SALE => 'POS sales',
+        self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers received',
         'other_income' => 'Other income',
         'service_fee' => 'Service fee',
         'adjustment' => 'Adjustment',
@@ -27,6 +30,7 @@ class FinancialEntry extends Model
 
     public const EXPENSE_CATEGORIES = [
         self::CATEGORY_STOCK_RECEIPT => 'Stock receipts',
+        self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers paid',
         'inventory' => 'Inventory',
         'delivery' => 'Delivery',
         'marketing' => 'Marketing',
@@ -42,6 +46,7 @@ class FinancialEntry extends Model
     protected $fillable = [
         'recorded_by',
         'location_id',
+        'stock_transfer_id',
         'type',
         'category',
         'title',
@@ -68,6 +73,11 @@ class FinancialEntry extends Model
         return $this->belongsTo(Location::class);
     }
 
+    public function stockTransfer(): BelongsTo
+    {
+        return $this->belongsTo(StockTransfer::class);
+    }
+
     public function isStockReceiptEntry(): bool
     {
         return $this->type === 'expense' && $this->category === self::CATEGORY_STOCK_RECEIPT;
@@ -75,7 +85,7 @@ class FinancialEntry extends Model
 
     public function isSystemManaged(): bool
     {
-        return $this->isStockReceiptEntry();
+        return $this->isStockReceiptEntry() || $this->category === self::CATEGORY_INTERNAL_TRANSFER;
     }
 
     public static function categoryOptions(): array

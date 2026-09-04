@@ -254,7 +254,7 @@ class PosController extends Controller
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
-            'customer_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
+            'customer_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'items' => ['required', 'array', 'min:1'],

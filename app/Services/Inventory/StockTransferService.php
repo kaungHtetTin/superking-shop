@@ -4,6 +4,7 @@ namespace App\Services\Inventory;
 
 use App\Events\StockTransferStatusChanged;
 use App\Models\InventoryBalance;
+use App\Models\FinancialEntry;
 use App\Models\Location;
 use App\Models\ProductUnit;
 use App\Models\StockTransfer;
@@ -23,16 +24,16 @@ class StockTransferService
         return $this->transferNow($source, $destination, $lines, $actor);
     }
 
-    public function transferNow(Location $source, Location $destination, array $lines, User $actor): StockTransfer
+    public function transferNow(Location $source, Location $destination, array $lines, User $actor, array $details = []): StockTransfer
     {
         if ($source->id === $destination->id) {
             throw ValidationException::withMessages(['destination_location_id' => 'Source and destination must be different.']);
         }
-        $transfer = DB::transaction(function () use ($source, $destination, $lines, $actor) {
+        $transfer = DB::transaction(function () use ($source, $destination, $lines, $actor, $details) {
             $now = now();
             $normalizedLines = $this->normalizeLines($source, $lines);
             $totalAmount = round(collect($normalizedLines)->sum('line_total'), 2);
-            $transfer = StockTransfer::create(['transfer_number' => $this->number(), 'source_location_id' => $source->id, 'destination_location_id' => $destination->id, 'status' => 'received', 'total_amount' => $totalAmount, 'created_by' => $actor->id, 'shipped_by' => $actor->id, 'received_by' => $actor->id, 'shipped_at' => $now, 'received_at' => $now]);
+            $transfer = StockTransfer::create(['transfer_number' => $this->number(), 'source_location_id' => $source->id, 'destination_location_id' => $destination->id, 'status' => 'received', 'total_amount' => $totalAmount, 'notes' => $details['notes'] ?? null, 'created_by' => $actor->id, 'shipped_by' => $actor->id, 'received_by' => $actor->id, 'shipped_at' => $now, 'received_at' => $now]);
             foreach ($normalizedLines as $line) {
                 $item = $transfer->items()->create(array_merge($line, ['shipped_quantity' => $line['requested_quantity'], 'received_quantity' => $line['requested_quantity']]));
                 $unit = ProductUnit::query()->with('product')->findOrFail($line['product_unit_id']);
@@ -40,6 +41,29 @@ class StockTransferService
                 $in = $this->inventoryService->receiveTransfer($destination, $unit->product, (float) $line['requested_base_quantity'], $actor, "transfer:{$transfer->id}:in:item:{$item->id}", $transfer, null, $unit, (float) $line['requested_quantity']);
                 $item->update(['transfer_out_movement_id' => $out->id, 'transfer_in_movement_id' => $in->id]);
             }
+
+            $financeBase = [
+                'stock_transfer_id' => $transfer->id,
+                'recorded_by' => $actor->id,
+                'category' => FinancialEntry::CATEGORY_INTERNAL_TRANSFER,
+                'amount' => $totalAmount,
+                'entry_date' => $now->toDateString(),
+                'reference' => $transfer->transfer_number,
+                'status' => 'approved',
+                'notes' => $details['notes'] ?? null,
+            ];
+
+            FinancialEntry::create(array_merge($financeBase, [
+                'location_id' => $source->id,
+                'type' => 'income',
+                'title' => "Transfer income {$transfer->transfer_number}",
+            ]));
+            FinancialEntry::create(array_merge($financeBase, [
+                'location_id' => $destination->id,
+                'type' => 'expense',
+                'category' => FinancialEntry::CATEGORY_STOCK_RECEIPT,
+                'title' => "Stock expense {$transfer->transfer_number}",
+            ]));
 
             return $transfer->load(['items.product', 'items.unit']);
         }, 3);

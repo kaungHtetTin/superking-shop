@@ -319,7 +319,7 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                         <Button type="submit" variant="contained" disabled={processing}>
                             {t('Save')}
                         </Button>
-                        {(showSuccess || recentlySuccessful) && (
+                        {!isAdminContext && (showSuccess || recentlySuccessful) && (
                             <Alert severity="success" variant="outlined" sx={{ py: 0, alignItems: 'center' }}>
                                 {t('Profile updated successfully.')}
                             </Alert>
