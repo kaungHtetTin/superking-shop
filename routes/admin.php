@@ -236,6 +236,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::get('/pos', [PosController::class, 'index'])
         ->middleware('admin.permission:pos.access')->name('pos.index');
+    Route::get('/pos/shifts', [PosController::class, 'shiftHistory'])
+        ->middleware('admin.permission:pos.access')->name('pos.shifts.index');
     Route::get('/pos/products/search', [PosController::class, 'products'])
         ->middleware('admin.permission:pos.access')->name('pos.products.search');
     Route::get('/pos/customers/search', [PosController::class, 'customers'])
@@ -244,6 +246,12 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:pos.access')->name('pos.customers.store');
     Route::post('/pos/checkout', [PosController::class, 'checkout'])
         ->middleware('admin.permission:pos.access')->name('pos.checkout');
+    Route::get('/pos/shifts/active', [PosController::class, 'activeShift'])
+        ->middleware('admin.permission:pos.access')->name('pos.shifts.active');
+    Route::post('/pos/shifts/open', [PosController::class, 'openShift'])
+        ->middleware('admin.permission:pos.access')->name('pos.shifts.open');
+    Route::post('/pos/shifts/{shift}/close', [PosController::class, 'closeShift'])
+        ->middleware('admin.permission:pos.access')->name('pos.shifts.close');
     Route::post('/pos/held-carts', [PosController::class, 'holdCart'])
         ->middleware('admin.permission:pos.hold')->name('pos.held-carts.store');
     Route::delete('/pos/held-carts/{heldCart}', [PosController::class, 'deleteHeldCart'])

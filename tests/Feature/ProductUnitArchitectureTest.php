@@ -18,6 +18,7 @@ use App\Services\Inventory\InventoryService;
 use App\Services\Inventory\StorefrontInventoryService;
 use App\Services\Inventory\StockTransferService;
 use App\Services\POS\PosCheckoutService;
+use App\Services\POS\PosShiftService;
 use App\Services\OrderManagementService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -188,8 +189,8 @@ class ProductUnitArchitectureTest extends TestCase
 
         $this->assertSame(96.0, (float) $order->total_amount);
         $this->assertSame(96.0, (float) $order->final_amount);
-        $this->assertNull($order->shift_id);
-        $this->assertNull($order->register_id);
+        $this->assertSame($shift->id, $order->shift_id);
+        $this->assertSame($shift->pos_register_id, $order->register_id);
         $this->assertSame(4.0, (float) $order->payments->sole()->change_due);
         $this->assertSame(0.0, (float) $shift->fresh()->cash_sales);
         $this->assertSame('wholesale', $paidLine->price_type);
@@ -208,12 +209,14 @@ class ProductUnitArchitectureTest extends TestCase
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
         $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
+        $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 24, idempotencyKey: 'pos-derived-price-opening');
 
         $box->priceFor('retail')->update(['price' => 0]);
 
         $order = app(PosCheckoutService::class)->checkout([
             'location_id' => $location->id,
+            'shift_id' => $shift->id,
             'customer_id' => $customer->id,
             'items' => [[
                 'product_unit_id' => $box->id,
@@ -439,6 +442,34 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
     }
 
+    public function test_closed_shift_rejects_a_stale_sale_without_changing_stock(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'closed-shift-stock');
+        app(PosShiftService::class)->close($shift, $cashier, 1000);
+
+        try {
+            app(PosCheckoutService::class)->checkout([
+                'location_id' => $location->id,
+                'shift_id' => $shift->id,
+                'customer_id' => $customer->id,
+                'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+                'tender_type' => 'cash',
+                'amount_tendered' => 10,
+            ], $cashier);
+            $this->fail('A closed shift accepted a sale.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('shift_id', $exception->errors());
+        }
+
+        $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_stock_transfer_records_source_income_and_destination_expense(): void
     {
         [$product, , $box] = $this->productWithUnits();
@@ -549,8 +580,10 @@ class ProductUnitArchitectureTest extends TestCase
 
         return PosShift::create([
             'pos_register_id' => $register->id,
+            'location_id' => $location->id,
             'cashier_id' => $cashier->id,
             'status' => 'open',
+            'open_slot' => 1,
             'opening_cash' => 1000,
             'expected_cash' => 1000,
             'opened_at' => now(),

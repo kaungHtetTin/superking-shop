@@ -9,11 +9,13 @@ use App\Models\InventoryBalance;
 use App\Models\Location;
 use App\Models\Order;
 use App\Models\PosRegister;
+use App\Models\PosShift;
 use App\Models\ProductUnit;
 use App\Models\ProductPriceType;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\POS\PosCheckoutService;
+use App\Services\POS\PosShiftService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -53,8 +55,117 @@ class PosController extends Controller
             'can' => [
                 'discount' => $request->user()->hasAdminPermission('pos.discount'),
                 'credit' => $request->user()->hasAdminPermission('credit.manage'),
+                'manageRegisters' => $request->user()->hasAdminPermission('registers.manage'),
             ],
+            'registers' => PosRegister::query()->whereIn('location_id', $locationIds)->where('is_active', true)
+                ->orderBy('name')->get(['id', 'location_id', 'code', 'name']),
         ]);
+    }
+
+    public function activeShift(Request $request, PosShiftService $service)
+    {
+        $validated = $request->validate(['location_id' => ['required', 'integer', 'exists:locations,id']]);
+        $location = Location::query()->where('is_active', true)->findOrFail($validated['location_id']);
+        abort_unless($request->user()->canAccessLocation($location), 403);
+        $shift = $service->active($request->user(), $location);
+
+        return response()->json(['shift' => $shift ? $service->summary($shift) : null]);
+    }
+
+    public function shiftHistory(Request $request, PosShiftService $service)
+    {
+        $user = $request->user();
+        $locationIds = $user->accessibleLocationIds();
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', Rule::in(['open', 'closed'])],
+            'location_id' => ['nullable', 'integer'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $canViewAllCashiers = $user->hasAdminPermission('registers.manage')
+            || $user->hasAdminPermission('locations.manage')
+            || $user->hasAdminPermission('reports.sales')
+            || $user->hasAdminPermission('view_reports');
+
+        $query = PosShift::query()
+            ->with([
+                'cashier:id,name,email',
+                'closedBy:id,name',
+                'register:id,location_id,code,name',
+                'location:id,code,name',
+            ])
+            ->whereIn('location_id', $locationIds)
+            ->when(! $canViewAllCashiers, fn ($builder) => $builder->where('cashier_id', $user->id))
+            ->when($filters['status'] ?? null, fn ($builder, $status) => $builder->where('status', $status))
+            ->when($filters['location_id'] ?? null, function ($builder, $locationId) use ($locationIds) {
+                $builder->where('location_id', in_array((int) $locationId, array_map('intval', $locationIds), true) ? $locationId : -1);
+            })
+            ->when($filters['from'] ?? null, fn ($builder, $date) => $builder->whereDate('opened_at', '>=', $date))
+            ->when($filters['to'] ?? null, fn ($builder, $date) => $builder->whereDate('opened_at', '<=', $date))
+            ->when($filters['q'] ?? null, function ($builder, $search) {
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($search)).'%';
+                $builder->where(function ($nested) use ($like) {
+                    $nested->whereHas('cashier', fn ($cashier) => $cashier->where('name', 'like', $like)->orWhere('email', 'like', $like))
+                        ->orWhereHas('register', fn ($register) => $register->where('name', 'like', $like)->orWhere('code', 'like', $like));
+                });
+            });
+
+        $summaryQuery = clone $query;
+        $shifts = $query->latest('opened_at')->paginate(20)->withQueryString();
+        $shifts->through(function (PosShift $shift) use ($service) {
+            $shift->setAttribute('calculated_summary', $service->summary($shift));
+            return $shift;
+        });
+
+        return Spa::render('Admin/POS/Shifts/Index', [
+            'shifts' => $shifts,
+            'locations' => Location::query()->whereIn('id', $locationIds)->orderBy('name')->get(['id', 'code', 'name']),
+            'filters' => [
+                'q' => $filters['q'] ?? '',
+                'status' => $filters['status'] ?? '',
+                'location_id' => $filters['location_id'] ?? '',
+                'from' => $filters['from'] ?? '',
+                'to' => $filters['to'] ?? '',
+            ],
+            'stats' => [
+                'total' => (clone $summaryQuery)->count(),
+                'open' => (clone $summaryQuery)->where('status', 'open')->count(),
+                'closed' => (clone $summaryQuery)->where('status', 'closed')->count(),
+                'variance' => (float) (clone $summaryQuery)->where('status', 'closed')->sum('variance'),
+            ],
+            'canViewAllCashiers' => $canViewAllCashiers,
+        ]);
+    }
+
+    public function openShift(Request $request, PosShiftService $service, AuditLogService $audit)
+    {
+        $validated = $request->validate([
+            'location_id' => ['required', 'integer', 'exists:locations,id'],
+            'register_id' => ['required', 'integer', 'exists:pos_registers,id'],
+            'opening_cash' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+        $location = Location::query()->where('is_active', true)->findOrFail($validated['location_id']);
+        abort_unless($request->user()->canAccessLocation($location), 403);
+        $register = PosRegister::query()->findOrFail($validated['register_id']);
+        $shift = $service->open($request->user(), $location, $register, (float) $validated['opening_cash'], $validated['notes'] ?? null);
+        $audit->record('pos.shift.opened', $shift, ['location_id' => $location->id, 'register_id' => $register->id], $request);
+
+        return response()->json(['shift' => $service->summary($shift)], 201);
+    }
+
+    public function closeShift(Request $request, PosShift $shift, PosShiftService $service, AuditLogService $audit)
+    {
+        $validated = $request->validate([
+            'counted_cash' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+        $closed = $service->close($shift, $request->user(), (float) $validated['counted_cash'], $validated['notes'] ?? null);
+        $audit->record('pos.shift.closed', $closed, ['variance' => $closed->variance], $request);
+
+        return response()->json(['message' => 'Shift closed successfully.', 'shift' => $closed]);
     }
 
     public function products(Request $request)
@@ -254,6 +365,7 @@ class PosController extends Controller
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
+            'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
             'customer_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],

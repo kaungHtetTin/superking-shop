@@ -72,7 +72,7 @@ const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
     line.available_base_qty || (Number(line.available_qty || 0) * Number(line.conversion_factor || 1)),
 ) + 0.00005;
 
-export default function PosIndex({ locations = [], categories = [], priceTypes = ['retail'], can = {} }) {
+export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
     const { app_base, app_url, flash = {}, errors: pageErrors = {} } = usePage().props;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -111,6 +111,15 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     const [message, setMessage] = useState('');
     const [errors, setErrors] = useState({});
     const [receipt, setReceipt] = useState(null);
+    const [activeShift, setActiveShift] = useState(null);
+    const [shiftLoading, setShiftLoading] = useState(true);
+    const [shiftBusy, setShiftBusy] = useState(false);
+    const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
+    const [closeShiftOpen, setCloseShiftOpen] = useState(false);
+    const [openingCash, setOpeningCash] = useState('');
+    const [openingNotes, setOpeningNotes] = useState('');
+    const [countedCash, setCountedCash] = useState('');
+    const [closingNotes, setClosingNotes] = useState('');
     const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
     const searchInputRef = useRef(null);
     const categoryScrollRef = useRef(null);
@@ -120,6 +129,8 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     const productLoadMoreLockRef = useRef(false);
 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
+    const locationRegisters = registers.filter((item) => Number(item.location_id) === Number(locationId));
+    const [registerId, setRegisterId] = useState('');
     const paymentMethods = ['cash', 'card', 'mobile', ...(can.credit ? ['credit'] : [])];
     const api = async (url, options = {}) => {
         setErrors({});
@@ -130,6 +141,73 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
             const nextErrors = error.response?.data?.errors || { request: error.response?.data?.message || tp('Request failed.') };
             setErrors(nextErrors);
             throw error;
+        }
+    };
+
+    const refreshShift = useCallback(async () => {
+        if (!locationId) {
+            setActiveShift(null);
+            setShiftLoading(false);
+            return;
+        }
+        setShiftLoading(true);
+        try {
+            const response = await window.axios.get(routeWithBase('/admin/pos/shifts/active', app_base), { params: { location_id: locationId } });
+            setActiveShift(response.data.shift || null);
+        } catch (error) {
+            setErrors(error.response?.data?.errors || { shift: error.response?.data?.message || tp('Unable to load cash shift.') });
+            setActiveShift(null);
+        } finally {
+            setShiftLoading(false);
+        }
+    }, [app_base, locationId]);
+
+    useEffect(() => {
+        setRegisterId(String(locationRegisters[0]?.id || ''));
+        setCart([]);
+        refreshShift();
+    }, [locationId, refreshShift]);
+
+    useEffect(() => {
+        const refreshWhenActive = () => document.visibilityState === 'visible' && refreshShift();
+        window.addEventListener('focus', refreshWhenActive);
+        document.addEventListener('visibilitychange', refreshWhenActive);
+        return () => {
+            window.removeEventListener('focus', refreshWhenActive);
+            document.removeEventListener('visibilitychange', refreshWhenActive);
+        };
+    }, [refreshShift]);
+
+    const openShift = async (event) => {
+        event.preventDefault();
+        if (!registerId) return;
+        setShiftBusy(true);
+        try {
+            const data = await api('/admin/pos/shifts/open', { method: 'post', data: { location_id: locationId, register_id: registerId, opening_cash: Number(openingCash || 0), notes: openingNotes || null } });
+            setActiveShift(data.shift);
+            setOpenShiftDialogOpen(false);
+            setOpeningCash('');
+            setOpeningNotes('');
+            setMessage(tp('Cash shift opened.'));
+        } finally {
+            setShiftBusy(false);
+        }
+    };
+
+    const closeShift = async (event) => {
+        event.preventDefault();
+        if (!activeShift) return;
+        setShiftBusy(true);
+        try {
+            await api(`/admin/pos/shifts/${activeShift.id}/close`, { method: 'post', data: { counted_cash: Number(countedCash || 0), notes: closingNotes || null } });
+            setActiveShift(null);
+            setCloseShiftOpen(false);
+            setCountedCash('');
+            setClosingNotes('');
+            setCart([]);
+            setMessage(tp('Cash shift closed.'));
+        } finally {
+            setShiftBusy(false);
         }
     };
 
@@ -654,6 +732,10 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
     };
 
     const openPaymentDialog = () => {
+        if (!activeShift) {
+            setScanError(tp('Open a cash shift before selling.'));
+            return;
+        }
         if (!locationId) {
             setScanError(tp('Select a warehouse before selling.'));
             if (isMobile) setMobileStep('products');
@@ -688,6 +770,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 method: 'post',
                 data: {
                     location_id: locationId,
+                    shift_id: activeShift?.id,
                     customer_id: selectedCustomer.id,
                     customer_name: selectedCustomer.name,
                     customer_phone: selectedCustomer.phone || null,
@@ -718,6 +801,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
             setPaymentDialogOpen(false);
             setMobileStep('products');
             setMessage(`${tp('Sale completed')}: ${data.order.receipt_number}`);
+            await refreshShift();
             window.setTimeout(() => searchInputRef.current?.focus(), 100);
         } finally {
             checkoutIntentRef.current = 'complete';
@@ -889,7 +973,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -909,7 +993,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -990,6 +1074,7 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                         size="small"
                         value={locationId}
                         onChange={(event) => setLocationId(event.target.value)}
+                        disabled={Boolean(activeShift)}
                         inputProps={{ 'aria-label': tp('Warehouse') }}
                         sx={{ width: { xs: '100%', sm: 190 }, maxWidth: '100%' }}
                     >
@@ -997,6 +1082,16 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     </TextField>
                 </Stack>
                 <Box className="pos-console__titlebar-spacer" sx={{ flex: 1 }} />
+                {activeShift && (
+                    <Button size="small" color="success" variant="outlined" onClick={() => { setCountedCash(String(activeShift.expected_cash ?? '')); setCloseShiftOpen(true); }}>
+                        {tp('Shift open')} · {activeShift.register?.code}
+                    </Button>
+                )}
+                {!shiftLoading && !activeShift && (
+                    <Button size="small" variant="contained" onClick={() => setOpenShiftDialogOpen(true)}>
+                        {tp('Open shift')}
+                    </Button>
+                )}
                 <Chip className="pos-console__online-status" size="small" color={isOnline ? 'success' : 'error'} label={isOnline ? tp('Online') : tp('Offline')} variant="outlined" />
                 <LanguageSwitcher compact className="admin-language-switcher" />
                 <Button className="pos-console__dashboard-link" size="small" variant="text" component={Link} href={routeWithBase('/admin/dashboard', app_base)}>
@@ -1024,6 +1119,19 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     '& .MuiPaper-root': { borderRadius: 1, boxShadow: 'none' },
                 }}
             >
+                {!shiftLoading && !activeShift && (
+                    <Alert
+                        severity="warning"
+                        sx={{ mb: 1 }}
+                        action={(
+                            <Button color="inherit" size="small" onClick={() => setOpenShiftDialogOpen(true)}>
+                                {tp('Open shift')}
+                            </Button>
+                        )}
+                    >
+                        {tp('Open a cash shift before making a sale.')}
+                    </Alert>
+                )}
                 {(flash?.success || flash?.error || message || Object.keys(errors).length > 0 || Object.keys(pageErrors).length > 0) && (
                     <Stack spacing={1} sx={{ mb: 2 }}>
                         {flash?.success && <Alert severity="success">{flash.success}</Alert>}
@@ -1699,6 +1807,55 @@ export default function PosIndex({ locations = [], categories = [], priceTypes =
                     <DialogActions className="pos-console__payment-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
                         <Button type="button" variant="outlined" onClick={() => setPaymentDialogOpen(false)} disabled={busy}>{tp('Cancel')}</Button>
                         {completeSaleButtons}
+                    </DialogActions>
+                </Box>
+            </Dialog>
+
+            <Dialog open={openShiftDialogOpen && !activeShift} onClose={() => !shiftBusy && setOpenShiftDialogOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" onSubmit={openShift}>
+                    <DialogTitle sx={{ fontWeight: 800 }}>{tp('Open cash shift')}</DialogTitle>
+                    <DialogContent dividers>
+                        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+                            <Alert severity="info">{tp('An open shift is required before making POS sales.')}</Alert>
+                            <TextField select label={tp('Warehouse')} value={locationId} onChange={(event) => setLocationId(event.target.value)} fullWidth>
+                                {locations.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}
+                            </TextField>
+                            <TextField select required label={tp('Register')} value={registerId} onChange={(event) => setRegisterId(event.target.value)} fullWidth error={!locationRegisters.length} helperText={!locationRegisters.length ? tp('Create or activate a POS register for this warehouse first.') : ''}>
+                                {locationRegisters.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.code}</MenuItem>)}
+                            </TextField>
+                            <TextField required type="number" label={tp('Opening cash')} value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} inputProps={{ min: 0, step: 0.01 }} fullWidth />
+                            <TextField label={tp('Opening note')} value={openingNotes} onChange={(event) => setOpeningNotes(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        {!locationRegisters.length && can.manageRegisters && (
+                            <Button component={Link} href={routeWithBase('/admin/registers', app_base)}>{tp('Manage registers')}</Button>
+                        )}
+                        <Button type="button" onClick={() => setOpenShiftDialogOpen(false)} disabled={shiftBusy}>{tp('Cancel')}</Button>
+                        <Button type="submit" variant="contained" disabled={shiftBusy || !registerId || openingCash === ''}>{shiftBusy ? tp('Opening...') : tp('Open Shift')}</Button>
+                    </DialogActions>
+                </Box>
+            </Dialog>
+
+            <Dialog open={closeShiftOpen} onClose={() => !shiftBusy && setCloseShiftOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" onSubmit={closeShift}>
+                    <DialogTitle sx={{ fontWeight: 800 }}>{tp('Close cash shift')}</DialogTitle>
+                    <DialogContent dividers>
+                        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                                <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Opening cash')}</Typography><Typography fontWeight={800}>{money(activeShift?.opening_cash || 0)}</Typography></Paper>
+                                <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Expected cash')}</Typography><Typography fontWeight={800}>{money(activeShift?.expected_cash || 0)}</Typography></Paper>
+                                <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Cash received')}</Typography><Typography fontWeight={800}>{money(activeShift?.cash_received_total || 0)}</Typography></Paper>
+                                <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Change given')}</Typography><Typography fontWeight={800}>{money(activeShift?.change_given_total || 0)}</Typography></Paper>
+                            </Box>
+                            <TextField required type="number" label={tp('Counted cash')} value={countedCash} onChange={(event) => setCountedCash(event.target.value)} inputProps={{ min: 0, step: 0.01 }} fullWidth />
+                            <TextField label={tp('Closing note')} value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
+                            {countedCash !== '' && <Alert severity={Math.abs(Number(countedCash) - Number(activeShift?.expected_cash || 0)) < 0.01 ? 'success' : Number(countedCash) > Number(activeShift?.expected_cash || 0) ? 'warning' : 'error'}>{tp('Difference')}: {money(Number(countedCash) - Number(activeShift?.expected_cash || 0))}</Alert>}
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setCloseShiftOpen(false)} disabled={shiftBusy}>{tp('Cancel')}</Button>
+                        <Button type="submit" color="error" variant="contained" disabled={shiftBusy || countedCash === ''}>{shiftBusy ? tp('Closing...') : tp('Confirm Close')}</Button>
                     </DialogActions>
                 </Box>
             </Dialog>

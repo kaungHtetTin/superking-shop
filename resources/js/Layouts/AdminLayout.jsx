@@ -173,6 +173,21 @@ function AdminChrome({ children, mainClassName = '' }) {
                                   label: t('admin.items.pos', 'POS'),
                                   href: routeWithBase('/admin/pos', app_base),
                                   icon: 'card',
+                                  excludeActivePaths: ['/admin/pos/shifts'],
+                              },
+                              {
+                                  label: t('Shift history'),
+                                  href: routeWithBase('/admin/pos/shifts', app_base),
+                                  icon: 'history',
+                              },
+                          ]
+                        : []),
+                    ...(can('registers.manage')
+                        ? [
+                              {
+                                  label: t('Registers'),
+                                  href: routeWithBase('/admin/registers', app_base),
+                                  icon: 'desktop',
                               },
                           ]
                         : []),

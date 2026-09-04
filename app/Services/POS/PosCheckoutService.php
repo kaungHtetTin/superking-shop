@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class PosCheckoutService
 {
-    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService, private CustomerCreditService $creditService)
+    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService, private CustomerCreditService $creditService, private PosShiftService $shiftService)
     {
     }
 
@@ -36,6 +36,7 @@ class PosCheckoutService
             if (! $cashier->canAccessLocation($location)) {
                 throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
             }
+            $shift = $this->shiftService->lockForSale((int) ($payload['shift_id'] ?? 0), $cashier, $location);
             $customer = User::query()
                 ->where('role', User::CUSTOMER_ROLE)
                 ->lockForUpdate()
@@ -162,8 +163,8 @@ class PosCheckoutService
                 'receipt_number' => $this->number('RCT'),
                 'sales_channel' => 'pos',
                 'location_id' => $location->id,
-                'register_id' => null,
-                'shift_id' => null,
+                'register_id' => $shift->pos_register_id,
+                'shift_id' => $shift->id,
                 'served_by' => $cashier->id,
                 'total_amount' => round($subtotal, 2),
                 'discount_amount' => $discount,
@@ -216,8 +217,8 @@ class PosCheckoutService
             if ($paidNow > 0) {
                 $payment = Payment::create([
                 'order_id' => $order->id,
-                'register_id' => null,
-                'shift_id' => null,
+                'register_id' => $shift->pos_register_id,
+                'shift_id' => $shift->id,
                 'received_by' => $cashier->id,
                 'transaction_id' => $this->paymentTransactionId(),
                 'amount' => $paidNow,
