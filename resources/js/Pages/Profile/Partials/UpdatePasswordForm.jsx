@@ -29,10 +29,14 @@ export default function UpdatePasswordForm({ className, showHeading = true }) {
 
         put(passwordEndpoint, {
             preserveScroll: true,
-            refreshRedirected: false,
-            onSuccess: () => {
+            onSuccess: (response) => {
                 reset();
                 setPasswordVisibility({ current_password: false, password: false, password_confirmation: false });
+                if (isAdminContext && response?.status === 'password-updated') {
+                    window.dispatchEvent(new CustomEvent('admin:notice', {
+                        detail: { type: 'success', message: t('Password updated successfully.') },
+                    }));
+                }
             },
             onError: (nextErrors) => {
                 if (nextErrors.password) {

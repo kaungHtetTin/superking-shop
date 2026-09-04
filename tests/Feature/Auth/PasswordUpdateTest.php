@@ -78,4 +78,25 @@ class PasswordUpdateTest extends TestCase
 
         $this->assertAuthenticatedAs($admin->fresh());
     }
+
+    public function test_admin_spa_password_update_returns_an_immediate_success_response(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'super_admin',
+            'status' => 'active',
+            'password' => Hash::make('password'),
+        ]);
+
+        $this->actingAs($admin)
+            ->withHeader('X-SPA', 'true')
+            ->putJson('/admin/profile/password', [
+                'current_password' => 'password',
+                'password' => 'new-password',
+                'password_confirmation' => 'new-password',
+            ])
+            ->assertOk()
+            ->assertExactJson(['status' => 'password-updated']);
+
+        $this->assertTrue(Hash::check('new-password', $admin->fresh()->password));
+    }
 }

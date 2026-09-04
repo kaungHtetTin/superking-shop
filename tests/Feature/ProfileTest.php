@@ -81,6 +81,20 @@ class ProfileTest extends TestCase
         $this->assertSoftDeleted($user);
     }
 
+    public function test_spa_account_deletion_returns_a_logout_redirect(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->withHeader('X-SPA', 'true')
+            ->deleteJson('/profile', ['password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('redirect', url('/'));
+
+        $this->assertGuest();
+        $this->assertSoftDeleted($user);
+    }
+
     public function test_correct_password_must_be_provided_to_delete_account(): void
     {
         $user = User::factory()->create();

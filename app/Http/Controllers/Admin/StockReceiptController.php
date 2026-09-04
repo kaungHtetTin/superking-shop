@@ -10,7 +10,9 @@ use App\Models\StockReceipt;
 use App\Services\AuditLogService;
 use App\Services\Inventory\StockReceiptService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Support\Spa;
+use Throwable;
 
 class StockReceiptController extends Controller
 {
@@ -58,11 +60,21 @@ class StockReceiptController extends Controller
         $location = Location::findOrFail($validated['location_id']);
         abort_unless($request->user()->canAccessLocation($location), 403);
 
-        $receipt = $service->createDraft($location, $validated['items'], $request->user(), $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
-        $audit->record('inventory.receipt.created', $receipt, ['location_id' => $location->id], $request);
+        try {
+            DB::transaction(function () use ($service, $audit, $location, $validated, $request) {
+                $receipt = $service->createDraft($location, $validated['items'], $request->user(), $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
+                $audit->record('inventory.receipt.created', $receipt, ['location_id' => $location->id], $request);
 
-        $receipt = $service->post($receipt, $request->user());
-        $audit->record('inventory.receipt.posted', $receipt, ['location_id' => $receipt->location_id], $request);
+                $receipt = $service->post($receipt, $request->user());
+                $audit->record('inventory.receipt.posted', $receipt, ['location_id' => $receipt->location_id], $request);
+            }, 3);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors([
+                'receipt' => 'Receipt could not be posted. No stock was changed. Please try again or contact an administrator.',
+            ]);
+        }
 
         return redirect()->route('admin.inventory.receipts.index')->with('success', 'Receipt posted and stock updated.');
     }
@@ -105,11 +117,21 @@ class StockReceiptController extends Controller
         $location = Location::findOrFail($validated['location_id']);
         abort_unless($request->user()->canAccessLocation($location), 403);
 
-        $receipt = $service->updateDraft($receipt, $location, $validated['items'], $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
-        $audit->record('inventory.receipt.updated', $receipt, ['location_id' => $location->id], $request);
+        try {
+            DB::transaction(function () use ($service, $audit, $receipt, $location, $validated, $request) {
+                $updatedReceipt = $service->updateDraft($receipt, $location, $validated['items'], $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
+                $audit->record('inventory.receipt.updated', $updatedReceipt, ['location_id' => $location->id], $request);
 
-        $receipt = $service->post($receipt, $request->user());
-        $audit->record('inventory.receipt.posted', $receipt, ['location_id' => $receipt->location_id], $request);
+                $postedReceipt = $service->post($updatedReceipt, $request->user());
+                $audit->record('inventory.receipt.posted', $postedReceipt, ['location_id' => $postedReceipt->location_id], $request);
+            }, 3);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors([
+                'receipt' => 'Receipt could not be posted. No stock was changed. Please try again or contact an administrator.',
+            ]);
+        }
 
         return redirect()->route('admin.inventory.receipts.index')->with('success', 'Receipt posted and stock updated.');
     }

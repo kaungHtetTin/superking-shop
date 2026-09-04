@@ -33,10 +33,9 @@ export default function DeleteUserForm({ className, showHeading = true }) {
 
         destroy(profileEndpoint, {
             preserveScroll: true,
-            refreshRedirected: false,
-            onSuccess: () => {
+            onSuccess: (response) => {
                 closeModal();
-                window.location.assign(routeWithBase('/', app_base));
+                window.location.replace(response?.redirect || routeWithBase('/', app_base));
             },
             onError: () => passwordInput.current.focus(),
             onFinish: () => reset(),

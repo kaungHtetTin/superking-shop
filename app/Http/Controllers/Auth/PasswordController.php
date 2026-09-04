@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ class PasswordController extends Controller
     /**
      * Update the user's password.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
@@ -41,6 +42,10 @@ class PasswordController extends Controller
         }
 
         if ($request->routeIs('admin.profile.password.update')) {
+            if ($request->header('X-SPA') === 'true') {
+                return response()->json(['status' => 'password-updated']);
+            }
+
             return redirect()->route('admin.profile.edit', ['saved' => 'password']);
         }
 
