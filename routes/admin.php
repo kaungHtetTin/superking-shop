@@ -240,6 +240,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:pos.access')->name('pos.shifts.index');
     Route::get('/pos/products/search', [PosController::class, 'products'])
         ->middleware('admin.permission:pos.access')->name('pos.products.search');
+    Route::get('/pos/products/prices', [PosController::class, 'prices'])
+        ->middleware('admin.permission:pos.access')->name('pos.products.prices');
     Route::get('/pos/customers/search', [PosController::class, 'customers'])
         ->middleware('admin.permission:pos.access')->name('pos.customers.search');
     Route::post('/pos/customers', [PosController::class, 'storeCustomer'])
@@ -299,8 +301,17 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('/inventory/transfers', [StockTransferController::class, 'store'])
         ->middleware('admin.permission:inventory.transfer.create')->name('inventory.transfers.store');
     Route::get('/inventory/transfers/{transfer}', [StockTransferController::class, 'show'])->name('inventory.transfers.show');
+    Route::delete('/inventory/transfers/{transfer}', [StockTransferController::class, 'destroy'])
+        ->middleware('admin.permission:inventory.transfer.create')->name('inventory.transfers.destroy');
 
     Route::middleware('admin.permission:settings.manage')->group(function () {
+        Route::get('/settings/prices', [\App\Http\Controllers\Admin\PricingRuleController::class, 'index'])->name('pricing.index');
+        Route::get('/settings/prices/create', [\App\Http\Controllers\Admin\PricingRuleController::class, 'create'])->name('pricing.create');
+        Route::post('/settings/prices/preview', [\App\Http\Controllers\Admin\PricingRuleController::class, 'preview'])->name('pricing.preview');
+        Route::post('/settings/prices', [\App\Http\Controllers\Admin\PricingRuleController::class, 'store'])->name('pricing.store');
+        Route::get('/settings/prices/{rule}/edit', [\App\Http\Controllers\Admin\PricingRuleController::class, 'edit'])->name('pricing.edit');
+        Route::patch('/settings/prices/{rule}', [\App\Http\Controllers\Admin\PricingRuleController::class, 'update'])->name('pricing.update');
+        Route::delete('/settings/prices/{rule}', [\App\Http\Controllers\Admin\PricingRuleController::class, 'destroy'])->name('pricing.destroy');
         Route::get('/settings', [SettingController::class, 'edit'])->name('settings.edit');
         Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
     });

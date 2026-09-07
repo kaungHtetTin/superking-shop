@@ -10,6 +10,7 @@ use App\Services\AuditLogService;
 use App\Services\Inventory\StockTransferService;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use App\Support\Spa;
 
 class StockTransferController extends Controller
@@ -22,13 +23,17 @@ class StockTransferController extends Controller
         $filters = $request->validate($this->filterRules());
         $query = $this->filteredQuery($locationIds, $filters);
         $summaryRows = (clone $query)->with(['sourceLocation:id,code,name', 'destinationLocation:id,code,name'])->get();
+        $transfers = (clone $query)
+            ->with(['sourceLocation:id,code,name', 'destinationLocation:id,code,name', 'items'])
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+        $transfers->getCollection()->each(function (StockTransfer $transfer) use ($request) {
+            $transfer->setAttribute('can_delete', $request->user()->can('delete', $transfer));
+        });
 
         return Spa::render('Admin/Inventory/Transfers/Index', [
-            'transfers' => (clone $query)
-                ->with(['sourceLocation:id,code,name', 'destinationLocation:id,code,name', 'items'])
-                ->latest()
-                ->paginate(20)
-                ->withQueryString(),
+            'transfers' => $transfers,
             'filters' => $filters,
             'locations' => Location::query()->whereIn('id', $locationIds)->orderBy('name')->get(['id', 'code', 'name']),
             'summary' => [
@@ -142,9 +147,35 @@ class StockTransferController extends Controller
                 'items.unit:id,name,code,conversion_factor',
                 'creator:id,name',
             ]),
+            'canDelete' => $request->user()->can('delete', $transfer),
             'lastUpdated' => now()->toIso8601String(),
             'pollIntervalMs' => 20000,
         ]);
+    }
+
+    public function destroy(Request $request, StockTransfer $transfer, StockTransferService $service, AuditLogService $audit)
+    {
+        $this->authorize('delete', $transfer);
+        $transferNumber = $transfer->transfer_number;
+        $sourceLocationId = $transfer->source_location_id;
+        $destinationLocationId = $transfer->destination_location_id;
+        $totalAmount = (float) $transfer->total_amount;
+
+        DB::transaction(function () use ($service, $transfer, $request, $audit, $transferNumber, $sourceLocationId, $destinationLocationId, $totalAmount) {
+            $service->delete($transfer, $request->user());
+            $audit->record('inventory.transfer.deleted', null, [
+                'transfer_number' => $transferNumber,
+                'source_location_id' => $sourceLocationId,
+                'destination_location_id' => $destinationLocationId,
+                'total_amount' => $totalAmount,
+                'inventory_reversed' => true,
+                'financial_entries_removed' => true,
+            ], $request);
+        }, 3);
+
+        return redirect()
+            ->route('admin.inventory.transfers.index', [], 303)
+            ->with('success', "Transfer {$transferNumber} deleted; inventory and financial records were reversed.");
     }
 
     private function filterRules(): array

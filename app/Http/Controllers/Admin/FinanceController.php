@@ -34,11 +34,11 @@ class FinanceController extends Controller
         };
 
         $paidOrders = Order::query()
-            ->where('payment_status', 'paid')
+            ->recognizedSale()
             ->where($entryLocationScope)
             ->whereBetween('created_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()]);
 
-        $approvedEntries = FinancialEntry::query()
+        $approvedEntries = FinancialEntry::query()->external()
             ->where('status', 'approved')
             ->where($entryLocationScope)
             ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()]);
@@ -47,12 +47,12 @@ class FinanceController extends Controller
             ->where('type', 'income')
             ->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)
             ->sum('amount');
-        $approvedExpenses = (clone $approvedEntries)->where('type', 'expense')->where('category', '!=', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
+        $approvedExpenses = (clone $approvedEntries)->where('type', 'expense')->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])->sum('amount');
         $stockPurchases = (clone $approvedEntries)->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidRevenue = (clone $paidOrders)->sum('final_amount');
         $costOfGoods = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->where(function ($query) use ($location, $accessibleLocationIds, $request) {
                 $query->whereIn('orders.location_id', $location ? [$location->id] : $accessibleLocationIds);
                 if (! $location && $request->user()->isSuperAdmin()) {
@@ -66,7 +66,13 @@ class FinanceController extends Controller
         $summary = [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
-            'paid_orders' => (clone $paidOrders)->count(),
+            'paid_orders' => (clone $paidOrders)->where('payment_status', 'paid')->count(),
+            'recognized_orders' => (clone $paidOrders)->count(),
+            'accounting_basis' => 'Completed sales including credit; collections are not additional revenue.',
+            'unvalued_adjustment_lines' => \App\Services\FinancialIntegrityService::unvaluedAdjustmentLines($location ? [$location->id] : $accessibleLocationIds, $from, $to),
+            'refunds_due' => (float) FinancialEntry::query()->external()
+                ->where('category', FinancialEntry::CATEGORY_REFUND_PAYABLE)->where('status', 'pending')
+                ->where($entryLocationScope)->sum('amount'),
             'gross_sales' => (float) (clone $paidOrders)->sum('total_amount'),
             'discounts' => (float) (clone $paidOrders)->sum('discount_amount'),
             'shipping_collected' => (float) (clone $paidOrders)->sum('shipping_fee'),
@@ -76,22 +82,23 @@ class FinanceController extends Controller
             'expenses' => (float) $approvedExpenses,
             'stock_purchases' => (float) $stockPurchases,
             'net_profit' => round((float) $paidRevenue + (float) $approvedManualIncome - $costOfGoods - (float) $approvedExpenses, 2),
-            'pending_income' => (float) FinancialEntry::query()
+            'pending_income' => (float) FinancialEntry::query()->external()
                 ->where('type', 'income')
                 ->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)
                 ->where('status', 'pending')
                 ->where($entryLocationScope)
                 ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
                 ->sum('amount'),
-            'pending_expenses' => (float) FinancialEntry::query()
+            'pending_expenses' => (float) FinancialEntry::query()->external()
                 ->where('type', 'expense')
+                ->where('category', '!=', FinancialEntry::CATEGORY_REFUND_PAYABLE)
                 ->where('status', 'pending')
                 ->where($entryLocationScope)
                 ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
                 ->sum('amount'),
         ];
 
-        $entryQuery = FinancialEntry::query()->with(['recorder:id,name', 'location:id,code,name'])
+        $entryQuery = FinancialEntry::query()->external()->with(['recorder:id,name', 'location:id,code,name'])
             ->where($entryLocationScope)
             ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
             ->latest('entry_date')
@@ -119,17 +126,17 @@ class FinanceController extends Controller
         }
 
         $dailyOrders = Order::query()
-            ->where('payment_status', 'paid')
+            ->recognizedSale()
             ->where($entryLocationScope)
             ->whereBetween('created_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->selectRaw('DATE(created_at) as day, SUM(final_amount) as amount')
             ->groupBy('day')
             ->pluck('amount', 'day');
 
-        $dailyEntries = FinancialEntry::query()
+        $dailyEntries = FinancialEntry::query()->external()
             ->where('status', 'approved')
             ->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)
-            ->where('category', '!=', FinancialEntry::CATEGORY_STOCK_RECEIPT)
+            ->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])
             ->where($entryLocationScope)
             ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
             ->selectRaw('entry_date as day, type, SUM(amount) as amount')
@@ -138,7 +145,7 @@ class FinanceController extends Controller
 
         $dailyCosts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->where(function ($query) use ($location, $accessibleLocationIds, $request) {
                 $query->whereIn('orders.location_id', $location ? [$location->id] : $accessibleLocationIds);
                 if (! $location && $request->user()->isSuperAdmin()) {
@@ -172,6 +179,8 @@ class FinanceController extends Controller
             ],
             'options' => [
                 'categories' => FinancialEntry::categoryOptions(),
+                'manual_categories' => collect(FinancialEntry::categoryOptions())
+                    ->map(fn ($categories) => array_values(array_filter($categories, fn ($category) => ! in_array($category['value'], FinancialEntry::SYSTEM_CATEGORIES, true))))->all(),
                 'statuses' => FinancialEntry::STATUSES,
                 'types' => FinancialEntry::TYPES,
                 'locations' => Location::query()->whereIn('id', $request->user()->accessibleLocationIds())->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
@@ -209,7 +218,7 @@ class FinanceController extends Controller
         [$from, $to] = $this->dateRange($request);
         $location = $this->selectedLocation($request);
         $accessibleIds = array_map('intval', $request->user()->accessibleLocationIds());
-        $query = FinancialEntry::query()->with(['location:id,code,name', 'recorder:id,name'])
+        $query = FinancialEntry::query()->external()->with(['location:id,code,name', 'recorder:id,name'])
             ->where(function ($locations) use ($location, $accessibleIds, $request) {
                 if ($location) return $locations->where('location_id', $location->id);
                 $locations->whereIn('location_id', $accessibleIds);
@@ -239,7 +248,7 @@ class FinanceController extends Controller
     {
         $this->authorizeEntryLocation($request, $entry);
         if ($entry->isSystemManaged()) {
-            return back()->with('error', 'This ledger entry is managed from its inventory document.');
+            return back()->with('error', 'This ledger entry is managed by its source transaction.');
         }
 
         $payload = $this->validated($request);
@@ -267,7 +276,7 @@ class FinanceController extends Controller
     {
         $this->authorizeEntryLocation($request, $entry);
         if ($entry->isSystemManaged()) {
-            return back()->with('error', 'This ledger entry is managed from its inventory document.');
+            return back()->with('error', 'This ledger entry is managed by its source transaction.');
         }
 
         $auditLogService->record('finance.entry.deleted', $entry, [
@@ -297,7 +306,7 @@ class FinanceController extends Controller
         ]);
 
         validator($validated, [
-            'category' => [Rule::in(FinancialEntry::categoryValuesFor($validated['type']))],
+            'category' => [Rule::in(FinancialEntry::categoryValuesFor($validated['type'])), Rule::notIn(FinancialEntry::SYSTEM_CATEGORIES)],
         ])->validate();
 
         return $validated;

@@ -647,7 +647,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                         </div>
                         <div className="crud-grid admin-form-grid admin-form-grid-single">
                             <p className="admin-form-notice">
-                                {t('This permanently removes the order. Paid order stock will be returned, active reservations will be released, and any POS sale finance entry will be deleted.')}
+                                {t('Unpaid orders will be removed and reservations released. Paid sales will be cancelled and stock returned; payment history is retained. Any refund due must still be paid separately.')}
                             </p>
                             <label className="form-field span-2">
                                 <span>{t('Reason (optional)')}</span>

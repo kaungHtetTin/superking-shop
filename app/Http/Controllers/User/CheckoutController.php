@@ -77,6 +77,7 @@ class CheckoutController extends Controller
 
         try {
             $order = DB::transaction(function () use ($validated, $request, $proofPath, $couponService, $loyaltyService, $flashSalePricing, $auditLogService, $paymentMethod, $fulfillmentLocation, $stockReservations) {
+                app(\App\Services\AutomaticPricingService::class)->lock();
                 $user = User::query()->whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
                 $lines = collect($validated['lines'])->keyBy('product_unit_id');
                 $unitIds = $lines->keys()->map(fn ($id) => (int) $id)->all();
@@ -104,6 +105,9 @@ class CheckoutController extends Controller
                         throw ValidationException::withMessages(['lines' => "Flash sale quantity is no longer available for \"{$unit->product->name}\"."]);
                     }
                     $unitPrice = $flashSalePricing->effectivePrice($unit, $saleItem);
+                    if ($unit->hasUnavailableAutomaticPrice()) {
+                        throw ValidationException::withMessages(['lines' => 'A product needs a buying cost before it can be sold. Remove it from the cart and try again.']);
+                    }
                     $itemPayloads[] = [
                         'unit' => $unit,
                         'quantity' => $quantity,
@@ -116,6 +120,10 @@ class CheckoutController extends Controller
                 }
 
                 $totals = $this->calculateTotals($validated, $user, config('shop'), $couponService, $loyaltyService, $flashSalePricing);
+                $accountingCost = round(array_sum(array_map(fn ($item) => round((float) $item['unit']->product->original_price * (float) $item['unit']->conversion_factor, 2) * $item['quantity'], $itemPayloads)), 2);
+                if (round($totals['final'] - $totals['shipping'], 2) < $accountingCost) {
+                    throw ValidationException::withMessages(['lines' => 'The current prices and discounts cannot be applied to this order. Please remove discounts or contact the store.']);
+                }
                 $coupon = $couponService->findValid($validated['coupon_code'] ?? null, $totals['subtotal']);
                 if ($coupon) {
                     $coupon = Coupon::query()->whereKey($coupon->id)->lockForUpdate()->firstOrFail();

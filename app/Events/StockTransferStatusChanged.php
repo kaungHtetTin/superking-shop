@@ -7,26 +7,37 @@ use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
-use Illuminate\Queue\SerializesModels;
 
 class StockTransferStatusChanged implements ShouldBroadcast
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, InteractsWithSockets;
 
     public bool $afterCommit = true;
 
-    public StockTransfer $transfer;
+    public int $transferId;
+
+    public string $transferNumber;
+
+    public string $status;
+
+    public int $sourceLocationId;
+
+    public int $destinationLocationId;
 
     public function __construct(StockTransfer $transfer)
     {
-        $this->transfer = clone $transfer;
+        $this->transferId = (int) $transfer->id;
+        $this->transferNumber = $transfer->transfer_number;
+        $this->status = $transfer->status;
+        $this->sourceLocationId = (int) $transfer->source_location_id;
+        $this->destinationLocationId = (int) $transfer->destination_location_id;
     }
 
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel("inventory.location.{$this->transfer->source_location_id}"),
-            new PrivateChannel("inventory.location.{$this->transfer->destination_location_id}"),
+            new PrivateChannel("inventory.location.{$this->sourceLocationId}"),
+            new PrivateChannel("inventory.location.{$this->destinationLocationId}"),
             new PrivateChannel('inventory.all'),
         ];
     }
@@ -39,11 +50,11 @@ class StockTransferStatusChanged implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'transfer_id' => $this->transfer->id,
-            'transfer_number' => $this->transfer->transfer_number,
-            'status' => $this->transfer->status,
-            'source_location_id' => $this->transfer->source_location_id,
-            'destination_location_id' => $this->transfer->destination_location_id,
+            'transfer_id' => $this->transferId,
+            'transfer_number' => $this->transferNumber,
+            'status' => $this->status,
+            'source_location_id' => $this->sourceLocationId,
+            'destination_location_id' => $this->destinationLocationId,
             'event_time' => now()->toIso8601String(),
         ];
     }

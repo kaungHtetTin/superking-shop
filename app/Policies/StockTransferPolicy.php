@@ -32,6 +32,13 @@ class StockTransferPolicy
         return false;
     }
 
+    public function delete(User $user, StockTransfer $transfer): bool
+    {
+        return $this->create($user)
+            && $user->canAccessLocation($transfer->sourceLocation)
+            && $user->canAccessLocation($transfer->destinationLocation);
+    }
+
     public function approve(User $user, StockTransfer $transfer): bool
     {
         return false;

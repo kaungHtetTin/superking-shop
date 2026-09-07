@@ -161,6 +161,8 @@ class ProductUnitArchitectureTest extends TestCase
     public function test_pos_attaches_a_different_foc_unit_to_the_same_paid_product_line(): void
     {
         [$product, $piece, $box] = $this->productWithUnits();
+        // Keep this unit-conversion scenario above cost; losses have a separate test.
+        $product->update(['original_price' => 6]);
         $location = $this->location();
         $cashier = User::factory()->create(['role' => 'super_admin']);
         $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
@@ -198,9 +200,89 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame($piece->id, $paidLine->foc_product_unit_id);
         $this->assertSame(2.0, (float) $paidLine->foc_quantity);
         $this->assertSame(2.0, (float) $paidLine->foc_base_quantity);
-        $this->assertSame(16.0, (float) $paidLine->foc_cost_price);
+        $this->assertSame(12.0, (float) $paidLine->foc_cost_price);
         $this->assertSame(96.0, (float) $paidLine->total_price);
         $this->assertSame(11.0, (float) $balance->on_hand_qty);
+    }
+
+    public function test_pos_rejects_loss_after_discount_and_free_stock_without_posting(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $product->update(['original_price' => 10]);
+        $piece->prices()->update(['price' => 20]);
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 25, idempotencyKey: 'loss-opening');
+        foreach ([[11, 0], [1, 1]] as [$discount, $free]) {
+            try {
+                app(PosCheckoutService::class)->checkout(['location_id' => $location->id, 'shift_id' => $shift->id,
+                    'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => $free, 'foc_product_unit_id' => $piece->id]],
+                    'discount_type' => 'amount', 'discount_value' => $discount, 'tender_type' => 'cash', 'amount_tendered' => 20], $cashier);
+                $this->fail('Loss-making sale was accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertStringContainsString('below accounting cost', $exception->errors()['items'][0]);
+            }
+        }
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('financial_entries', 0);
+        $this->assertEquals(25, InventoryBalance::where('product_id', $product->id)->where('location_id', $location->id)->value('on_hand_qty'));
+    }
+
+    public function test_pos_accepts_a_walk_in_cash_sale_without_a_customer_account(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'walk-in-opening');
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => null,
+            'customer_name' => 'Walk-in customer',
+            'items' => [[
+                'product_unit_id' => $piece->id,
+                'quantity' => 1,
+                'price_type' => 'retail',
+            ]],
+            'tender_type' => 'cash',
+            'amount_tendered' => 10,
+        ], $cashier);
+
+        $this->assertNull($order->user_id);
+        $this->assertSame('Walk-in customer', $order->receiver_name);
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('cash', $order->payment_method);
+    }
+
+    public function test_pos_walk_in_customer_cannot_use_credit(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'walk-in-credit-opening');
+
+        try {
+            app(PosCheckoutService::class)->checkout([
+                'location_id' => $location->id,
+                'shift_id' => $shift->id,
+                'customer_id' => null,
+                'customer_name' => 'Walk-in customer',
+                'items' => [[
+                    'product_unit_id' => $piece->id,
+                    'quantity' => 1,
+                    'price_type' => 'retail',
+                ]],
+                'tender_type' => 'credit',
+                'amount_tendered' => 0,
+            ], $cashier);
+            $this->fail('A walk-in customer was allowed to use credit.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('customer_id', $exception->errors());
+        }
     }
 
     public function test_pos_derives_a_missing_unit_price_from_the_base_unit_and_conversion(): void
@@ -470,7 +552,7 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertDatabaseCount('orders', 0);
     }
 
-    public function test_stock_transfer_records_source_income_and_destination_expense(): void
+    public function test_stock_transfer_preserves_value_without_external_income_or_purchase(): void
     {
         [$product, , $box] = $this->productWithUnits();
         $source = $this->location();
@@ -490,8 +572,7 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(192.0, (float) $transfer->items->sole()->line_total);
         $this->assertSame(0.0, (float) InventoryBalance::whereBelongsTo($source)->whereBelongsTo($product)->value('on_hand_qty'));
         $this->assertSame(24.0, (float) InventoryBalance::whereBelongsTo($destination)->whereBelongsTo($product)->value('on_hand_qty'));
-        $this->assertDatabaseHas('financial_entries', ['stock_transfer_id' => $transfer->id, 'location_id' => $source->id, 'type' => 'income', 'category' => 'internal_transfer', 'amount' => 192]);
-        $this->assertDatabaseHas('financial_entries', ['stock_transfer_id' => $transfer->id, 'location_id' => $destination->id, 'type' => 'expense', 'category' => 'stock_receipt', 'amount' => 192]);
+        $this->assertDatabaseMissing('financial_entries', ['stock_transfer_id' => $transfer->id]);
 
         $csv = $this->actingAs($actor)->get('/admin/inventory/transfers/export?source='.$source->id);
         $csv->assertOk()->assertDownload();
@@ -501,6 +582,24 @@ class ProductUnitArchitectureTest extends TestCase
     }
 
     /** @return array{Product, ProductUnit, ProductUnit} */
+    public function test_online_checkout_rejects_below_cost_even_with_shipping_collected(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        [$product, $piece] = $this->productWithUnits();
+        $piece->prices()->update(['price' => 1]);
+        $location = $this->location(true);
+        app(InventoryService::class)->receive($location, $product, 25, idempotencyKey: 'online-loss-opening');
+        $method = \App\Models\PaymentMethod::create(['banking_service' => 'Test', 'account_name' => 'Store', 'account_no' => '123', 'is_active' => true]);
+        $user = User::factory()->create(['role' => User::CUSTOMER_ROLE]);
+        $this->actingAs($user)->postJson('/checkout', [
+            'lines' => [['product_unit_id' => $piece->id, 'quantity' => 1]],
+            'receiver_name' => 'Customer', 'receiver_phone' => '091234567', 'shipping_address' => 'Test address',
+            'payment_method_id' => $method->id, 'payment_proof' => \Illuminate\Http\UploadedFile::fake()->createWithContent('proof.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE9sAAAAASUVORK5CYII=')),
+        ])->assertStatus(422)->assertJsonValidationErrors('lines')->assertJsonPath('errors.lines.0', 'The current prices and discounts cannot be applied to this order. Please remove discounts or contact the store.');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertEquals(0, InventoryBalance::where('product_id', $product->id)->where('location_id', $location->id)->value('reserved_qty'));
+    }
+
     private function productWithUnits(?string $barcode = null): array
     {
         $category = Category::create([

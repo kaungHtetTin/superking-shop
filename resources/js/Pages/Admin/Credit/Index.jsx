@@ -7,50 +7,101 @@ import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
 
+function CreditMetricCard({ label, value, caption, icon, tone = 'primary', active = false, onClick }) {
+    const t = usePhraseTranslation();
+
+    return (
+        <button type="button" className={`metric-card glass credit-kpi-card tone-${tone}${active ? ' is-active' : ''}`} onClick={onClick} aria-pressed={active}>
+            <span className="icon-well"><Icon name={icon} size={14} /></span>
+            <small>{t(label)}</small>
+            <strong>{formatMoney(value)}</strong>
+            <p>{caption}</p>
+        </button>
+    );
+}
+
 export default function CreditReport({ customers, filters = {}, aging = {}, collections = [] }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const navigate = (changes) => router.get(routeWithBase('/admin/credit', app_base), { ...filters, ...changes }, { preserveState: true, preserveScroll: true });
     const cards = [
-        ['Current', aging.current, 'current'], ['1–30 days', aging.days_1_30, '1_30'], ['31–60 days', aging.days_31_60, '31_60'], ['61–90 days', aging.days_61_90, '61_90'], ['90+ days', aging.days_90_plus, '90_plus'],
+        { label: 'Current', value: aging.current, bucket: 'current', caption: 'Not yet overdue', icon: 'check', tone: 'success' },
+        { label: '1–30 days', value: aging.days_1_30, bucket: '1_30', caption: 'Past due', icon: 'history', tone: 'warning' },
+        { label: '31–60 days', value: aging.days_31_60, bucket: '31_60', caption: 'Past due', icon: 'history', tone: 'warning' },
+        { label: '61–90 days', value: aging.days_61_90, bucket: '61_90', caption: 'Past due', icon: 'history', tone: 'danger' },
+        { label: '90+ days', value: aging.days_90_plus, bucket: '90_plus', caption: 'Past due', icon: 'history', tone: 'danger' },
     ];
     const maxCollection = Math.max(1, ...collections.map((row) => Number(row.amount || 0)));
+    const hasFilters = Boolean(filters.q || (filters.bucket && filters.bucket !== 'all'));
+    const exportHref = routeWithBase(`/admin/credit/export?bucket=${filters.bucket || 'all'}`, app_base);
 
-    return <AdminLayout title={t('Credit accounts')} eyebrow={t('Accounts receivable')}>
-        <Head title={t('Credit accounts')} />
-        <section className="panel glass" style={{ marginBottom: 14 }}>
-            <div className="stack-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                <PanelHeading eyebrow={t('Aging report')} title={t('Outstanding customer credit')} />
-                <a className="btn secondary" href={routeWithBase(`/admin/credit/export?bucket=${filters.bucket || 'all'}`, app_base)}><Icon name="download" size={14} />{t('Export CSV')}</a>
-            </div>
-            <div className="metrics-grid four" style={{ marginTop: 12 }}>
-                <article className="metric-card glass"><small>{t('Total receivable')}</small><strong>{formatMoney(aging.total)}</strong><p>{customers.total || 0} {t('customer accounts')}</p></article>
-                {cards.map(([label, value, bucket]) => <button type="button" key={bucket} className={`metric-card glass${filters.bucket === bucket ? ' is-active' : ''}`} style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => navigate({ bucket, page: 1 })}><small>{t(label)}</small><strong>{formatMoney(value)}</strong><p>{t(bucket === 'current' ? 'Not yet overdue' : 'Past due')}</p></button>)}
-            </div>
-        </section>
+    const clearFilters = () => router.get(routeWithBase('/admin/credit', app_base), {}, { preserveState: true, preserveScroll: true });
 
-        <section className="panel glass" style={{ marginBottom: 14 }}>
-            <form className="toolbar" onSubmit={(event) => { event.preventDefault(); navigate({ q: new FormData(event.currentTarget).get('q'), page: 1 }); }}>
-                <label className="search-box"><Icon name="search" size={15} /><input name="q" defaultValue={filters.q || ''} placeholder={t('Search customer, email or phone')} /></label>
-                <select value={filters.bucket || 'all'} onChange={(e) => navigate({ bucket: e.target.value, page: 1 })}><option value="all">{t('All aging buckets')}</option>{cards.map(([label, , bucket]) => <option key={bucket} value={bucket}>{t(label)}</option>)}</select>
-                <button className="btn primary" type="submit">{t('Search')}</button>
-            </form>
-            <div className="table-wrap">
-                <table><thead><tr><th>{t('Customer')}</th><th>{t('Status')}</th><th>{t('Invoices')}</th><th>{t('Oldest due')}</th><th>{t('Outstanding')}</th><th>{t('Overdue')}</th><th /></tr></thead>
-                    <tbody>{!customers.data.length ? <tr><td colSpan={7}><span className="muted">{t('No credit balances match these filters.')}</span></td></tr> : customers.data.map((customer) => <tr key={customer.id}>
-                        <td><strong>{customer.name}</strong><small>{customer.phone || customer.email || '-'}</small></td>
-                        <td><StatusBadge status={customer.credit_status === 'active' ? 'success' : 'warning'} label={t(customer.credit_status)} /></td>
-                        <td>{customer.invoice_count}</td><td>{customer.oldest_due_date || '-'}</td><td><strong>{formatMoney(customer.outstanding)}</strong></td><td><strong style={{ color: Number(customer.overdue) > 0 ? 'var(--danger)' : undefined }}>{formatMoney(customer.overdue)}</strong></td>
-                        <td><Link className="btn secondary small" href={routeWithBase(`/admin/customers/${customer.id}`, app_base)}>{t('Open')}</Link></td>
-                    </tr>)}</tbody>
-                </table>
-            </div>
-            <AdminPagination paginator={customers} />
-        </section>
+    return (
+        <AdminLayout title={t('Credit accounts')} eyebrow={t('Accounts receivable')} action={<a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('Export CSV')}</a>}>
+            <Head title={t('Credit accounts')} />
 
-        <section className="panel glass">
-            <PanelHeading eyebrow={t('Last 30 days')} title={t('Credit collections')} />
-            {!collections.length ? <p className="muted">{t('No credit payments in this period.')}</p> : <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>{collections.map((row) => <div key={row.day} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 130px', alignItems: 'center', gap: 10 }}><small>{row.day}</small><div style={{ height: 8, borderRadius: 8, background: 'var(--surface-muted)', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${Math.max(2, Number(row.amount) / maxCollection * 100)}%`, background: 'var(--accent)' }} /></div><strong style={{ textAlign: 'right' }}>{formatMoney(row.amount)}</strong></div>)}</div>}
-        </section>
-    </AdminLayout>;
+            <div className="credit-report-page">
+                <div className="metrics-grid six compact-kpi-strip credit-kpi-strip">
+                    <CreditMetricCard label="Total receivable" value={aging.total} caption={`${customers.total || 0} ${t('customer accounts')}`} icon="wallet" active={!filters.bucket || filters.bucket === 'all'} onClick={() => navigate({ bucket: 'all', page: 1 })} />
+                    {cards.map((card) => <CreditMetricCard key={card.bucket} {...card} caption={t(card.caption)} active={filters.bucket === card.bucket} onClick={() => navigate({ bucket: card.bucket, page: 1 })} />)}
+                </div>
+
+                <section className="panel glass credit-accounts-panel">
+                    <PanelHeading eyebrow={t('Accounts receivable')} title={t('Customer credit accounts')} action={<span className="status status-neutral"><span className="status-dot" />{customers.total || 0} {t('shown')}</span>} />
+
+                    <form className="credit-filter-toolbar" aria-label={t('Filter credit accounts')} onSubmit={(event) => { event.preventDefault(); navigate({ q: new FormData(event.currentTarget).get('q'), page: 1 }); }}>
+                        <label className="form-field credit-filter__search">
+                            <span>{t('Search customers')}</span>
+                            <span className="search-box"><Icon name="search" size={15} /><input name="q" type="search" defaultValue={filters.q || ''} placeholder={t('Name, email or phone')} /></span>
+                        </label>
+                        <label className="form-field credit-filter__bucket">
+                            <span>{t('Aging bucket')}</span>
+                            <select value={filters.bucket || 'all'} onChange={(event) => navigate({ bucket: event.target.value, page: 1 })}>
+                                <option value="all">{t('All aging buckets')}</option>
+                                {cards.map(({ label, bucket }) => <option key={bucket} value={bucket}>{t(label)}</option>)}
+                            </select>
+                        </label>
+                        <div className="inline-actions credit-filter__actions">
+                            <button className="btn primary" type="submit"><Icon name="search" size={14} /> {t('Search')}</button>
+                            {hasFilters && <button className="btn secondary" type="button" onClick={clearFilters}>{t('Clear')}</button>}
+                        </div>
+                    </form>
+
+                    <div className="table-wrap credit-table-wrap">
+                        <table className="credit-table">
+                            <thead><tr><th>{t('Customer')}</th><th>{t('Status')}</th><th className="numeric-cell">{t('Invoices')}</th><th>{t('Oldest due')}</th><th className="numeric-cell">{t('Outstanding')}</th><th className="numeric-cell">{t('Overdue')}</th><th className="table-actions-column">{t('Actions')}</th></tr></thead>
+                            <tbody>
+                                {!customers.data.length ? (
+                                    <tr><td colSpan={7}><div className="credit-empty-state"><Icon name="wallet" size={20} /><strong>{t('No credit balances found')}</strong><span className="muted">{t('Try changing the search or aging bucket.')}</span></div></td></tr>
+                                ) : customers.data.map((customer) => (
+                                    <tr key={customer.id}>
+                                        <td><strong>{customer.name}</strong><small>{customer.phone || customer.email || '—'}</small></td>
+                                        <td><StatusBadge status={customer.credit_status === 'active' ? 'success' : 'warning'} label={t(customer.credit_status)} /></td>
+                                        <td className="numeric-cell">{customer.invoice_count}</td>
+                                        <td>{customer.oldest_due_date || '—'}</td>
+                                        <td className="money-cell"><strong>{formatMoney(customer.outstanding)}</strong></td>
+                                        <td className={`money-cell${Number(customer.overdue) > 0 ? ' text-danger' : ''}`}><strong>{formatMoney(customer.overdue)}</strong></td>
+                                        <td className="table-actions-column"><Link className="icon-btn small" href={routeWithBase(`/admin/customers/${customer.id}`, app_base)} aria-label={`${t('Open customer')} ${customer.name}`} title={t('Open customer')}><Icon name="external" size={13} /></Link></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="credit-pagination"><AdminPagination paginator={customers} /></div>
+                </section>
+
+                <section className="panel glass credit-collections-panel">
+                    <PanelHeading eyebrow={t('Last 30 days')} title={t('Credit collections')} />
+                    {!collections.length ? (
+                        <div className="credit-empty-state credit-empty-state--compact"><Icon name="chart" size={20} /><strong>{t('No collections yet')}</strong><span className="muted">{t('No credit payments in this period.')}</span></div>
+                    ) : (
+                        <div className="credit-collection-list">
+                            {collections.map((row) => <div className="credit-collection-row" key={row.day}><small>{row.day}</small><div className="credit-collection-track" role="progressbar" aria-label={`${row.day}: ${formatMoney(row.amount)}`} aria-valuemin="0" aria-valuemax={maxCollection} aria-valuenow={Number(row.amount || 0)}><span style={{ width: `${Math.max(2, Number(row.amount) / maxCollection * 100)}%` }} /></div><strong>{formatMoney(row.amount)}</strong></div>)}
+                        </div>
+                    )}
+                </section>
+            </div>
+        </AdminLayout>
+    );
 }

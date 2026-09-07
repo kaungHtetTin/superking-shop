@@ -9,6 +9,8 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 import UpdateProfileInformationForm from '@/Pages/Profile/Partials/UpdateProfileInformationForm';
 import UpdatePasswordForm from '@/Pages/Profile/Partials/UpdatePasswordForm';
 import DeleteUserForm from '@/Pages/Profile/Partials/DeleteUserForm';
+import PricingIndex from '@/Pages/Admin/Pricing/Index';
+import PricingForm from '@/Pages/Admin/Pricing/Form';
 
 const contactMeta = {
     email: { label: 'Email', type: 'email', placeholder: 'support@example.com' },
@@ -103,7 +105,7 @@ function ContactRows({ type, values, errors, onChange, onAdd, onRemove, t }) {
                 <div>
                     <p className="eyebrow">{label}</p>
                 </div>
-                <button type="button" className="btn secondary" onClick={onAdd} style={{ minHeight: 30, padding: '6px 9px' }}>
+                <button type="button" className="btn secondary" onClick={onAdd}>
                     <Icon name="plus" size={13} />
                     {t('Add')}
                 </button>
@@ -132,18 +134,19 @@ function ContactRows({ type, values, errors, onChange, onAdd, onRemove, t }) {
                             <Icon name="trash" size={13} />
                         </button>
                     </div>
-                    {errors?.[`${type}.${index}`] && <small style={{ color: '#ce4444' }}>{errors[`${type}.${index}`]}</small>}
+                    {errors?.[`${type}.${index}`] && <small className="field-error">{errors[`${type}.${index}`]}</small>}
                 </label>
             ))}
         </div>
     );
 }
 
-export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null }) {
+export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null, pricing, pricingAction, pricingRule }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
     const [activeSection, setActiveSection] = useState(status === 'password-updated' ? 'security' : status === 'profile-updated' ? 'profile' : initialSection);
     const applicationSections = ['general', 'branding', 'contacts'];
+    useEffect(() => { setActiveSection(initialSection); }, [initialSection, pricingAction, pricingRule?.id, pricing?.rules?.current_page, pricing?.filters?.q]);
     const initialData = useMemo(() => ({
         app_name: settings.app_name || '',
         currency_label: settings.currency_label || 'MMK',
@@ -233,6 +236,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                             { id: 'general', label: 'General', description: 'Name and currency', icon: 'settings' },
                             { id: 'branding', label: 'Branding', description: 'Color and assets', icon: 'palette' },
                             { id: 'contacts', label: 'Contacts', description: 'Public channels', icon: 'chat' },
+                            { id: 'prices', label: 'Prices', description: 'Price types and automatic pricing', icon: 'wallet' },
                             { id: 'profile', label: 'Edit profile', description: 'Personal information', icon: 'user' },
                             { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
                             { id: 'danger', label: 'Account deletion', description: 'Delete account', icon: 'trash' },
@@ -254,6 +258,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                     </aside>
 
                     <section className="settings-work-surface">
+                        {activeSection === 'prices' && <div className="settings-section-content">{pricingAction ? <PricingForm key={`${pricingAction}-${pricingRule?.id || 'new'}`} embedded rule={pricingRule} app_base={app_base} /> : <PricingIndex key={`${pricing.rules.current_page}-${pricing.filters.q}`} embedded {...pricing} app_base={app_base} />}</div>}
                         {applicationSections.includes(activeSection) && <form id="application-settings-form" onSubmit={submit}>
                         {activeSection === 'general' && (
                             <div className="settings-section-content">
@@ -372,7 +377,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
 
                         {activeSection === 'profile' && <div className="settings-section-content profile-settings-content">
                             <PanelHeading eyebrow={t('Account')} title={t('Edit profile')} />
-                            <p className="settings-section-description">{t('Update your name, email address, phone, address, and profile photo.')}</p>
+                            <p className="settings-section-description">{t('Update your name, email address, and profile photo.')}</p>
                             <UpdateProfileInformationForm mustVerifyEmail={mustVerifyEmail} status={status} showHeading={false} />
                         </div>}
                         {activeSection === 'security' && <div className="settings-section-content profile-settings-content">
@@ -393,7 +398,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                         <span className={hasChanges ? 'is-dirty' : 'is-clean'} />
                         <div>
                             <strong>{form.recentlySuccessful ? t('Settings saved') : hasChanges ? t('Unsaved changes') : t('All changes saved')}</strong>
-                            <small>{t('Settings are saved together across every section.')}</small>
+                            <small>{t('General, branding, and contacts are saved together.')}</small>
                         </div>
                     </div>
                     <div className="editor-action-buttons">

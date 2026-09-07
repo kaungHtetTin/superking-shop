@@ -12,7 +12,7 @@ class StockReceiptItem extends Model
 
     protected $fillable = [
         'stock_receipt_id', 'product_id', 'product_unit_id', 'expected_quantity', 'received_quantity',
-        'base_quantity', 'conversion_factor', 'unit_cost', 'notes', 'movement_id',
+        'base_quantity', 'conversion_factor', 'unit_cost', 'notes', 'movement_id', 'previous_base_cost', 'applied_base_cost', 'free_quantity',
     ];
 
     protected $casts = [
@@ -21,6 +21,9 @@ class StockReceiptItem extends Model
         'base_quantity' => 'decimal:4',
         'conversion_factor' => 'decimal:6',
         'unit_cost' => 'decimal:2',
+        'free_quantity' => 'decimal:4',
+        'previous_base_cost' => 'decimal:2',
+        'applied_base_cost' => 'decimal:2',
     ];
 
     public function receipt(): BelongsTo

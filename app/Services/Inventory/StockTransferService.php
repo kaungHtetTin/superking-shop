@@ -42,34 +42,96 @@ class StockTransferService
                 $item->update(['transfer_out_movement_id' => $out->id, 'transfer_in_movement_id' => $in->id]);
             }
 
-            $financeBase = [
-                'stock_transfer_id' => $transfer->id,
-                'recorded_by' => $actor->id,
-                'category' => FinancialEntry::CATEGORY_INTERNAL_TRANSFER,
-                'amount' => $totalAmount,
-                'entry_date' => $now->toDateString(),
-                'reference' => $transfer->transfer_number,
-                'status' => 'approved',
-                'notes' => $details['notes'] ?? null,
-            ];
-
-            FinancialEntry::create(array_merge($financeBase, [
-                'location_id' => $source->id,
-                'type' => 'income',
-                'title' => "Transfer income {$transfer->transfer_number}",
-            ]));
-            FinancialEntry::create(array_merge($financeBase, [
-                'location_id' => $destination->id,
-                'type' => 'expense',
-                'category' => FinancialEntry::CATEGORY_STOCK_RECEIPT,
-                'title' => "Stock expense {$transfer->transfer_number}",
-            ]));
+            // Moving owned inventory is neither external revenue nor a purchase.
+            // The document and its paired movements retain the transferred value.
 
             return $transfer->load(['items.product', 'items.unit']);
         }, 3);
         StockTransferStatusChanged::dispatch($transfer);
 
         return $transfer;
+    }
+
+    public function delete(StockTransfer $transfer, User $actor): void
+    {
+        $deletedTransfer = DB::transaction(function () use ($transfer, $actor) {
+            $locked = StockTransfer::query()
+                ->lockForUpdate()
+                ->with([
+                    'sourceLocation',
+                    'destinationLocation',
+                    'items.product',
+                    'items.unit',
+                    'items.transferOutMovement',
+                    'items.transferInMovement',
+                ])
+                ->findOrFail($transfer->id);
+
+            foreach ($locked->items as $item) {
+                $receivedBaseQuantity = $item->transferInMovement
+                    ? max(0, (float) $item->transferInMovement->quantity_delta)
+                    : max(0, (float) ($item->received_quantity ?? 0) * (float) $item->conversion_factor);
+                $receivedUnitQuantity = $item->transferInMovement?->unit_quantity !== null
+                    ? (float) $item->transferInMovement->unit_quantity
+                    : (float) ($item->received_quantity ?? 0);
+
+                // Remove destination stock first. If it has since been sold or
+                // reserved, InventoryService rejects the reversal and the whole
+                // transaction rolls back without changing any transfer records.
+                if ($receivedBaseQuantity > 0.00005) {
+                    $this->inventoryService->adjust(
+                        $locked->destinationLocation,
+                        $item->product,
+                        -$receivedBaseQuantity,
+                        'transfer_delete',
+                        $actor,
+                        "transfer-delete:{$locked->id}:in:item:{$item->id}",
+                        null,
+                        "Reversed deleted transfer {$locked->transfer_number} (destination).",
+                        $item->unit,
+                        -$receivedUnitQuantity,
+                    );
+                }
+
+                $shippedBaseQuantity = $item->transferOutMovement
+                    ? abs(min(0, (float) $item->transferOutMovement->quantity_delta))
+                    : max(0, (float) ($item->shipped_quantity ?? 0) * (float) $item->conversion_factor);
+                $shippedUnitQuantity = $item->transferOutMovement?->unit_quantity !== null
+                    ? (float) $item->transferOutMovement->unit_quantity
+                    : (float) ($item->shipped_quantity ?? 0);
+
+                if ($shippedBaseQuantity > 0.00005) {
+                    $this->inventoryService->adjust(
+                        $locked->sourceLocation,
+                        $item->product,
+                        $shippedBaseQuantity,
+                        'transfer_delete',
+                        $actor,
+                        "transfer-delete:{$locked->id}:out:item:{$item->id}",
+                        null,
+                        "Reversed deleted transfer {$locked->transfer_number} (source).",
+                        $item->unit,
+                        $shippedUnitQuantity,
+                    );
+                }
+            }
+
+            FinancialEntry::query()
+                ->where(function ($query) use ($locked) {
+                    $query->where('stock_transfer_id', $locked->id)
+                        ->orWhere(fn ($legacy) => $legacy->where('reference', $locked->transfer_number)
+                            ->whereIn('category', [FinancialEntry::CATEGORY_INTERNAL_TRANSFER, FinancialEntry::CATEGORY_STOCK_RECEIPT]));
+                })
+                ->delete();
+
+            $deleted = clone $locked;
+            $deleted->status = 'deleted';
+            $locked->delete();
+
+            return $deleted;
+        }, 3);
+
+        StockTransferStatusChanged::dispatch($deletedTransfer);
     }
 
     private function normalizeLines(Location $source, array $lines): array
@@ -82,6 +144,7 @@ class StockTransferService
                 throw ValidationException::withMessages(['items' => 'Transfer products must be valid and unique.']);
             }
             $seen[$unit->product_id] = true;
+            $unit->setRelation('product', \App\Models\Product::query()->whereKey($unit->product_id)->lockForUpdate()->firstOrFail());
             $quantity = round((float) $line['requested_quantity'], 4);
             if ($quantity <= 0) {
                 throw ValidationException::withMessages(['items' => 'Every transfer line needs a positive quantity.']);

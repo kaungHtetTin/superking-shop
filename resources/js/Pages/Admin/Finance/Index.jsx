@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
@@ -245,30 +245,47 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [localSuccess, setLocalSuccess] = useState('');
-    const [search, setSearch] = useState(filters.q ?? '');
-    const [showAdvancedFilters, setShowAdvancedFilters] = useState(
-        Boolean(filters.from || filters.to || filters.location_id || filters.type || filters.status || filters.category),
-    );
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [filterState, setFilterState] = useState({
+        q: filters.q ?? '',
+        location_id: filters.location_id ?? '',
+        from: filters.from ?? '',
+        to: filters.to ?? '',
+        type: filters.type ?? '',
+        status: filters.status ?? '',
+        category: filters.category ?? '',
+    });
     const form = useForm({ ...emptyEntry });
 
     const categoryOptions = useMemo(() => {
-        if (filters.type && options.categories?.[filters.type]) return options.categories[filters.type];
+        if (filterState.type && options.categories?.[filterState.type]) return options.categories[filterState.type];
         return [...(options.categories?.income || []), ...(options.categories?.expense || [])];
-    }, [filters.type, options.categories]);
+    }, [filterState.type, options.categories]);
 
-    const formCategoryOptions = options.categories?.[form.data.type] || [];
+    const formCategoryOptions = options.manual_categories?.[form.data.type] || [];
 
-    const applyFilters = (patch) => {
+    const activeFilterCount = Object.values(filterState).filter(Boolean).length;
+
+    useEffect(() => {
+        if (!filterDrawerOpen) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [filterDrawerOpen]);
+
+    const submitFilters = (event) => {
+        event.preventDefault();
+        setFilterDrawerOpen(false);
         router.get(
             routeWithBase('/admin/finance', app_base),
-            { ...filters, ...patch },
-            { preserveState: true, replace: true },
+            { ...filterState, q: filterState.q.trim() || undefined },
+            { preserveState: true, preserveScroll: true, replace: true },
         );
-    };
-
-    const submitSearch = (e) => {
-        e.preventDefault();
-        applyFilters({ q: search.trim() || undefined });
     };
 
     const openModal = (entry = null) => {
@@ -328,9 +345,51 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         router.delete(routeWithBase(`/admin/finance/entries/${entry.id}`, app_base), { preserveScroll: true });
     };
 
-    const resetFilters = () => router.get(routeWithBase('/admin/finance', app_base));
+    const resetFilters = () => {
+        setFilterDrawerOpen(false);
+        setFilterState({ q: '', location_id: '', from: '', to: '', type: '', status: '', category: '' });
+        router.get(routeWithBase('/admin/finance', app_base));
+    };
     const exportQuery = new URLSearchParams();
-    Object.entries(filters || {}).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
+    Object.entries(filterState).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
+
+    const renderFilterFields = (autoFocus = false) => (
+        <>
+            <label className="form-field finance-report-filter__search">
+                <span>{t('Search entries')}</span>
+                <span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} type="search" placeholder={t('Title, reference or notes')} value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} /></span>
+            </label>
+            <label className="form-field finance-report-filter__store">
+                <span>{t('Store')}</span>
+                <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
+                    <option value="">{t('All stores')}</option>
+                    {options.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+            </label>
+            <label className="form-field finance-report-filter__date"><span>{t('From')}</span><input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>
+            <label className="form-field finance-report-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>
+            <label className="form-field finance-report-filter__select">
+                <span>{t('Type')}</span>
+                <select value={filterState.type} onChange={(event) => setFilterState((current) => ({ ...current, type: event.target.value, category: '' }))}>
+                    <option value="">{t('All types')}</option><option value="income">{t('Income')}</option><option value="expense">{t('Expense')}</option>
+                </select>
+            </label>
+            <label className="form-field finance-report-filter__select">
+                <span>{t('Status')}</span>
+                <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
+                    <option value="">{t('All statuses')}</option>
+                    {options.statuses.map((status) => <option key={status} value={status}>{t(status)}</option>)}
+                </select>
+            </label>
+            <label className="form-field finance-report-filter__category">
+                <span>{t('Category')}</span>
+                <select value={filterState.category} onChange={(event) => setFilterState((current) => ({ ...current, category: event.target.value }))}>
+                    <option value="">{t('All categories')}</option>
+                    {categoryOptions.map((category) => <option key={`${category.value}-${category.label}`} value={category.value}>{t(category.label)}</option>)}
+                </select>
+            </label>
+        </>
+    );
 
     return (
         <AdminLayout
@@ -345,75 +404,61 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         >
             <Head title={t('Finance')} />
             <AdminFlash flash={{ ...flash, success: localSuccess || flash?.success }} errors={open ? {} : form.errors} />
+            <p className="muted">{t('Revenue includes completed credit sales. Payments and refunds are tracked separately from profit.')}</p>
+            {Number(summary.unvalued_adjustment_lines) > 0 && <p role="status" className="muted">{t('Historical stock adjustments are missing cost snapshots. Profit is incomplete until those records are reconciled.')} ({summary.unvalued_adjustment_lines})</p>}
 
             <div className="metrics-grid six compact-kpi-strip finance-kpi-strip">
                 <MetricCard label="Order revenue" value={money(summary.order_revenue)} icon="receipt" />
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} icon="box" tone="danger" />
                 <MetricCard label="Stock purchases" value={money(summary.stock_purchases)} icon="receipt" />
-                <MetricCard label="Manual income" value={money(summary.manual_income)} icon="wallet" />
+                <MetricCard label="Other income & stock gains" value={money(summary.manual_income)} icon="wallet" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} icon="card" tone="danger" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} icon="chart" tone={summary.net_profit < 0 ? 'danger' : 'success'} />
                 <MetricCard label="Paid orders" value={summary.paid_orders} icon="check" />
+                <MetricCard label="Refunds due (all dates)" value={money(summary.refunds_due)} icon="wallet" tone="danger" />
             </div>
 
             <section className="panel glass finance-filter-panel">
-                <PanelHeading eyebrow={t('Period controls')} title={t('Finance filters')} />
-                <form className="finance-filter" onSubmit={submitSearch}>
-                    <div className="finance-filter-row search-row has-filter-toggle">
-                        <div className="search-box">
-                            <Icon name="search" size={16} />
-                            <input placeholder={t('Search title, reference, notes...')} value={search} onChange={(e) => setSearch(e.target.value)} />
-                        </div>
-                        <button
-                            type="button"
-                            className="btn secondary"
-                            aria-expanded={showAdvancedFilters}
-                            onClick={() => setShowAdvancedFilters((visible) => !visible)}
-                        >
-                            <Icon name={showAdvancedFilters ? 'chevronUp' : 'chevronDown'} size={13} />
-                            {t('More filters')}
+                <PanelHeading
+                    eyebrow={t('Period controls')}
+                    title={t('Finance filters')}
+                    action={(
+                        <button type="button" className="btn secondary finance-report-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}>
+                            <Icon name="search" size={14} /> {t('Filter')}
+                            {activeFilterCount > 0 && <span className="finance-report-filter__count">{activeFilterCount}</span>}
                         </button>
-                        <button type="submit" className="btn primary">{t('Search')}</button>
-                        <a className="btn secondary" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
+                    )}
+                />
+                <form className="finance-report-filter" onSubmit={submitFilters} aria-label={t('Finance filters')}>
+                    <div className="finance-report-filter__scroll">
+                        <div className="finance-report-filter__fields">{renderFilterFields()}</div>
                     </div>
-                    {showAdvancedFilters && <div className="finance-filter-row controls-row">
-                        <select value={filters.location_id || ''} onChange={(e) => applyFilters({ location_id: e.target.value || undefined })}>
-                            <option value="">{t('All stores')}</option>
-                            {options.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                        </select>
-                        <label className="form-field inline">
-                            <span>{t('From')}</span>
-                            <input type="date" value={filters.from || ''} onChange={(e) => applyFilters({ from: e.target.value || undefined })} />
-                        </label>
-                        <label className="form-field inline">
-                            <span>{t('To')}</span>
-                            <input type="date" value={filters.to || ''} onChange={(e) => applyFilters({ to: e.target.value || undefined })} />
-                        </label>
-                        <select value={filters.type || ''} onChange={(e) => applyFilters({ type: e.target.value || undefined, category: undefined })}>
-                            <option value="">{t('All types')}</option>
-                            <option value="income">{t('Income')}</option>
-                            <option value="expense">{t('Expense')}</option>
-                        </select>
-                        <select value={filters.status || ''} onChange={(e) => applyFilters({ status: e.target.value || undefined })}>
-                            <option value="">{t('All statuses')}</option>
-                            {options.statuses.map((status) => (
-                                <option key={status} value={status}>
-                                    {t(status)}
-                                </option>
-                            ))}
-                        </select>
-                        <select value={filters.category || ''} onChange={(e) => applyFilters({ category: e.target.value || undefined })}>
-                            <option value="">{t('All categories')}</option>
-                            {categoryOptions.map((category) => (
-                                <option key={`${category.value}-${category.label}`} value={category.value}>
-                                    {t(category.label)}
-                                </option>
-                            ))}
-                        </select>
+                    <div className="inline-actions finance-report-filter__actions">
+                        <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
+                        <a className="btn secondary" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
                         <button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button>
-                    </div>}
+                    </div>
                 </form>
             </section>
+
+            {filterDrawerOpen && (
+                <div className="modal-backdrop finance-report-filter__backdrop" onMouseDown={() => setFilterDrawerOpen(false)}>
+                    <form className="drawer glass finance-report-filter__drawer" onSubmit={submitFilters} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="finance-filter-title">
+                        <div className="drawer-header">
+                            <div><small className="eyebrow">{t('Period controls')}</small><h2 id="finance-filter-title">{t('Finance filters')}</h2></div>
+                            <button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}><Icon name="close" size={16} /></button>
+                        </div>
+                        <div className="finance-report-filter__drawer-body">
+                            {renderFilterFields(true)}
+                            <a className="btn secondary finance-report-filter__drawer-export" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
+                        </div>
+                        <div className="drawer-actions">
+                            <button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button>
+                            <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
 
             <div className="finance-grid finance-grid-full">
                 <section className="panel glass">
@@ -423,7 +468,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             </div>
 
             <section className="panel glass finance-ledger-panel">
-                <PanelHeading eyebrow={t('Manual ledger')} title={t('Income and expense entries')} />
+                <PanelHeading eyebrow={t('Financial records')} title={t('Income and expense entries')} />
                 <div className="table-wrap">
                     <table className="finance-ledger-table">
                         <thead>
@@ -440,7 +485,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                         </thead>
                         <tbody>
                             {entries.data.length === 0 ? (
-                                <tr><td colSpan={8}><span className="muted">{t('No manual finance entries match your filters.')}</span></td></tr>
+                                <tr><td colSpan={8}><span className="muted">{t('No finance entries match your filters.')}</span></td></tr>
                             ) : entries.data.map((entry) => {
                                 const isManagedEntry = entry.is_system_managed || entry.is_stock_receipt_entry || entry.category === 'stock_receipt';
 
@@ -461,7 +506,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                         <td>{entry.recorder?.name || t('System')}</td>
                                         <td className="table-actions-column">
                                             {isManagedEntry ? (
-                                                <span className="muted">{t('Managed by inventory')}</span>
+                                                <span className="muted">{t('System managed')}</span>
                                             ) : (
                                                 <div className="inline-actions">
                                                     <button type="button" className="icon-btn small" onClick={() => openModal(entry)} aria-label={t('Edit entry')} title={t('Edit entry')}>
@@ -521,7 +566,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                         form.setData({
                                             ...form.data,
                                             type,
-                                            category: options.categories?.[type]?.[0]?.value || '',
+                                            category: options.manual_categories?.[type]?.[0]?.value || '',
                                         });
                                     }}
                                 >

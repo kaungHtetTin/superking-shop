@@ -37,6 +37,8 @@ class ProductCsvImportService
         }
 
         return DB::transaction(function () use ($rows, $stats) {
+            $pricing = app(AutomaticPricingService::class);
+            $pricing->lock();
             $defaultLocation = Location::query()
                 ->where('is_default_fulfillment', true)
                 ->where('is_active', true)
@@ -89,6 +91,12 @@ class ProductCsvImportService
                     'product_price_type_id' => $retail->id,
                     'price' => $row['retail_price'],
                 ]);
+                // An imported retail amount is an explicit Manual override.
+                foreach (\App\Models\PricingRule::where('pricing_mode', 'automatic')->where('code', '!=', 'retail')->get() as $rule) {
+                    $type = $product->priceTypes()->create(['name' => $rule->code, 'pricing_rule_id' => $rule->id]);
+                    $unit->prices()->create(['product_price_type_id' => $type->id, 'price' => 0, 'is_manual' => false]);
+                }
+                $pricing->refreshProduct($product, 'product_import', auth()->id());
 
                 if ($defaultLocation) {
                     $this->inventoryService->ensureBalance($defaultLocation, $product);

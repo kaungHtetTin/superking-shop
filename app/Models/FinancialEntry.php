@@ -16,6 +16,25 @@ class FinancialEntry extends Model
 
     public const CATEGORY_INTERNAL_TRANSFER = 'internal_transfer';
 
+    public const CATEGORY_STOCK_ADJUSTMENT = 'stock_adjustment';
+
+    public const CATEGORY_REFUND_PAYABLE = 'refund_payable';
+
+    public const SYSTEM_CATEGORIES = [self::CATEGORY_POS_SALE, self::CATEGORY_STOCK_RECEIPT,
+        self::CATEGORY_INTERNAL_TRANSFER, self::CATEGORY_STOCK_ADJUSTMENT, self::CATEGORY_REFUND_PAYABLE];
+
+    /** Exclude both current and legacy internal-transfer postings from external finance. */
+    public function scopeExternal($query)
+    {
+        return $query->whereNull('financial_entries.stock_transfer_id')
+            ->where('financial_entries.category', '!=', self::CATEGORY_INTERNAL_TRANSFER)
+            ->whereNotExists(function ($transfers) {
+                $transfers->selectRaw('1')->from('stock_transfers')
+                    ->whereColumn('stock_transfers.transfer_number', 'financial_entries.reference')
+                    ->where('financial_entries.category', self::CATEGORY_STOCK_RECEIPT);
+            });
+    }
+
     public const TYPES = ['income', 'expense'];
 
     public const STATUSES = ['pending', 'approved', 'void'];
@@ -23,6 +42,7 @@ class FinancialEntry extends Model
     public const INCOME_CATEGORIES = [
         self::CATEGORY_POS_SALE => 'POS sales',
         self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers received',
+        self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory gains',
         'other_income' => 'Other income',
         'service_fee' => 'Service fee',
         'adjustment' => 'Adjustment',
@@ -31,6 +51,8 @@ class FinancialEntry extends Model
     public const EXPENSE_CATEGORIES = [
         self::CATEGORY_STOCK_RECEIPT => 'Stock receipts',
         self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers paid',
+        self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory losses',
+        self::CATEGORY_REFUND_PAYABLE => 'Customer refund due (not yet paid)',
         'inventory' => 'Inventory',
         'delivery' => 'Delivery',
         'marketing' => 'Marketing',
@@ -85,7 +107,7 @@ class FinancialEntry extends Model
 
     public function isSystemManaged(): bool
     {
-        return $this->isStockReceiptEntry() || $this->category === self::CATEGORY_INTERNAL_TRANSFER;
+        return $this->stock_transfer_id !== null || in_array($this->category, self::SYSTEM_CATEGORIES, true);
     }
 
     public static function categoryOptions(): array

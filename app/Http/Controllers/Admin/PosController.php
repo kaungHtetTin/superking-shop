@@ -248,7 +248,8 @@ class PosController extends Controller
 
                         return [
                             'price_type' => $price->price_type,
-                            'price' => $configured > 0 ? $configured : round($basePrice * $factor, 2),
+                            'price' => ! $price->is_manual && $price->calculation_status === 'cost_required' && $configured <= 0 ? 0 : ($configured > 0 ? $configured : round($basePrice * $factor, 2)),
+                            'display_name' => $price->typeDefinition?->pricingRule?->name ?? $price->price_type,
                             'is_derived' => $configured <= 0 && $basePrice > 0,
                         ];
                     })->values();
@@ -360,19 +361,35 @@ class PosController extends Controller
         ])], 201);
     }
 
+    public function prices(Request $request)
+    {
+        $validated = $request->validate(['unit_ids' => ['required', 'array', 'max:200'], 'unit_ids.*' => ['integer']]);
+        return ProductUnit::whereIn('id', $validated['unit_ids'])->where('is_active', true)
+            ->whereHas('product', fn ($q) => $q->where('status', 'active')->where('is_active', true))
+            ->with(['prices', 'product.baseUnit.prices'])->get()->map(fn ($unit) => [
+                'id' => $unit->id,
+                'prices' => $unit->prices->map(function ($price) use ($unit) {
+                    $base = (float) ($unit->product->baseUnit?->priceFor($price->price_type)?->price ?? 0);
+                    $amount = $unit->hasUnavailableAutomaticPrice($price->price_type) ? 0 : ((float) $price->price > 0 ? (float) $price->price : round($base * (float) $unit->conversion_factor, 2));
+                    return ['price_type' => $price->price_type, 'price' => $amount, 'display_name' => $price->typeDefinition?->pricingRule?->name ?? $price->price_type];
+                })->values(),
+            ])->values();
+    }
+
     public function checkout(Request $request, PosCheckoutService $service)
     {
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
             'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
-            'customer_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
+            'customer_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_unit_id' => ['required', 'integer', 'exists:product_units,id'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:9999'],
             'items.*.price_type' => ['required', 'string', 'max:60'],
+            'items.*.expected_unit_price' => ['sometimes', 'numeric', 'min:0'],
             'items.*.foc_quantity' => ['sometimes', 'numeric', 'min:0', 'max:9999'],
             'items.*.foc_product_unit_id' => ['nullable', 'integer', 'exists:product_units,id'],
             'discount_type' => ['nullable', 'string', Rule::in(['percent', 'amount'])],

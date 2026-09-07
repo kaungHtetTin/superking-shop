@@ -17,13 +17,13 @@ const initialUnit = () => ({
     is_active: true,
 });
 
-export default function Create({ categories, app_base }) {
+export default function Create({ categories, app_base, pricingRules = [] }) {
     const t = usePhraseTranslation();
     const [previews, setPreviews] = useState([]);
     const { data, setData, post, processing, errors } = useForm({
         category_id: '', barcode: '', name: '', description: '', min_quantity: 0, original_price: 0,
         status: 'active', is_featured: false, metadata: null, mainImageAttachmentId: null,
-        imageAttachmentIds: [], units: [initialUnit()], price_types: [{ name: 'retail', prices: [0] }], images: [],
+        imageAttachmentIds: [], units: [initialUnit()], price_types: pricingRules.filter(rule => rule.code === 'retail' || rule.pricing_mode === 'automatic').map(rule => ({ name: rule.code, prices: [0], is_manual: [rule.pricing_mode !== 'automatic'] })), images: [],
     });
 
     const handleImages = (event) => {
@@ -56,6 +56,7 @@ export default function Create({ categories, app_base }) {
             {Object.keys(errors).length > 0 && <div className="flash error">{t('Please correct the errors below.')}{Object.entries(errors).map(([key, error]) => <div key={key}><small>{key}: {formatErrorMessage(error)}</small></div>)}</div>}
             <form onSubmit={submit} className="product-crud-form">
                 <ProductFormUI
+                    pricingRules={pricingRules}
                     data={data} setData={setData} errors={errors} processing={processing} categories={categories}
                     previews={previews} product={{ images: [] }} appUrl={null} onGenerateBarcode={generateBarcode}
                     onImageChange={handleImages} onRemoveNewPreview={removePreview} onRemoveExistingImage={() => {}}

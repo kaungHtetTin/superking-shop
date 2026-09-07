@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     Box,
-    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -15,6 +14,7 @@ import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import AdminPagination from '@/Components/Admin/AdminPagination';
 import Icon from '@/Components/Admin/icons';
+import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
@@ -30,21 +30,14 @@ const formatDateTime = (value) => {
 
 const money = (value) => formatMoney(Number(value || 0));
 
-function SummaryCard({ label, value, tone = 'primary', caption }) {
-    const colors = {
-        primary: ['primary.main', 'primary.50'],
-        success: ['success.main', 'success.50'],
-        warning: ['warning.main', 'warning.50'],
-        error: ['error.main', 'error.50'],
-    };
-    const [borderColor, backgroundColor] = colors[tone] || colors.primary;
-
+function SummaryCard({ label, value, tone = 'primary', caption, icon }) {
     return (
-        <Paper variant="outlined" sx={{ p: 1.75, minWidth: 0, borderTop: '3px solid', borderTopColor: borderColor, bgcolor: backgroundColor }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700}>{label}</Typography>
-            <Typography variant="h6" fontWeight={850} noWrap>{value}</Typography>
-            {caption && <Typography variant="caption" color="text.secondary">{caption}</Typography>}
-        </Paper>
+        <div className={`metric-card glass shift-history__metric tone-${tone}`}>
+            <span className="icon-well"><Icon name={icon} size={14} /></span>
+            <small>{label}</small>
+            <strong>{value}</strong>
+            {caption && <p>{caption}</p>}
+        </div>
     );
 }
 
@@ -61,6 +54,7 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const [selectedShift, setSelectedShift] = useState(null);
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [filterState, setFilterState] = useState({
         q: filters.q || '',
         status: filters.status || '',
@@ -71,6 +65,19 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
 
     const rows = shifts?.data || [];
     const selectedSummary = useMemo(() => selectedShift?.calculated_summary || selectedShift || {}, [selectedShift]);
+    const activeFilterCount = Object.values(filterState).filter(Boolean).length;
+
+    useEffect(() => {
+        if (!filterDrawerOpen) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [filterDrawerOpen]);
 
     const navigate = (next = filterState) => {
         router.get(routeWithBase('/admin/pos/shifts', app_base), next, { preserveState: true, preserveScroll: true });
@@ -78,14 +85,48 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
 
     const submitFilters = (event) => {
         event.preventDefault();
+        setFilterDrawerOpen(false);
         navigate(filterState);
     };
 
     const clearFilters = () => {
         const empty = { q: '', status: '', location_id: '', from: '', to: '' };
         setFilterState(empty);
+        setFilterDrawerOpen(false);
         navigate(empty);
     };
+
+    const renderFilterFields = (autoFocus = false) => (
+        <>
+            <label className="form-field shift-history__filter-search">
+                <span>{canViewAllCashiers ? t('Search cashier or register') : t('Search register')}</span>
+                <input autoFocus={autoFocus} type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Name, email or register code')} />
+            </label>
+            <label className="form-field shift-history__filter-status">
+                <span>{t('Status')}</span>
+                <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
+                    <option value="">{t('All statuses')}</option>
+                    <option value="open">{t('Open')}</option>
+                    <option value="closed">{t('Closed')}</option>
+                </select>
+            </label>
+            <label className="form-field shift-history__filter-warehouse">
+                <span>{t('Warehouse')}</span>
+                <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
+                    <option value="">{t('All warehouses')}</option>
+                    {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+            </label>
+            <label className="form-field shift-history__filter-date">
+                <span>{t('From')}</span>
+                <input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} />
+            </label>
+            <label className="form-field shift-history__filter-date">
+                <span>{t('To')}</span>
+                <input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} />
+            </label>
+        </>
+    );
 
     return (
         <AdminLayout
@@ -95,58 +136,51 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
         >
             <Head title={t('Shift history')} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 1.25, mb: 2 }}>
-                <SummaryCard label={t('Total shifts')} value={stats.total || 0} caption={t('Matching filters')} />
-                <SummaryCard label={t('Open now')} value={stats.open || 0} tone="warning" caption={t('Active cash sessions')} />
-                <SummaryCard label={t('Closed')} value={stats.closed || 0} tone="success" caption={t('Completed sessions')} />
+            <div className="shift-history-page">
+            <div className="metrics-grid four shift-history__metrics">
+                <SummaryCard label={t('Total shifts')} value={stats.total || 0} caption={t('Matching filters')} icon="history" />
+                <SummaryCard label={t('Open now')} value={stats.open || 0} tone="warning" caption={t('Active cash sessions')} icon="rotateClockwise" />
+                <SummaryCard label={t('Closed')} value={stats.closed || 0} tone="success" caption={t('Completed sessions')} icon="check" />
                 <SummaryCard
                     label={t('Net difference')}
                     value={money(stats.variance)}
                     tone={Number(stats.variance || 0) < 0 ? 'error' : 'success'}
                     caption={Number(stats.variance || 0) < 0 ? t('Overall shortage') : t('Overall overage')}
+                    icon="wallet"
                 />
-            </Box>
+            </div>
 
-            <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
-                <Box component="form" className="shift-history-filter-grid" onSubmit={submitFilters} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(220px, 2fr) 1fr', lg: 'minmax(240px, 2fr) repeat(4, minmax(140px, 1fr)) auto' }, gap: 1.25, alignItems: 'end' }}>
-                    <label className="form-field">
-                        <span>{canViewAllCashiers ? t('Search cashier or register') : t('Search register')}</span>
-                        <input type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Name, email or register code')} />
-                    </label>
-                    <label className="form-field">
-                        <span>{t('Status')}</span>
-                        <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
-                            <option value="">{t('All statuses')}</option>
-                            <option value="open">{t('Open')}</option>
-                            <option value="closed">{t('Closed')}</option>
-                        </select>
-                    </label>
-                    <label className="form-field">
-                        <span>{t('Warehouse')}</span>
-                        <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
-                            <option value="">{t('All warehouses')}</option>
-                            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                        </select>
-                    </label>
-                    <label className="form-field">
-                        <span>{t('From')}</span>
-                        <input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} />
-                    </label>
-                    <label className="form-field">
-                        <span>{t('To')}</span>
-                        <input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} />
-                    </label>
-                    <div className="inline-actions" style={{ flexWrap: 'nowrap' }}>
+            <section className="panel glass shift-history__filter-panel">
+                <PanelHeading
+                    eyebrow={t('History controls')}
+                    title={t('Filter shifts')}
+                    action={(
+                        <button type="button" className="btn secondary shift-history__mobile-filter-trigger" onClick={() => setFilterDrawerOpen(true)}>
+                            <Icon name="search" size={14} /> {t('Filter')}
+                            {activeFilterCount > 0 && <span className="shift-history__filter-count">{activeFilterCount}</span>}
+                        </button>
+                    )}
+                />
+                <form className="shift-history__filter-toolbar" onSubmit={submitFilters} aria-label={t('Filter shifts')}>
+                    <div className="shift-history__filter-scroll">
+                        <div className="shift-history__filter-fields">{renderFilterFields()}</div>
+                    </div>
+                    <div className="inline-actions shift-history__filter-actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Filter')}</button>
                         <button type="button" className="btn secondary" onClick={clearFilters}>{t('Clear')}</button>
                     </div>
-                </Box>
-            </Paper>
+                </form>
+            </section>
 
-            <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-                <Box sx={{ overflowX: 'auto' }}>
-                    <Box component="table" sx={{ width: '100%', minWidth: 1050, borderCollapse: 'collapse', '& th': { bgcolor: 'action.hover', color: 'text.secondary', fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', textAlign: 'left', px: 1.5, py: 1.25 }, '& td': { px: 1.5, py: 1.25, borderTop: '1px solid', borderColor: 'divider', verticalAlign: 'middle' }, '& tbody tr:hover': { bgcolor: 'action.hover' } }}>
-                        <thead><tr><th>{t('Shift')}</th><th>{t('Cashier')}</th><th>{t('Warehouse / Register')}</th><th>{t('Opening')}</th><th>{t('Expected')}</th><th>{t('Counted')}</th><th>{t('Difference')}</th><th>{t('Status')}</th><th /></tr></thead>
+            <section className="panel glass shift-history__table-panel">
+                <PanelHeading
+                    eyebrow={t('Cash sessions')}
+                    title={t('Shift records')}
+                    action={<span className="status status-neutral"><span className="status-dot" />{rows.length} {t('shown')}</span>}
+                />
+                <div className="table-wrap shift-history__table-wrap">
+                    <table>
+                        <thead><tr><th>{t('Shift')}</th><th>{t('Cashier')}</th><th>{t('Warehouse / Register')}</th><th>{t('Opening')}</th><th>{t('Expected')}</th><th>{t('Counted')}</th><th>{t('Difference')}</th><th>{t('Status')}</th><th className="shift-history__actions">{t('Actions')}</th></tr></thead>
                         <tbody>
                             {rows.length === 0 ? (
                                 <tr><td colSpan="9"><Box sx={{ py: 5, textAlign: 'center' }}><Typography fontWeight={750}>{t('No shifts found')}</Typography><Typography variant="body2" color="text.secondary">{t('Try changing the filters or open a new shift from POS.')}</Typography></Box></td></tr>
@@ -155,40 +189,69 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                                 const variance = shift.variance;
                                 return (
                                     <tr key={shift.id}>
-                                        <td><Typography fontWeight={800}>#{shift.id}</Typography><Typography variant="caption" color="text.secondary">{formatDateTime(shift.opened_at)}</Typography></td>
-                                        <td><Typography fontWeight={700}>{shift.cashier?.name || '—'}</Typography><Typography variant="caption" color="text.secondary">{shift.cashier?.email || ''}</Typography></td>
-                                        <td><Typography fontWeight={700}>{shift.location?.name || '—'}</Typography><Typography variant="caption" color="text.secondary">{shift.register?.name || '—'} · {shift.register?.code || '—'}</Typography></td>
-                                        <td>{money(shift.opening_cash)}</td>
-                                        <td><Typography fontWeight={750}>{money(summary.expected_cash)}</Typography></td>
-                                        <td>{shift.counted_cash === null ? '—' : money(shift.counted_cash)}</td>
-                                        <td><Typography fontWeight={800} color={variance === null ? 'text.secondary' : Number(variance) < 0 ? 'error.main' : Number(variance) > 0 ? 'warning.dark' : 'success.main'}>{variance === null ? '—' : money(variance)}</Typography></td>
-                                        <td><Chip size="small" label={t(shift.status === 'open' ? 'Open' : 'Closed')} color={shift.status === 'open' ? 'warning' : 'success'} variant={shift.status === 'open' ? 'filled' : 'outlined'} /></td>
-                                        <td>
+                                        <td><strong>#{shift.id}</strong><small>{formatDateTime(shift.opened_at)}</small></td>
+                                        <td><strong>{shift.cashier?.name || '—'}</strong><small>{shift.cashier?.email || ''}</small></td>
+                                        <td><strong>{shift.location?.name || '—'}</strong><small>{shift.register?.name || '—'} · {shift.register?.code || '—'}</small></td>
+                                        <td className="numeric-cell">{money(shift.opening_cash)}</td>
+                                        <td className="numeric-cell"><strong>{money(summary.expected_cash)}</strong></td>
+                                        <td className="numeric-cell">{shift.counted_cash === null ? '—' : money(shift.counted_cash)}</td>
+                                        <td className={`numeric-cell shift-history__variance ${variance === null ? 'is-neutral' : Number(variance) < 0 ? 'is-negative' : Number(variance) > 0 ? 'is-warning' : 'is-positive'}`}>{variance === null ? '—' : money(variance)}</td>
+                                        <td><StatusBadge status={shift.status === 'open' ? 'warning' : 'success'} label={shift.status === 'open' ? 'Open' : 'Closed'} /></td>
+                                        <td className="shift-history__actions">
                                             <button
                                                 type="button"
-                                                className="btn secondary"
-                                                style={{ minHeight: 32, padding: '6px 10px', whiteSpace: 'nowrap' }}
+                                                className="icon-btn small"
                                                 onClick={() => setSelectedShift(shift)}
                                                 aria-label={`${t('View details')} #${shift.id}`}
+                                                title={t('View details')}
                                             >
-                                                <Icon name="eye" size={14} /> {t('Details')}
+                                                <Icon name="eye" size={15} />
                                             </button>
                                         </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
-                    </Box>
-                </Box>
-                <Box sx={{ p: 1.5, borderTop: rows.length ? '1px solid' : 0, borderColor: 'divider' }}>
+                    </table>
+                </div>
+                <div className="shift-history__pagination">
                     <AdminPagination paginator={shifts} label="shifts" />
-                </Box>
-            </Paper>
+                </div>
+            </section>
+            </div>
 
-            <Dialog open={Boolean(selectedShift)} onClose={() => setSelectedShift(null)} maxWidth="md" fullWidth>
+            {filterDrawerOpen && (
+                <div className="modal-backdrop shift-history__filter-backdrop" onMouseDown={() => setFilterDrawerOpen(false)}>
+                    <form
+                        className="drawer glass shift-history__filter-drawer"
+                        onSubmit={submitFilters}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="shift-history-filter-title"
+                    >
+                        <div className="drawer-header">
+                            <div>
+                                <small className="eyebrow">{t('History controls')}</small>
+                                <h2 id="shift-history-filter-title">{t('Filter shifts')}</h2>
+                            </div>
+                            <button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}>
+                                <Icon name="close" size={16} />
+                            </button>
+                        </div>
+                        <div className="shift-history__filter-drawer-body">{renderFilterFields(true)}</div>
+                        <div className="drawer-actions">
+                            <button type="button" className="btn secondary" onClick={clearFilters}>{t('Clear')}</button>
+                            <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Filter')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <Dialog className="shift-history__dialog" open={Boolean(selectedShift)} onClose={() => setSelectedShift(null)} maxWidth="md" fullWidth>
                 <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center', fontWeight: 850 }}>
                     <span>{t('Shift details')} #{selectedShift?.id}</span>
-                    <Chip size="small" label={t(selectedShift?.status === 'open' ? 'Open' : 'Closed')} color={selectedShift?.status === 'open' ? 'warning' : 'success'} />
+                    <StatusBadge status={selectedShift?.status === 'open' ? 'warning' : 'success'} label={selectedShift?.status === 'open' ? 'Open' : 'Closed'} />
                 </DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={2}>

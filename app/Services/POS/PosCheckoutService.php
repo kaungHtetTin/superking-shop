@@ -25,23 +25,20 @@ class PosCheckoutService
 
     public function checkout(array $payload, User $cashier): Order
     {
-        if (empty($payload['customer_id'])) {
-            throw ValidationException::withMessages([
-                'customer_id' => 'Choose a registered customer before completing the sale.',
-            ]);
-        }
-
         return DB::transaction(function () use ($payload, $cashier) {
+            app(\App\Services\AutomaticPricingService::class)->lock();
             $location = Location::query()->where('is_active', true)->findOrFail((int) $payload['location_id']);
             if (! $cashier->canAccessLocation($location)) {
                 throw ValidationException::withMessages(['location_id' => 'You cannot sell from this warehouse.']);
             }
             $shift = $this->shiftService->lockForSale((int) ($payload['shift_id'] ?? 0), $cashier, $location);
-            $customer = User::query()
-                ->where('role', User::CUSTOMER_ROLE)
-                ->lockForUpdate()
-                ->find((int) $payload['customer_id']);
-            if (! $customer) {
+            $customer = filled($payload['customer_id'] ?? null)
+                ? User::query()
+                    ->where('role', User::CUSTOMER_ROLE)
+                    ->lockForUpdate()
+                    ->find((int) $payload['customer_id'])
+                : null;
+            if (filled($payload['customer_id'] ?? null) && ! $customer) {
                 throw ValidationException::withMessages([
                     'customer_id' => 'Choose a registered customer before completing the sale.',
                 ]);
@@ -56,7 +53,7 @@ class PosCheckoutService
                 ->where('is_active', true)
                 ->with([
                     'prices',
-                    'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true),
+                    'product' => fn ($query) => $query->where('status', 'active')->where('is_active', true)->orderBy('id')->lockForUpdate(),
                     'product.baseUnit.prices',
                 ])
                 ->get()
@@ -108,6 +105,9 @@ class PosCheckoutService
                     ]);
                 }
                 $lineTotal = round($unitPrice * $quantity, 2);
+                if (isset($line['expected_unit_price']) && bccomp((string) $line['expected_unit_price'], (string) $unitPrice, 2) !== 0) {
+                    throw ValidationException::withMessages(['items' => 'Selling prices changed. Reopen the payment dialog to review the updated total.']);
+                }
                 $baseQuantity = $unit->toBaseQuantity($quantity);
                 $subtotal += $lineTotal;
                 $items[] = compact('unit', 'quantity', 'baseQuantity', 'priceType', 'unitPrice', 'lineTotal', 'focUnit', 'focQuantity', 'focBaseQuantity');
@@ -127,6 +127,13 @@ class PosCheckoutService
 
             $discount = $this->discountAmount($payload, $subtotal, $cashier);
             $final = round(max(0, $subtotal - $discount), 2);
+            // Match the cost snapshots written to order items, including free stock.
+            $accountingCost = round(array_sum(array_map(fn ($item) =>
+                round((float) $item['unit']->product->original_price * (float) $item['unit']->conversion_factor, 2) * $item['quantity']
+                + round((float) $item['unit']->product->original_price * $item['focBaseQuantity'], 2), $items)), 2);
+            if ($final < $accountingCost) {
+                throw ValidationException::withMessages(['items' => 'Sale total after discounts is below accounting cost, including free items. Reduce the discount or free quantity, or review selling prices.']);
+            }
             $tenderType = $payload['tender_type'] ?? 'cash';
             $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
             $isCredit = $tenderType === 'credit';
@@ -137,7 +144,7 @@ class PosCheckoutService
                 if (! $cashier->hasAdminPermission('credit.manage')) {
                     throw ValidationException::withMessages(['tender_type' => 'You cannot create credit sales.']);
                 }
-                if (empty($payload['customer_id'])) {
+                if (! $customer) {
                     throw ValidationException::withMessages(['customer_id' => 'Choose a registered customer for a credit sale.']);
                 }
                 if ($amountTendered < 0 || $amountTendered >= $final) {
@@ -158,7 +165,7 @@ class PosCheckoutService
             $paymentStatus = $isCredit ? ($amountTendered > 0 ? 'partially_paid' : 'unpaid') : 'paid';
             $dueDate = $isCredit ? now()->addDays(max(1, (int) $customer->credit_terms_days))->toDateString() : null;
             $order = Order::create([
-                'user_id' => $payload['customer_id'],
+                'user_id' => $customer?->id,
                 'order_number' => $this->number('POS'),
                 'receipt_number' => $this->number('RCT'),
                 'sales_channel' => 'pos',
@@ -181,8 +188,8 @@ class PosCheckoutService
                 'paid_amount' => $isCredit ? $amountTendered : $final,
                 'payment_method' => $tenderType,
                 'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue, 'credit_amount' => $creditAmount, 'deposit_method' => $isCredit ? $depositMethod : null],
-                'receiver_name' => $customer->name,
-                'receiver_phone' => $customer->phone,
+                'receiver_name' => $customer?->name ?: trim((string) ($payload['customer_name'] ?? '')) ?: 'Walk-in customer',
+                'receiver_phone' => $customer?->phone ?: ($payload['customer_phone'] ?? null),
                 'order_notes' => $payload['notes'] ?? null,
                 'status_updated_at' => now(),
             ]);

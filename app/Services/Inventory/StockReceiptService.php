@@ -3,6 +3,9 @@
 namespace App\Services\Inventory;
 
 use App\Models\FinancialEntry;
+use App\Models\InventoryBalance;
+use App\Models\InventoryMovement;
+use App\Models\Product;
 use App\Models\Location;
 use App\Models\ProductUnit;
 use App\Models\StockReceipt;
@@ -20,6 +23,7 @@ class StockReceiptService
     public function createDraft(Location $location, array $lines, User $actor, ?string $supplierReference = null, ?string $notes = null): StockReceipt
     {
         return DB::transaction(function () use ($location, $lines, $actor, $supplierReference, $notes) {
+            app(\App\Services\AutomaticPricingService::class)->lock();
             $receipt = StockReceipt::create(['receipt_number' => $this->number(), 'location_id' => $location->id, 'supplier_reference' => $supplierReference, 'status' => 'draft', 'notes' => $notes, 'created_by' => $actor->id]);
             foreach ($this->normalizeLines($lines) as $line) {
                 $receipt->items()->create($line);
@@ -32,6 +36,7 @@ class StockReceiptService
     public function updateDraft(StockReceipt $receipt, Location $location, array $lines, ?string $supplierReference = null, ?string $notes = null): StockReceipt
     {
         return DB::transaction(function () use ($receipt, $location, $lines, $supplierReference, $notes) {
+            app(\App\Services\AutomaticPricingService::class)->lock();
             $locked = StockReceipt::query()->lockForUpdate()->findOrFail($receipt->id);
             if ($locked->status !== 'draft') {
                 throw ValidationException::withMessages(['receipt' => 'Only a draft receipt can be edited.']);
@@ -46,9 +51,11 @@ class StockReceiptService
         });
     }
 
-    public function post(StockReceipt $receipt, User $actor): StockReceipt
+    public function post(StockReceipt $receipt, User $actor, bool $acknowledgeBelowCost = false): StockReceipt
     {
-        return DB::transaction(function () use ($receipt, $actor) {
+        return DB::transaction(function () use ($receipt, $actor, $acknowledgeBelowCost) {
+            $pricing = app(\App\Services\AutomaticPricingService::class);
+            $pricing->lock();
             $locked = StockReceipt::query()->lockForUpdate()->findOrFail($receipt->id);
             if ($locked->status === 'posted') {
                 return $locked->load(['items.product', 'items.unit']);
@@ -57,34 +64,75 @@ class StockReceiptService
                 throw ValidationException::withMessages(['receipt' => 'Only a draft receipt can be posted.']);
             }
             $locked->load(['items.product', 'items.unit', 'location']);
-            foreach ($locked->items as $item) {
-                $movement = $this->inventoryService->receive($locked->location, $item->product, (float) $item->base_quantity, $actor, "receipt:{$locked->id}:item:{$item->id}", $locked, $item->notes, $item->unit, (float) $item->received_quantity);
-                $item->update(['movement_id' => $movement->id]);
-                if ($item->unit_cost !== null) {
-                    $item->product->update(['original_price' => round((float) $item->unit_cost / max((float) $item->conversion_factor, 0.000001), 2)]);
+            foreach ($locked->items->sortBy('product_id') as $item) {
+                $product = Product::query()->lockForUpdate()->findOrFail($item->product_id);
+                if ($item->unit_cost === null) {
+                    throw ValidationException::withMessages(['items' => 'Enter a cost for every receipt line (use zero for free stock).']);
                 }
+                $previousCost = (float) $product->original_price;
+                if ($product->pricing_base_cost === null) $product->update(['pricing_base_cost' => $product->original_price]);
+                $quantityBefore = (float) InventoryBalance::query()->where('product_id', $product->id)->sum('on_hand_qty');
+                // The application carries one cost per product across warehouses.
+                // Weight the incoming cost so a purchase does not reprice old stock.
+                $appliedCost = round(($quantityBefore * $previousCost + (float) $item->unit_cost * (float) $item->received_quantity)
+                    / max($quantityBefore + (float) $item->base_quantity, 0.000001), 2);
+                $movement = $this->inventoryService->receive($locked->location, $item->product, (float) $item->base_quantity, $actor, "receipt:{$locked->id}:item:{$item->id}", $locked, $item->notes, $item->unit, ((float) $item->received_quantity + (float) $item->free_quantity));
+                $item->update(['movement_id' => $movement->id, 'previous_base_cost' => $previousCost, 'applied_base_cost' => $appliedCost]);
+                $product->update(['original_price' => $appliedCost]);
             }
             $locked->update(['status' => 'posted', 'received_by' => $actor->id, 'received_at' => now()]);
             $this->recordFinanceExpense($locked, $actor);
 
-            return $locked->fresh(['items.product', 'items.unit', 'location']);
+            $summary = ['changed_row_count' => 0, 'skipped_cost_count' => 0, 'price_changes' => []];
+            $warnings = [];
+            foreach ($locked->items as $item) {
+                $result = $pricing->refreshProduct($item->product, 'purchase_post', $actor->id, 'receipt:'.$locked->id);
+                $summary['changed_row_count'] += $result['changed_row_count'];
+                $summary['skipped_cost_count'] += $result['skipped_cost_count'];
+                $summary['price_changes'] = array_merge($summary['price_changes'], $result['price_changes']);
+                $warnings = array_merge($warnings, $pricing->belowCostWarnings($item->product->fresh()));
+            }
+            if ($warnings && ! $acknowledgeBelowCost) {
+                throw ValidationException::withMessages(['acknowledge_below_cost' => implode(' ', $warnings).' Review items or choose Save anyway.']);
+            }
+            return $locked->fresh(['items.product', 'items.unit', 'location'])->setAttribute('pricing_summary', $summary);
         }, 3);
     }
 
-    public function delete(StockReceipt $receipt, User $actor): void
+    public function delete(StockReceipt $receipt, User $actor): array
     {
-        DB::transaction(function () use ($receipt, $actor) {
+        return DB::transaction(function () use ($receipt, $actor) {
+            $pricing = app(\App\Services\AutomaticPricingService::class);
+            $pricing->lock();
             $locked = StockReceipt::query()->lockForUpdate()->with(['items.product', 'items.unit', 'location'])->findOrFail($receipt->id);
             if (! in_array($locked->status, ['draft', 'posted'], true)) {
                 throw ValidationException::withMessages(['receipt' => 'Only draft or posted receipts can be deleted.']);
             }
             if ($locked->status === 'posted') {
-                foreach ($locked->items as $item) {
-                    $this->inventoryService->adjust($locked->location, $item->product, -1 * (float) $item->base_quantity, 'receipt_delete', $actor, "receipt-delete:{$locked->id}:item:{$item->id}", $locked, "Deleted receipt {$locked->receipt_number}.", $item->unit, -1 * (float) $item->received_quantity);
+                foreach ($locked->items->sortBy('product_id') as $item) {
+                    $product = Product::query()->lockForUpdate()->findOrFail($item->product_id);
+                    if ($item->previous_base_cost === null || $item->applied_base_cost === null || ! $item->movement_id) {
+                        throw ValidationException::withMessages(['receipt' => 'This legacy receipt has no cost snapshot. Reconcile its cost before reversing it.']);
+                    }
+                    $laterActivity = InventoryMovement::query()->where('product_id', $item->product_id)
+                        ->where('id', '>', $item->movement_id)->where('quantity_delta', '!=', 0)->exists();
+                    if ($laterActivity || abs((float) $product->original_price - (float) $item->applied_base_cost) > 0.009) {
+                        throw ValidationException::withMessages(['receipt' => 'Later stock or cost changes depend on this receipt. Use a documented stock/cost correction instead.']);
+                    }
+                    $this->inventoryService->adjust($locked->location, $item->product, -1 * (float) $item->base_quantity, 'receipt_delete', $actor, "receipt-delete:{$locked->id}:item:{$item->id}", $locked, "Deleted receipt {$locked->receipt_number}.", $item->unit, -1 * ((float) $item->received_quantity + (float) $item->free_quantity));
+                    $product->update(['original_price' => $item->previous_base_cost]);
                 }
             }
             FinancialEntry::query()->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->where('reference', $locked->receipt_number)->delete();
             $locked->delete();
+            $summary = ['changed_row_count' => 0, 'skipped_cost_count' => 0, 'price_changes' => []];
+            foreach ($locked->items as $item) {
+                $result = $pricing->refreshProduct($item->product, 'purchase_delete', $actor->id, 'receipt-delete:'.$locked->id);
+                $summary['changed_row_count'] += $result['changed_row_count'];
+                $summary['skipped_cost_count'] += $result['skipped_cost_count'];
+                $summary['price_changes'] = array_merge($summary['price_changes'], $result['price_changes']);
+            }
+            return $summary;
         }, 3);
     }
 
@@ -103,6 +151,8 @@ class StockReceiptService
             }
             $seen[$key] = true;
             $quantity = round((float) $line['received_quantity'], 4);
+            $free = (string) ($line['free_quantity'] ?? '0');
+            if (! is_numeric($free) || (float) $free < 0) throw ValidationException::withMessages(['items' => 'Free quantity cannot be negative.']);
             if ($quantity <= 0) {
                 throw ValidationException::withMessages(['items' => 'Every receipt line needs a positive quantity.']);
             }
@@ -114,7 +164,8 @@ class StockReceiptService
                 'product_unit_id' => $unit->id,
                 'expected_quantity' => ($line['expected_quantity'] ?? '') === '' ? null : round((float) $line['expected_quantity'], 4),
                 'received_quantity' => $quantity,
-                'base_quantity' => $unit->toBaseQuantity($quantity),
+                'free_quantity' => $free,
+                'base_quantity' => $unit->toBaseQuantity($quantity + (float) $free),
                 'conversion_factor' => $unit->conversion_factor,
                 'unit_cost' => ($line['unit_cost'] ?? '') === '' ? null : $line['unit_cost'],
                 'notes' => $line['notes'] ?? null,

@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import AdminPagination from '@/Components/Admin/AdminPagination';
 import Icon from '@/Components/Admin/icons';
+import { AdminFlash } from '@/Components/Admin/AdminFlash';
 import { PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import useInventoryRealtime from '@/Utils/useInventoryRealtime';
@@ -14,8 +16,9 @@ function TransferMetric({ label, value, hint, icon, tone = '' }) {
 }
 
 export default function TransfersIndex({ transfers, filters = {}, locations = [], summary = {}, canCreate, realtime, lastUpdated, pollIntervalMs = 20000 }) {
-    const { app_base } = usePage().props;
+    const { app_base, flash, errors } = usePage().props;
     const t = usePhraseTranslation();
+    const [deletingId, setDeletingId] = useState(null);
     const applyFilter = (patch) => router.get(routeWithBase('/admin/inventory/transfers', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
     const exportQuery = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '' && value != null)).toString();
     const exportHref = `${routeWithBase('/admin/inventory/transfers/export', app_base)}${exportQuery ? `?${exportQuery}` : ''}`;
@@ -27,6 +30,16 @@ export default function TransfersIndex({ transfers, filters = {}, locations = []
         listenBalance: false,
         listenTransfers: true,
     });
+    const destroy = (transfer) => {
+        if (!confirm(t('Delete :number? This will reverse stock at both shops and remove every related financial entry. This cannot be undone.', { number: transfer.transfer_number }))) return;
+
+        setDeletingId(transfer.id);
+        router.delete(
+            routeWithBase(`/admin/inventory/transfers/${transfer.id}`, app_base),
+            {},
+            { preserveScroll: true, onFinish: () => setDeletingId(null) },
+        );
+    };
 
     return (
         <AdminLayout
@@ -35,6 +48,7 @@ export default function TransfersIndex({ transfers, filters = {}, locations = []
             action={<div className="inline-actions"><a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('CSV')}</a>{canCreate && <Link className="btn primary" href={routeWithBase('/admin/inventory/transfers/create', app_base)}><Icon name="plus" size={14} /> {t('New transfer')}</Link>}</div>}
         >
             <Head title={t('Stock Transfers')} />
+            <AdminFlash flash={flash} errors={errors} />
             <section className="panel glass">
                 <PanelHeading eyebrow={t('Inter-location')} title={t('Stock transfers')} action={<small className="muted">{t('Realtime')} {t(realtimeState)} - {t('Updated')} {new Date(lastEventAt || lastUpdated).toLocaleTimeString()}</small>} />
                 <div className="metrics-grid transfer-summary-grid"><TransferMetric label="Transfers" value={Number(summary.count || 0).toLocaleString()} hint="Filtered transfer records" icon="truck" /><TransferMetric label="Transfer value" value={formatMoney(summary.transfer_value)} hint="Total stock value moved" icon="box" /></div>
@@ -50,7 +64,7 @@ export default function TransfersIndex({ transfers, filters = {}, locations = []
                                 <th>{t('Units')}</th>
                                 <th>{t('Amount')}</th>
                                 <th>{t('Date')}</th>
-                                <th />
+                                <th className="actions-col">{t('Actions')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -65,10 +79,17 @@ export default function TransfersIndex({ transfers, filters = {}, locations = []
                                     <td>{transfer.items.reduce((sum, item) => sum + Number(item.requested_quantity || 0), 0)}</td>
                                     <td><strong>{formatMoney(transfer.total_amount)}</strong></td>
                                     <td>{new Date(transfer.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                        <Link className="icon-btn small" href={routeWithBase(`/admin/inventory/transfers/${transfer.id}`, app_base)} aria-label={t('Open transfer')}>
-                                            <Icon name="external" size={13} />
-                                        </Link>
+                                    <td className="actions-col">
+                                        <div className="inline-actions table-row-actions">
+                                            <Link className="icon-btn small" href={routeWithBase(`/admin/inventory/transfers/${transfer.id}`, app_base)} aria-label={t('Open transfer')} title={t('Open transfer')}>
+                                                <Icon name="external" size={13} />
+                                            </Link>
+                                            {transfer.can_delete && (
+                                                <button type="button" className="icon-btn small danger" onClick={() => destroy(transfer)} aria-label={t('Delete transfer')} title={t('Delete transfer')} disabled={deletingId !== null}>
+                                                    <Icon name="trash" size={13} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

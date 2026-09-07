@@ -83,6 +83,9 @@ class StockReservationService
 
             foreach ($reservations as $reservation) {
                 $item = $order->items->firstWhere('id', $reservation->order_item_id);
+                $product = \App\Models\Product::query()->whereKey($item->product_id)->lockForUpdate()->firstOrFail();
+                // Snapshot cost when stock leaves, not when a pending cart reserved it.
+                $item->update(['cost_price' => round((float) $product->original_price * (float) $item->conversion_factor, 2)]);
                 $this->inventoryService->completeSale(
                     $order->location,
                     $item->product,

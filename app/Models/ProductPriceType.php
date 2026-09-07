@@ -11,7 +11,11 @@ class ProductPriceType extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['product_id', 'name', 'is_default', 'sort_order'];
+    protected $fillable = ['product_id', 'name', 'is_default', 'sort_order', 'pricing_rule_id'];
+
+    protected $with = ['pricingRule'];
+
+    public function pricingRule(): BelongsTo { return $this->belongsTo(PricingRule::class); }
 
     protected $casts = ['is_default' => 'boolean', 'sort_order' => 'integer'];
 

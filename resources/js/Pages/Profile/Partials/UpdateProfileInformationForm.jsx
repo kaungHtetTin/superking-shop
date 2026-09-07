@@ -15,6 +15,7 @@ import { storageUrl } from '@/Utils/url';
 import { useEffect, useState } from 'react';
 import CropImageModal from '@/Components/Admin/CropImageModal';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import SettingsField from '@/Components/Admin/SettingsField';
 
 export default function UpdateProfileInformation({ mustVerifyEmail, status, className, showHeading = true }) {
     const { url, props } = usePage();
@@ -22,6 +23,7 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
     const { auth, app_base, app_url } = props;
     const user = auth?.user;
     const isAdminContext = typeof url === 'string' && url.includes('/admin');
+    const ProfileField = isAdminContext && !showHeading ? SettingsField : TextField;
     const profileEndpoint = routeWithBase(isAdminContext ? '/admin/profile' : '/profile', app_base);
     const avatarSrc = user?.avatar ? storageUrl(user.avatar, app_url) : undefined;
 
@@ -240,7 +242,7 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                             )}
                     </Stack>
 
-                    <TextField
+                    <ProfileField
                         id="name"
                         label={t('Name')}
                         fullWidth
@@ -253,7 +255,7 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                         helperText={errors.name}
                     />
 
-                    <TextField
+                    <ProfileField
                         id="email"
                         type="email"
                         label={t('Email')}
@@ -315,10 +317,8 @@ export default function UpdateProfileInformation({ mustVerifyEmail, status, clas
                         </Stack>
                     )}
 
-                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                        <Button type="submit" variant="contained" disabled={processing}>
-                            {t('Save')}
-                        </Button>
+                    <Stack className={isAdminContext && !showHeading ? 'settings-form-actions' : undefined} direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        {isAdminContext && !showHeading ? <button className="btn primary" type="submit" disabled={processing}>{t(processing ? 'Saving...' : 'Save profile')}</button> : <Button type="submit" variant="contained" disabled={processing}>{t('Save')}</Button>}
                         {!isAdminContext && (showSuccess || recentlySuccessful) && (
                             <Alert severity="success" variant="outlined" sx={{ py: 0, alignItems: 'center' }}>
                                 {t('Profile updated successfully.')}

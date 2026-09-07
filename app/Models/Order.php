@@ -12,6 +12,21 @@ class Order extends Model
 {
     use HasFactory;
 
+    /** Completed sales are revenue even while the customer's balance is unpaid. */
+    public function scopeRecognizedSale($query)
+    {
+        return $query->where('orders.status', '!=', 'cancelled')
+            ->where(function ($sales) {
+                $sales->where('orders.payment_status', 'paid')
+                    ->orWhere(function ($credit) {
+                        $credit->where('orders.sales_channel', 'pos')
+                            ->where('orders.status', 'delivered')
+                            ->where('orders.credit_amount', '>', 0)
+                            ->whereIn('orders.payment_status', ['unpaid', 'partially_paid']);
+                    });
+            });
+    }
+
     protected $fillable = [
         'user_id',
         'coupon_id',

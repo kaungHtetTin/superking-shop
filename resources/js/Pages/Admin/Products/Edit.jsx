@@ -10,7 +10,7 @@ import { formatErrorMessage } from '@/Utils/formatErrorMessage';
 
 const compactDecimal = (value) => String(value ?? '').replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
 
-export default function Edit({ product, categories, app_base, returnPage = 1 }) {
+export default function Edit({ product, categories, app_base, returnPage = 1, pricingRules = [] }) {
     const t = usePhraseTranslation();
     const { app_url } = usePage().props;
     const [previews, setPreviews] = useState([]);
@@ -22,6 +22,8 @@ export default function Edit({ product, categories, app_base, returnPage = 1 }) 
         description: product.description || '',
         min_quantity: compactDecimal(product.min_quantity ?? 0),
         original_price: compactDecimal(product.original_price ?? 0),
+        pricing_base_cost: compactDecimal(product.pricing_base_cost ?? product.original_price ?? 0),
+        pricing_version: product.pricing_version,
         status: product.status || 'active',
         is_featured: !!product.is_featured,
         is_active: !!product.is_active,
@@ -35,6 +37,7 @@ export default function Edit({ product, categories, app_base, returnPage = 1 }) 
         price_types: (product.price_types || []).map((type) => ({
             id: type.id,
             name: type.name,
+            is_manual: (product.units || []).map(unit => (type.unit_prices || []).find(price => Number(price.product_unit_id) === Number(unit.id))?.is_manual ?? true),
             prices: (product.units || []).map((unit) => compactDecimal(
                 (type.unit_prices || []).find((price) => Number(price.product_unit_id) === Number(unit.id))?.price ?? 0,
             )),
@@ -74,6 +77,7 @@ export default function Edit({ product, categories, app_base, returnPage = 1 }) 
             {Object.keys(errors).length > 0 && <div className="flash error">{t('Please correct the errors below.')}{Object.entries(errors).map(([key, error]) => <div key={key}><small>{key}: {formatErrorMessage(error)}</small></div>)}</div>}
             <form onSubmit={submit} className="product-crud-form">
                 <ProductFormUI
+                    pricingRules={pricingRules}
                     data={data} setData={setData} errors={errors} processing={processing} categories={categories}
                     previews={previews} product={product} appUrl={app_url} onGenerateBarcode={generateBarcode}
                     onImageChange={handleImages} onRemoveNewPreview={removePreview} onRemoveExistingImage={removeExisting}

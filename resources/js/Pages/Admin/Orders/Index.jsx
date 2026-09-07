@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
@@ -47,21 +47,101 @@ function MetricCard({ label, value, icon }) {
 export default function OrdersIndex({ orders, stats, filters, locations = [], canReviewPayments, canManageOrders }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
-    const [search, setSearch] = useState(filters.q ?? '');
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [filterState, setFilterState] = useState({
+        q: filters.q ?? '',
+        location_id: filters.location_id ?? '',
+        status: filters.status ?? '',
+        payment_status: filters.payment_status ?? '',
+        from: filters.from ?? '',
+        to: filters.to ?? '',
+    });
     const [visibleColumns, setVisibleColumns] = useState({ items: true, payment: true, fulfillment: true });
     const activeTab = filters.tab ?? '';
+    const activeFilterCount = Object.values(filterState).filter(Boolean).length;
     const toggleColumn = (key) => setVisibleColumns((current) => ({ ...current, [key]: current[key] === false }));
     const exportQuery = new URLSearchParams();
-    Object.entries(filters || {}).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
+    Object.entries({ ...filterState, tab: activeTab }).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
 
     const applyFilters = (patch) => {
         router.get(routeWithBase('/admin/orders', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
     };
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        applyFilters({ q: search.trim() || undefined });
+    useEffect(() => {
+        if (!filterDrawerOpen) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [filterDrawerOpen]);
+
+    const submitFilters = (event) => {
+        event.preventDefault();
+        setFilterDrawerOpen(false);
+        router.get(routeWithBase('/admin/orders', app_base), {
+            ...filterState,
+            q: filterState.q.trim() || undefined,
+            tab: activeTab || undefined,
+        }, { preserveState: true, preserveScroll: true, replace: true });
     };
+
+    const clearFilters = () => {
+        const empty = { q: '', location_id: '', status: '', payment_status: '', from: '', to: '' };
+        setFilterState(empty);
+        setFilterDrawerOpen(false);
+        router.get(routeWithBase('/admin/orders', app_base), {}, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const renderFilterFields = (autoFocus = false) => (
+        <>
+            <label className="form-field orders-filter__search">
+                <span>{t('Search orders')}</span>
+                <div className="search-box">
+                    <Icon name="search" size={16} />
+                    <input
+                        autoFocus={autoFocus}
+                        type="search"
+                        placeholder={t('Order #, name, email or phone')}
+                        value={filterState.q}
+                        onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))}
+                    />
+                </div>
+            </label>
+            <label className="form-field orders-filter__store">
+                <span>{t('Store')}</span>
+                <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
+                    <option value="">{t('All stores')}</option>
+                    {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+            </label>
+            <label className="form-field orders-filter__status">
+                <span>{t('Status')}</span>
+                <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
+                    <option value="">{t('All statuses')}</option>
+                    {Object.entries(orderStatusLabels).map(([key, value]) => <option key={key} value={key}>{t(value)}</option>)}
+                </select>
+            </label>
+            <label className="form-field orders-filter__payment">
+                <span>{t('Payment')}</span>
+                <select value={filterState.payment_status} onChange={(event) => setFilterState((current) => ({ ...current, payment_status: event.target.value }))}>
+                    <option value="">{t('All payments')}</option>
+                    {Object.entries(paymentLabels).map(([key, value]) => <option key={key} value={key}>{t(value)}</option>)}
+                </select>
+            </label>
+            <label className="form-field orders-filter__date">
+                <span>{t('From')}</span>
+                <input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} />
+            </label>
+            <label className="form-field orders-filter__date">
+                <span>{t('To')}</span>
+                <input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} />
+            </label>
+        </>
+    );
 
     return (
         <AdminLayout title={t('Order management')} eyebrow={t('Sales operations')}>
@@ -85,7 +165,12 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                     eyebrow={t('Order queue')}
                     title={t('All customer orders')}
                     action={
-                        <ColumnVisibilityControl
+                        <div className="inline-actions orders-queue__heading-actions">
+                            <button type="button" className="btn secondary orders-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}>
+                                <Icon name="search" size={14} /> {t('Filter')}
+                                {activeFilterCount > 0 && <span className="orders-filter__count">{activeFilterCount}</span>}
+                            </button>
+                            <ColumnVisibilityControl
                             columns={[
                                 { key: 'order', label: 'Order', locked: true },
                                 { key: 'customer', label: 'Customer', locked: true },
@@ -96,7 +181,8 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                             ]}
                             visible={visibleColumns}
                             onToggle={toggleColumn}
-                        />
+                            />
+                        </div>
                     }
                 />
 
@@ -113,52 +199,16 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                     ))}
                 </div>
 
-                <form className="filter-toolbar orders-filter-toolbar" onSubmit={handleSearch}>
-                    <div className="search-box">
-                        <Icon name="search" size={16} />
-                        <input
-                            placeholder={t('Search order #, name, email, phone...')}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
+                <form className="orders-filter-toolbar" onSubmit={submitFilters} aria-label={t('Filter orders')}>
+                    <div className="orders-filter__scroll">
+                        <div className="orders-filter__fields">{renderFilterFields()}</div>
                     </div>
-                    <select
-                        value={filters.location_id ?? ''}
-                        onChange={(e) => applyFilters({ location_id: e.target.value || undefined })}
-                    >
-                        <option value="">{t('All stores')}</option>
-                        {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-                    </select>
-                    <select
-                        value={filters.status ?? ''}
-                        onChange={(e) => applyFilters({ status: e.target.value || undefined })}
-                    >
-                        <option value="">{t('All statuses')}</option>
-                        {Object.entries(orderStatusLabels).map(([k, v]) => (
-                            <option key={k} value={k}>
-                                {t(v)}
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        value={filters.payment_status ?? ''}
-                        onChange={(e) => applyFilters({ payment_status: e.target.value || undefined })}
-                    >
-                        <option value="">{t('All payments')}</option>
-                        {Object.entries(paymentLabels).map(([k, v]) => (
-                            <option key={k} value={k}>
-                                {t(v)}
-                            </option>
-                        ))}
-                    </select>
-                    <input type="date" aria-label={t('From')} title={t('From')} value={filters.from ?? ''} onChange={(e) => applyFilters({ from: e.target.value || undefined })} />
-                    <input type="date" aria-label={t('To')} title={t('To')} value={filters.to ?? ''} onChange={(e) => applyFilters({ to: e.target.value || undefined })} />
-                    <button type="submit" className="btn primary">
-                        {t('Search')}
-                    </button>
-                    <a className="btn secondary" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
-                        <Icon name="download" size={14} /> CSV
-                    </a>
+                    <div className="inline-actions orders-filter__actions">
+                        <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
+                        <a className="btn secondary" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
+                            <Icon name="download" size={14} /> CSV
+                        </a>
+                    </div>
                 </form>
 
                 {(filters.q || filters.location_id || filters.status || filters.payment_status || filters.from || filters.to || filters.tab) && (
@@ -166,7 +216,7 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                         type="button"
                         className="text-btn"
                         style={{ marginBottom: 10 }}
-                        onClick={() => router.get(routeWithBase('/admin/orders', app_base))}
+                        onClick={clearFilters}
                     >
                         {t('Reset filters')}
                     </button>
@@ -257,6 +307,39 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
 
                 <AdminPagination paginator={orders} label={t('orders')} />
             </section>
+
+            {filterDrawerOpen && (
+                <div className="modal-backdrop orders-filter__backdrop" onMouseDown={() => setFilterDrawerOpen(false)}>
+                    <form
+                        className="drawer glass orders-filter__drawer"
+                        onSubmit={submitFilters}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="orders-filter-title"
+                    >
+                        <div className="drawer-header">
+                            <div>
+                                <small className="eyebrow">{t('Order queue')}</small>
+                                <h2 id="orders-filter-title">{t('Filter orders')}</h2>
+                            </div>
+                            <button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}>
+                                <Icon name="close" size={16} />
+                            </button>
+                        </div>
+                        <div className="orders-filter__drawer-body">
+                            {renderFilterFields(true)}
+                            <a className="btn secondary orders-filter__drawer-export" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
+                                <Icon name="download" size={14} /> CSV
+                            </a>
+                        </div>
+                        <div className="drawer-actions">
+                            <button type="button" className="btn secondary" onClick={clearFilters}>{t('Clear')}</button>
+                            <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </AdminLayout>
     );
 }

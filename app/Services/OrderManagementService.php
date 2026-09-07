@@ -122,17 +122,12 @@ class OrderManagementService
 
         return DB::transaction(function () use ($order, $actor, $reason, $restoreStock, $reservationStatus) {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
-            $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'user', 'server']);
+            $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'user', 'server', 'returns']);
+            $wasPaid = $order->payment_status === 'paid';
 
             if ($order->status === 'cancelled') {
                 throw ValidationException::withMessages([
                     'order' => 'Order is already cancelled.',
-                ]);
-            }
-
-            if ((float) $order->credit_amount > 0 && (float) $order->paid_amount > 0) {
-                throw ValidationException::withMessages([
-                    'order' => 'This credit order has collected payments. Refund those payments before cancelling it.',
                 ]);
             }
 
@@ -151,17 +146,24 @@ class OrderManagementService
                 }
 
                 foreach ($order->items as $item) {
-                    if ($item->product) {
-                        $this->inventoryService->returnSale(
-                            $order->location,
-                            $item->product,
-                            (float) $item->base_quantity,
-                            $actor,
-                            "order:return:item:{$item->id}",
-                            $order,
-                            $item->unit,
-                            (float) $item->quantity
-                        );
+                    if ($item->product && ! $item->is_preorder) {
+                        $alreadyRestocked = (float) $order->returns
+                            ->filter(fn ($return) => (int) $return->order_item_id === (int) $item->id && $return->restocked_at)
+                            ->sum('quantity');
+                        $quantityToRestore = max(0, (float) $item->quantity - $alreadyRestocked);
+                        if ($quantityToRestore > 0) {
+                            $this->inventoryService->returnSale(
+                                $order->location,
+                                $item->product,
+                                round($quantityToRestore * (float) $item->conversion_factor, 4),
+                                $actor,
+                                "order:return:item:{$item->id}:paid",
+                                $order,
+                                $item->unit,
+                                $quantityToRestore,
+                                (float) $item->cost_price / max((float) $item->conversion_factor, 0.000001)
+                            );
+                        }
                         if ($item->focUnit && (float) $item->foc_base_quantity > 0) {
                             $this->inventoryService->returnSale(
                                 $order->location,
@@ -171,7 +173,8 @@ class OrderManagementService
                                 "order:return:item:{$item->id}:foc",
                                 $order,
                                 $item->focUnit,
-                                (float) $item->foc_quantity
+                                (float) $item->foc_quantity,
+                                (float) $item->foc_cost_price / max((float) $item->foc_base_quantity, 0.000001)
                             );
                         }
                     }
@@ -179,7 +182,6 @@ class OrderManagementService
             }
 
 
-            $creditWasReversed = false;
             if ((float) $order->credit_amount > 0 && $order->user) {
                 $this->creditService->reverseOrderBalance(
                     $order->user,
@@ -187,7 +189,6 @@ class OrderManagementService
                     $actor ?: $order->server ?: $order->user,
                     $reason ?: 'Credit order cancelled'
                 );
-                $creditWasReversed = true;
             }
 
             foreach ($order->items as $item) {
@@ -203,11 +204,8 @@ class OrderManagementService
             $updates = [
                 'status' => 'cancelled',
                 'status_updated_at' => now(),
+                'payment_status' => 'cancelled',
             ];
-            if ($creditWasReversed) {
-                $updates['payment_status'] = 'cancelled';
-            }
-
             if ($order->payment_status === 'pending_review') {
                 $updates['payment_status'] = 'rejected';
                 $updates['payment_rejection_reason'] = $reason ?: 'Order cancelled by admin.';
@@ -220,6 +218,26 @@ class OrderManagementService
             }
 
             $order->forceFill($updates)->save();
+
+            // Cancellation reverses the sale, not the physical movement of cash.
+            // Keep original payments and record the obligation to refund them.
+            // Never label cash/card money refunded without a refund transaction.
+            $collected = max((float) $order->paid_amount, (float) $order->payments()->where('status', 'paid')->sum('amount'), $wasPaid ? (float) $order->final_amount : 0);
+            if ($collected > 0) {
+                FinancialEntry::firstOrCreate([
+                    'category' => FinancialEntry::CATEGORY_REFUND_PAYABLE,
+                    'reference' => 'order-refund:'.$order->id,
+                ], [
+                    'recorded_by' => $actor?->id ?? $order->served_by ?? $order->payment_reviewed_by,
+                    'location_id' => $order->location_id,
+                    'type' => 'expense',
+                    'title' => "Refund due for cancelled order {$order->order_number}",
+                    'amount' => round($collected, 2),
+                    'entry_date' => now()->toDateString(),
+                    'status' => 'pending',
+                    'notes' => 'Refund payable only; no cash or provider refund has been executed. '.($reason ?? ''),
+                ]);
+            }
 
             $this->loyaltyService->restoreRedeemedPoints($order->fresh('user'), 'Order cancelled');
             $this->auditLogService->record('order.cancelled', $order, [
@@ -254,6 +272,15 @@ class OrderManagementService
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'returns', 'user']);
 
+            // Paid sales must retain their payment/refund audit trail. A delete
+            // request returns/cancels the sale instead of erasing that evidence.
+            if ($order->payment_status === 'paid' || (float) $order->paid_amount > 0 || $order->payments()->exists()) {
+                if ($order->status !== 'cancelled') {
+                    $this->cancelOrder($order, $actor, $reason ?: 'Order returned by admin');
+                }
+                return;
+            }
+
             $financialReferences = array_values(array_filter([
                 $order->receipt_number,
                 $order->order_number,
@@ -277,50 +304,6 @@ class OrderManagementService
                 );
             }
 
-            if ($order->payment_status === 'paid') {
-                if (! $order->location) {
-                    throw ValidationException::withMessages(['order' => 'This order has no inventory location.']);
-                }
-
-                foreach ($order->items as $item) {
-                    if (! $item->product) {
-                        continue;
-                    }
-
-                    $alreadyRestocked = (float) $order->returns
-                        ->filter(fn ($return) => (int) $return->order_item_id === (int) $item->id && $return->restocked_at)
-                        ->sum('quantity');
-                    $unitQuantityToRestore = max(0, (float) $item->quantity - $alreadyRestocked);
-                    $baseQuantityToRestore = round($unitQuantityToRestore * (float) $item->conversion_factor, 4);
-
-                    if ($baseQuantityToRestore > 0) {
-                        $this->inventoryService->returnSale(
-                            $order->location,
-                            $item->product,
-                            $baseQuantityToRestore,
-                            $actor,
-                            "order:return:item:{$item->id}:paid",
-                            $order,
-                            $item->unit,
-                            $unitQuantityToRestore
-                        );
-                        $restoredStock += $baseQuantityToRestore;
-                    }
-                    if ($item->focUnit && (float) $item->foc_base_quantity > 0) {
-                        $this->inventoryService->returnSale(
-                            $order->location,
-                            $item->product,
-                            (float) $item->foc_base_quantity,
-                            $actor,
-                            "order:return:item:{$item->id}:foc",
-                            $order,
-                            $item->focUnit,
-                            (float) $item->foc_quantity
-                        );
-                        $restoredStock += (float) $item->foc_base_quantity;
-                    }
-                }
-            }
 
             foreach ($order->items as $item) {
                 $flashSaleItemId = $item->promotion_snapshot['flash_sale_item_id'] ?? null;

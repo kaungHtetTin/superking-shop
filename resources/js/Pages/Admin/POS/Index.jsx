@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 import {
     Add as AddIcon,
+    AccountBalanceWalletOutlined as ShiftIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
     Close as CloseIcon,
@@ -60,6 +61,15 @@ const money = formatMoney;
 const POS_RESULT_PAGE_SIZE = 24;
 const POS_TABLE_ROW_HEIGHT = 44;
 const POS_RESULT_OVERSCAN_ROWS = 6;
+const WALK_IN_CUSTOMER = Object.freeze({
+    id: null,
+    name: 'Walk-in customer',
+    phone: null,
+    email: null,
+    credit_status: 'disabled',
+    available_credit: 0,
+    is_walk_in: true,
+});
 const calculateLineTotal = (line) => Number(line.quantity || 0) * Number(line.unit_price || 0);
 const calculateLineBaseUsage = (line) => {
     const paidBase = Number(line.quantity || 0) * Number(line.conversion_factor || 1);
@@ -91,10 +101,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [scanError, setScanError] = useState('');
     const [mobileAppBarExpanded, setMobileAppBarExpanded] = useState(false);
     const [cart, setCart] = useState([]);
-    const [customerOptions, setCustomerOptions] = useState([]);
+    const [customerOptions, setCustomerOptions] = useState([WALK_IN_CUSTOMER]);
     const [customerSearchInput, setCustomerSearchInput] = useState('');
     const [customerLoading, setCustomerLoading] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [selectedCustomer, setSelectedCustomer] = useState(WALK_IN_CUSTOMER);
     const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
     const [newCustomer, setNewCustomer] = useState({ name: '', email: '', phone: '' });
     const [customerCreateErrors, setCustomerCreateErrors] = useState({});
@@ -211,6 +221,31 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         }
     };
 
+    const showOpenShiftDialog = () => {
+        setErrors({});
+        setScanError('');
+        setOpenShiftDialogOpen(true);
+    };
+
+    const hideOpenShiftDialog = () => {
+        if (shiftBusy) return;
+        setOpenShiftDialogOpen(false);
+        setErrors({});
+    };
+
+    const showCloseShiftDialog = () => {
+        if (!activeShift) return;
+        setErrors({});
+        setCountedCash(String(activeShift.expected_cash ?? ''));
+        setCloseShiftOpen(true);
+    };
+
+    const hideCloseShiftDialog = () => {
+        if (shiftBusy) return;
+        setCloseShiftOpen(false);
+        setErrors({});
+    };
+
     const fetchSearch = useCallback(async (options = {}) => {
         const { autoAddFirst = false, clearInputAfterSearch = false, append = false, page = 1 } = options;
         if (!locationId) return;
@@ -267,9 +302,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 method: 'get',
                 params: { q: query.trim() },
             });
-            setCustomerOptions(Array.isArray(data) ? data : []);
+            const customers = Array.isArray(data) ? data : [];
+            setCustomerOptions([WALK_IN_CUSTOMER, ...customers]);
         } catch {
-            setCustomerOptions([]);
+            setCustomerOptions([WALK_IN_CUSTOMER]);
         } finally {
             setCustomerLoading(false);
         }
@@ -409,14 +445,13 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     const resolveProductPrice = (product, priceType = salePriceType) => {
         const prices = product?.prices || [];
-        const selected = prices.find((price) => price.price_type === priceType) || prices.find((price) => price.price_type === 'retail');
-        return Number(selected?.price || product?.price || 0);
+        const selected = prices.find((price) => price.price_type === priceType);
+        return Number(selected?.price || 0);
     };
 
-    const resolvePriceFromList = (prices, priceType, fallback = 0) => Number(
+    const resolvePriceFromList = (prices, priceType) => Number(
         (prices || []).find((price) => price.price_type === priceType)?.price
-        ?? (prices || []).find((price) => price.price_type === 'retail')?.price
-        ?? fallback,
+        ?? 0,
     );
 
     const addProductToCart = (product) => {
@@ -426,7 +461,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         }
 
         setCart((prev) => {
-            const appliedPriceType = product.prices?.some((price) => price.price_type === salePriceType) ? salePriceType : 'retail';
+            const appliedPriceType = salePriceType;
             const existingIndex = prev.findIndex((line) => line.product_unit_id === product.id && line.price_type === appliedPriceType);
             if (existingIndex >= 0) {
                 const updated = [...prev];
@@ -493,9 +528,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             if (line.id !== id) return line;
             const unit = (line.unit_options || []).find((option) => Number(option.id) === Number(productUnitId));
             if (!unit || Number(unit.available_qty || 0) <= 0) return line;
-            const nextPriceType = (unit.prices || []).some((price) => price.price_type === line.price_type)
-                ? line.price_type
-                : ((unit.prices || []).some((price) => price.price_type === salePriceType) ? salePriceType : 'retail');
+            const nextPriceType = salePriceType;
 
             return {
                 ...line,
@@ -511,14 +544,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 quantity: Math.max(1, Math.min(Number(line.quantity || 1), Number(unit.available_qty || 1))),
             };
         }));
-    };
-
-    const changeCartPriceType = (id, priceType) => {
-        setCart((prev) => prev.map((line) => line.id === id ? {
-            ...line,
-            price_type: priceType,
-            unit_price: resolvePriceFromList(line.prices, priceType, line.unit_price),
-        } : line));
     };
 
     const changeCartFocUnit = (id, productUnitId) => {
@@ -539,131 +564,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         setCart((prev) => prev.map((line) => line.id === id ? { ...line, foc_quantity: nextQuantity } : line));
     };
 
-    const renderCartLineOptions = (line, exceedsStock = false) => {
-        const focUnit = (line.unit_options || []).find((unit) => Number(unit.id) === Number(line.foc_product_unit_id));
-
-        return (
-            <>
-                <Box className="pos-console__line-options">
-                    <Box className="pos-console__band-label pos-console__sale-label">
-                        <Typography component="span">{tp('Sale')}</Typography>
-                        <Typography component="small">{tp('Charged')}</Typography>
-                    </Box>
-                    <Box className={`pos-console__quantity-entry ${exceedsStock ? 'has-error' : ''}`}>
-                        <IconButton
-                            size="small"
-                            tabIndex={-1}
-                            aria-label={`${tp('Decrease quantity for')} ${line.name}`}
-                            disabled={Number(line.quantity || 1) <= 1}
-                            onClick={() => adjustCartQuantity(line.id, -1)}
-                        >
-                            <RemoveIcon fontSize="small" />
-                        </IconButton>
-                        <TextField
-                            size="small"
-                            type="number"
-                            value={line.quantity}
-                            onChange={(event) => updateCartLine(line.id, { quantity: event.target.value })}
-                            onFocus={(event) => event.target.select()}
-                            onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
-                            inputProps={{ min: 1, max: line.available_qty, step: 0.0001, inputMode: 'decimal', 'aria-label': tp('Sale quantity') }}
-                        />
-                        <IconButton
-                            size="small"
-                            tabIndex={-1}
-                            aria-label={`${tp('Increase quantity for')} ${line.name}`}
-                            disabled={Number(line.quantity || 1) >= Number(line.available_qty || 0)}
-                            onClick={() => adjustCartQuantity(line.id, 1)}
-                        >
-                            <AddIcon fontSize="small" />
-                        </IconButton>
-                    </Box>
-                    <TextField
-                        select
-                        size="small"
-                        label={tp('Selling unit')}
-                        value={line.product_unit_id}
-                        onChange={(event) => changeCartUnit(line.id, event.target.value)}
-                    >
-                        {(line.unit_options || []).map((unit) => (
-                            <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
-                                {formatUnitWithConversion(unit, line.unit_options)} · {unit.available_qty} {tp('available')}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                    <TextField
-                        select
-                        size="small"
-                        label={tp('Selling price')}
-                        value={line.price_type}
-                        onChange={(event) => changeCartPriceType(line.id, event.target.value)}
-                    >
-                        {(line.prices || []).map((price) => (
-                            <MenuItem key={price.price_type} value={price.price_type}>
-                                {tp(price.price_type.replaceAll('_', ' '))} - {money(price.price)}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                </Box>
-                {can.discount && (
-                    <Box component="details" className={`pos-console__foc-panel ${Number(line.foc_quantity || 0) > 0 ? 'has-foc' : ''}`}>
-                        <Box component="summary" className="pos-console__foc-panel-toggle">
-                            <Box className="pos-console__foc-label">
-                                <FocIcon fontSize="small" />
-                                <Box>
-                                    <Typography component="span">{tp('FOC')}</Typography>
-                                    <Typography component="small">{tp('Same product')}</Typography>
-                                </Box>
-                            </Box>
-                            <Typography className="pos-console__foc-collapsed-summary" component="span">
-                                {Number(line.foc_quantity || 0) > 0
-                                    ? `${line.foc_quantity} ${focUnit?.name || line.unit_name} ${tp('free')}`
-                                    : tp('Add free quantity')}
-                            </Typography>
-                            <ExpandMoreIcon className="pos-console__foc-chevron" fontSize="small" />
-                        </Box>
-                        <Box className="pos-console__foc-fields">
-                            <TextField
-                                className="pos-console__foc-quantity"
-                                size="small"
-                                type="number"
-                                label={tp('FOC quantity')}
-                                value={line.foc_quantity ?? 0}
-                                onChange={(event) => changeCartFocQuantity(line.id, event.target.value)}
-                                onBlur={() => changeCartFocQuantity(line.id, line.foc_quantity, true)}
-                                onFocus={(event) => event.target.select()}
-                                onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
-                                inputProps={{ min: 0, step: 0.0001, inputMode: 'decimal' }}
-                            />
-                            <TextField
-                                className="pos-console__foc-unit"
-                                select
-                                size="small"
-                                label={tp('FOC unit')}
-                                value={line.foc_product_unit_id || line.product_unit_id}
-                                onChange={(event) => changeCartFocUnit(line.id, event.target.value)}
-                            >
-                                {(line.unit_options || []).map((unit) => (
-                                    <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.available_qty || 0) <= 0}>
-                                        {formatUnitWithConversion(unit, line.unit_options)}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                            <Button
-                                className="pos-console__foc-clear"
-                                size="small"
-                                variant="text"
-                                disabled={Number(line.foc_quantity || 0) <= 0}
-                                onClick={() => changeCartFocQuantity(line.id, 0)}
-                            >
-                                {tp('Clear')}
-                            </Button>
-                        </Box>
-                    </Box>
-                )}
-            </>
-        );
-    };
 
     const removeCartLine = (id) => {
         setCart((items) => items.filter((item) => item.id !== id));
@@ -674,8 +574,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         setSalePriceType(next);
         setCart((prev) => prev.map((line) => ({
             ...line,
-            price_type: line.prices?.some((price) => price.price_type === next) ? next : 'retail',
-            unit_price: Number((line.prices || []).find((price) => price.price_type === next)?.price ?? (line.prices || []).find((price) => price.price_type === 'retail')?.price ?? line.unit_price),
+            price_type: next,
+            unit_price: resolvePriceFromList(line.prices, next),
         })));
     };
 
@@ -693,6 +593,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const creditAmount = tenderType === 'credit' ? Math.max(0, totals.grandTotal - creditDeposit) : 0;
     const creditUnavailable = tenderType === 'credit' && (
         !selectedCustomer
+        || selectedCustomer.is_walk_in
         || selectedCustomer.credit_status !== 'active'
         || creditAmount <= 0
         || creditAmount > Number(selectedCustomer.available_credit || 0) + 0.009
@@ -731,9 +632,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         });
     };
 
-    const openPaymentDialog = () => {
+    const openPaymentDialog = async () => {
+        if (busy) return;
         if (!activeShift) {
-            setScanError(tp('Open a cash shift before selling.'));
+            showOpenShiftDialog();
             return;
         }
         if (!locationId) {
@@ -747,7 +649,22 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             return;
         }
         if (cart.length) {
-            setAmountTendered(String(totals.grandTotal));
+            setBusy(true);
+            let updated;
+            try {
+                const latest = await api('/admin/pos/products/prices', { method: 'get', params: { unit_ids: cart.map(line => line.product_unit_id) } });
+                updated = cart.map(line => {
+                    const unit = latest.find(unit => Number(unit.id) === Number(line.product_unit_id));
+                    const price = unit?.prices.find(price => price.price_type === line.price_type);
+                    return { ...line, prices: unit?.prices || [], unit_price: Number(price?.price || 0) };
+                });
+                setCart(updated);
+                if (updated.some(line => line.unit_price <= 0)) { setScanError('A cart item is unavailable or needs a selling price. Review the cart.'); return; }
+                const subtotal = updated.reduce((sum, item) => sum + calculateLineTotal(item), 0);
+                const discount = Math.min(subtotal, Math.max(0, discountType === 'percent' ? subtotal * Number(discountValue || 0) / 100 : Number(discountValue || 0)));
+                setAmountTendered(String(subtotal - discount));
+            } catch { return; }
+            finally { setBusy(false); }
             if (isMobile) {
                 setMobileStep('checkout');
             } else {
@@ -759,7 +676,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const checkout = async (event) => {
         event.preventDefault();
         if (!locationId || !cart.length) return;
-        if (!selectedCustomer) {
+        if (!selectedCustomer && tenderType === 'credit') {
             setScanError(tp('Choose a registered customer before completing the sale.'));
             return;
         }
@@ -771,13 +688,14 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 data: {
                     location_id: locationId,
                     shift_id: activeShift?.id,
-                    customer_id: selectedCustomer.id,
-                    customer_name: selectedCustomer.name,
-                    customer_phone: selectedCustomer.phone || null,
+                    customer_id: selectedCustomer?.is_walk_in ? null : selectedCustomer?.id,
+                    customer_name: selectedCustomer?.is_walk_in ? WALK_IN_CUSTOMER.name : selectedCustomer?.name,
+                    customer_phone: selectedCustomer?.is_walk_in ? null : (selectedCustomer?.phone || null),
                     items: cart.map((item) => ({
                         product_unit_id: item.product_unit_id,
                         quantity: item.quantity,
                         price_type: item.price_type,
+                        expected_unit_price: item.unit_price,
                         foc_quantity: Number(item.foc_quantity || 0),
                         foc_product_unit_id: Number(item.foc_quantity || 0) > 0 ? item.foc_product_unit_id : null,
                     })),
@@ -797,7 +715,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             setCart([]);
             setDiscountType('');
             setDiscountValue('');
-            setSelectedCustomer(null);
+            setSelectedCustomer(WALK_IN_CUSTOMER);
+            setCustomerSearchInput('');
             setPaymentDialogOpen(false);
             setMobileStep('products');
             setMessage(`${tp('Sale completed')}: ${data.order.receipt_number}`);
@@ -811,46 +730,60 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     const paymentFormContent = (
         <Stack spacing={1.25} className="pos-console__payment-form">
-            <Box>
-                <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                    <Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{tp('Customer')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedCustomer?.name || tp('Customer required')}</Typography>
-                    </Box>
-                    <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => {
+            <Box className="pos-console__customer-selector">
+                <Stack className="pos-console__customer-row" direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}>
+                    <Autocomplete
+                        size="small"
+                        fullWidth
+                        options={customerOptions}
+                        value={selectedCustomer}
+                        onChange={(event, value) => {
+                            const nextCustomer = value || WALK_IN_CUSTOMER;
+                            setSelectedCustomer(nextCustomer);
+                        }}
+                        onInputChange={(event, value) => setCustomerSearchInput(value || '')}
+                        getOptionLabel={(option) => option?.is_walk_in ? tp('Walk-in customer') : (option?.name || '')}
+                        renderOption={(props, option) => (
+                            <li {...props} key={option.is_walk_in ? 'walk-in' : (option.id || option.email || option.name)}>
+                                <Stack>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.is_walk_in ? tp('Walk-in customer') : option.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {option.is_walk_in ? tp('Default customer for counter sales') : ([option.phone, option.email].filter(Boolean).join(' / ') || tp('No contact'))}
+                                    </Typography>
+                                    {!option.is_walk_in && option.credit_status === 'active' && (
+                                        <Typography variant="caption" color="primary.main">
+                                            {tp('Available credit')}: {money(option.available_credit)}
+                                        </Typography>
+                                    )}
+                                </Stack>
+                            </li>
+                        )}
+                        loading={customerLoading}
+                        isOptionEqualToValue={(option, value) => option?.is_walk_in
+                            ? Boolean(value?.is_walk_in)
+                            : Number(option?.id) === Number(value?.id)}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                label={tp('Customer')}
+                                placeholder={tp('Search customer by name, phone, or email...')}
+                                size="small"
+                            />
+                        )}
+                        sx={{ flex: 1, minWidth: 0 }}
+                    />
+                    <Button className="pos-console__new-customer" size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => {
                         setCustomerCreateErrors({});
                         setNewCustomer({ name: '', email: customerSearchInput.includes('@') ? customerSearchInput : '', phone: '' });
                         setCustomerDialogOpen(true);
                     }}>{tp('New customer')}</Button>
                 </Stack>
-                <Autocomplete
-                    size="small"
-                    fullWidth
-                    options={customerOptions}
-                    value={selectedCustomer}
-                    onChange={(event, value) => setSelectedCustomer(value)}
-                    inputValue={customerSearchInput}
-                    onInputChange={(event, value) => setCustomerSearchInput(value || '')}
-                    getOptionLabel={(option) => option?.name || ''}
-                    renderOption={(props, option) => (
-                        <li {...props} key={option.id || option.email || option.name}>
-                            <Stack>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>{option.name}</Typography>
-                                <Typography variant="caption" color="text.secondary">{[option.phone, option.email].filter(Boolean).join(' / ') || tp('No contact')}</Typography>
-                                {option.credit_status === 'active' && (
-                                    <Typography variant="caption" color="primary.main">
-                                        {tp('Available credit')}: {money(option.available_credit)}
-                                    </Typography>
-                                )}
-                            </Stack>
-                        </li>
-                    )}
-                    loading={customerLoading}
-                    isOptionEqualToValue={(option, value) => option?.id === value?.id && option?.name === value?.name}
-                    renderInput={(params) => <TextField {...params} placeholder={tp('Search customer by name, phone, or email...')} size="small" />}
-                />
+                {selectedCustomer?.is_walk_in && (
+                    <Typography className="pos-console__walk-in-hint" variant="caption" color="text.secondary">
+                        {tp('Walk-in sale; no customer account or loyalty points will be used.')}
+                    </Typography>
+                )}
             </Box>
-            {!selectedCustomer && <Alert severity="warning">{tp('Choose a registered customer before completing the sale.')}</Alert>}
 
             {can.discount && (
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -935,8 +868,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             )}
             {tenderType === 'credit' && (
                 <Stack spacing={1}>
-                    {!selectedCustomer && <Alert severity="warning">{tp('Choose a registered customer for a credit sale.')}</Alert>}
-                    {selectedCustomer && selectedCustomer.credit_status !== 'active' && (
+                    {(!selectedCustomer || selectedCustomer.is_walk_in) && <Alert severity="warning">{tp('Choose a registered customer for a credit sale.')}</Alert>}
+                    {selectedCustomer && !selectedCustomer.is_walk_in && selectedCustomer.credit_status !== 'active' && (
                         <Alert severity="error">{tp('Credit sales are not enabled for this customer.')}</Alert>
                     )}
                     {selectedCustomer?.credit_status === 'active' && (
@@ -973,7 +906,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -993,7 +926,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || !selectedCustomer || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -1010,6 +943,26 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 {tp('Complete Sale')}
             </Button>
         </>
+    );
+
+    const shiftError = (...keys) => {
+        for (const key of keys) {
+            const value = errors[key] ?? pageErrors[key];
+            if (Array.isArray(value) && value.length) return value.join(' ');
+            if (typeof value === 'string' && value) return value;
+        }
+        return '';
+    };
+    const openShiftGeneralError = shiftError('shift', 'request', 'location_id');
+    const openShiftRegisterError = shiftError('register_id');
+    const openShiftCashError = shiftError('opening_cash');
+    const openShiftNotesError = shiftError('notes');
+    const closeShiftGeneralError = shiftError('shift', 'request');
+    const closeShiftCashError = shiftError('counted_cash');
+    const closeShiftNotesError = shiftError('notes');
+    const shiftDialogErrorKeys = new Set(['shift', 'request', 'location_id', 'register_id', 'opening_cash', 'counted_cash', 'notes']);
+    const visiblePageErrors = Object.entries({ ...pageErrors, ...errors }).filter(
+        ([key]) => !(openShiftDialogOpen || closeShiftOpen) || !shiftDialogErrorKeys.has(key),
     );
 
     return (
@@ -1083,12 +1036,12 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 </Stack>
                 <Box className="pos-console__titlebar-spacer" sx={{ flex: 1 }} />
                 {activeShift && (
-                    <Button size="small" color="success" variant="outlined" onClick={() => { setCountedCash(String(activeShift.expected_cash ?? '')); setCloseShiftOpen(true); }}>
+                    <Button size="small" color="success" variant="outlined" onClick={showCloseShiftDialog}>
                         {tp('Shift open')} · {activeShift.register?.code}
                     </Button>
                 )}
                 {!shiftLoading && !activeShift && (
-                    <Button size="small" variant="contained" onClick={() => setOpenShiftDialogOpen(true)}>
+                    <Button size="small" variant="contained" onClick={showOpenShiftDialog}>
                         {tp('Open shift')}
                     </Button>
                 )}
@@ -1114,36 +1067,37 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 sx={{
                     flex: 1,
                     minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
                     p: { xs: 1, md: 1.25 },
                     overflow: { xs: 'visible', md: 'hidden' },
                     '& .MuiPaper-root': { borderRadius: 1, boxShadow: 'none' },
                 }}
             >
-                {!shiftLoading && !activeShift && (
-                    <Alert
-                        severity="warning"
-                        sx={{ mb: 1 }}
-                        action={(
-                            <Button color="inherit" size="small" onClick={() => setOpenShiftDialogOpen(true)}>
-                                {tp('Open shift')}
-                            </Button>
+                {(!shiftLoading && !activeShift) || flash?.success || flash?.error || message || visiblePageErrors.length > 0 ? (
+                    <Stack className="pos-console__notices" spacing={0.5}>
+                        {!shiftLoading && !activeShift && (
+                            <Alert
+                                severity="warning"
+                                action={(
+                                    <Button color="inherit" size="small" onClick={showOpenShiftDialog}>
+                                        {tp('Open shift')}
+                                    </Button>
+                                )}
+                            >
+                                {tp('Open a cash shift before making a sale.')}
+                            </Alert>
                         )}
-                    >
-                        {tp('Open a cash shift before making a sale.')}
-                    </Alert>
-                )}
-                {(flash?.success || flash?.error || message || Object.keys(errors).length > 0 || Object.keys(pageErrors).length > 0) && (
-                    <Stack spacing={1} sx={{ mb: 2 }}>
                         {flash?.success && <Alert severity="success">{flash.success}</Alert>}
                         {flash?.error && <Alert severity="error">{flash.error}</Alert>}
                         {message && <Alert severity="success" onClose={() => setMessage('')}>{message}</Alert>}
-                        {Object.entries({ ...pageErrors, ...errors }).map(([key, value]) => (
+                        {visiblePageErrors.map(([key, value]) => (
                             <Alert severity="error" key={key}>
                                 {Array.isArray(value) ? value.join(' ') : value}
                             </Alert>
                         ))}
                     </Stack>
-                )}
+                ) : null}
 
                 <Paper
                     className="pos-console__mobile-tabs"
@@ -1182,12 +1136,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 0.8fr) minmax(0, 1.2fr)' },
                         gap: 1.25,
                         alignItems: 'stretch',
-                        height: {
-                            xs: 'auto',
-                            md: (flash?.success || flash?.error || message || Object.keys(errors).length > 0 || Object.keys(pageErrors).length > 0)
-                                ? 'calc(100% - 56px)'
-                                : '100%',
-                        },
+                        flex: { xs: '0 0 auto', md: '1 1 auto' },
+                        height: { xs: 'auto', md: 'auto' },
                         minHeight: 0,
                     }}
                 >
@@ -1460,10 +1410,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                                 >
                                     <TableHead>
                                         <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'light' ? 'grey.50' : 'rgba(255,255,255,.05)' }}>
-                                            <TableCell sx={{ fontWeight: 700, width: '58%' }}>{tp('Product')}</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: '20%' }} align="right">{tp('Price')}</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: '12%' }} align="right">{tp('Available')}</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, width: '10%' }} align="center">{tp('Add')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700 }}>{tp('Product')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: 135 }} align="right">{tp('Price')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: 72 }} align="right">{tp('Available')}</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, width: 44 }} align="center">{tp('Add')}</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -1582,98 +1532,17 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
                         <Typography className="pos-console__cart-label" variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>{tp('Cart')}</Typography>
 
-                        {isMobile ? (
-                            <Stack className="pos-console__cart-cards" spacing={0.85} sx={{ flex: 1, minHeight: 140, overflow: 'visible' }}>
-                                {cart.map((line) => {
-                                    const lineTotal = calculateLineTotal(line);
-                                    const exceedsStock = lineExceedsStock(line);
-
-                                    return (
-                                        <Paper
-                                            className={`pos-console__mobile-cart-card ${Number(line.foc_quantity || 0) > 0 ? 'is-foc' : ''}`}
-                                            key={line.id}
-                                            variant="outlined"
-                                            sx={{
-                                                p: 0.85,
-                                                borderColor: exceedsStock ? 'error.main' : (Number(line.foc_quantity || 0) > 0 ? 'info.main' : 'divider'),
-                                                bgcolor: exceedsStock ? 'rgba(211, 47, 47, 0.08)' : (Number(line.foc_quantity || 0) > 0 ? 'rgba(40, 116, 188, 0.07)' : 'background.paper'),
-                                            }}
-                                        >
-                                            <Stack className="pos-console__mobile-cart-main" direction="row" spacing={0.85} sx={{ alignItems: 'center', minWidth: 0 }}>
-                                                 <Box className="pos-console__cart-product" sx={{ minWidth: 0, flex: 1 }}>
-                                                    <Typography variant="body2" title={line.name} sx={{ fontWeight: 800, lineHeight: 1.12 }} noWrap>
-                                                        {line.name}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }} noWrap>
-                                                        {line.product_code || '-'} · {line.unit_code || line.unit_name}
-                                                     </Typography>
-                                                 </Box>
-                                                 <Box className="pos-console__line-total">
-                                                     <Typography variant="caption" color="text.secondary">{tp('Total')}</Typography>
-                                                     <Typography variant="body2" noWrap>{money(lineTotal)}</Typography>
-                                                 </Box>
-                                                 <IconButton
-                                                    size="small"
-                                                    color="error"
-                                                    aria-label={`${tp('Remove item')} ${line.name}`}
-                                                    onClick={() => removeCartLine(line.id)}
-                                                    sx={{ width: 34, height: 34, flexShrink: 0 }}
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
-                                             </Stack>
-
-                                             {renderCartLineOptions(line, exceedsStock)}
-                                        </Paper>
-                                    );
-                                })}
-                                {cart.length === 0 && (
-                                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.paper' }}>
-                                        <Typography variant="body2" color="text.secondary" align="center">{tp('Cart is empty.')}</Typography>
-                                    </Paper>
-                                )}
-                            </Stack>
-                        ) : (
-                            <Stack className="pos-console__cart-list" sx={{ flex: 1, minHeight: 180, overflowY: 'auto' }}>
-                                {cart.map((line) => {
-                                    const lineTotal = calculateLineTotal(line);
-                                    const exceedsStock = lineExceedsStock(line);
-
-                                    return (
-                                        <Box
-                                            className={`pos-console__cart-line ${exceedsStock ? 'has-error' : ''} ${Number(line.foc_quantity || 0) > 0 ? 'is-foc' : ''}`}
-                                            key={line.id}
-                                        >
-                                             <Box className="pos-console__cart-product">
-                                                <Typography variant="body2" title={line.name} noWrap>{line.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary" noWrap>
-                                                    {line.product_code || '-'} · {line.unit_code || line.unit_name}
-                                                 </Typography>
-                                             </Box>
-                                             <Box className="pos-console__line-total">
-                                                <Typography variant="caption" color="text.secondary">{tp('Total')}</Typography>
-                                                <Typography variant="body2" noWrap>{money(lineTotal)}</Typography>
-                                            </Box>
-                                            <IconButton
-                                                className="pos-console__remove-line"
-                                                size="small"
-                                                color="error"
-                                                aria-label={`${tp('Remove item')} ${line.name}`}
-                                                onClick={() => removeCartLine(line.id)}
-                                            >
-                                                 <DeleteIcon fontSize="small" />
-                                             </IconButton>
-                                             {renderCartLineOptions(line, exceedsStock)}
-                                        </Box>
-                                    );
-                                })}
-                                {cart.length === 0 && (
-                                    <Box className="pos-console__cart-empty">
-                                        <Typography variant="body2" color="text.secondary">{tp('Cart is empty.')}</Typography>
-                                    </Box>
-                                )}
-                            </Stack>
-                        )}
+                        <div className="pos-items">
+                            {cart.map(line => <PosCartItem key={line.id} line={line} money={money} t={tp}
+                                exceedsStock={lineExceedsStock(line)} canFoc={can.discount}
+                                onQuantity={quantity => updateCartLine(line.id, { quantity })}
+                                onStep={delta => adjustCartQuantity(line.id, delta)}
+                                onUnit={unit => changeCartUnit(line.id, unit)}
+                                onFocQuantity={(quantity, normalize) => changeCartFocQuantity(line.id, quantity, normalize)}
+                                onFocUnit={unit => changeCartFocUnit(line.id, unit)}
+                                onRemove={() => removeCartLine(line.id)} />)}
+                            {!cart.length && <div className="pos-console__cart-empty">{tp('Cart is empty.')}</div>}
+                        </div>
 
                     </Paper>
 
@@ -1741,11 +1610,19 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 maxWidth={false}
                 slotProps={{
                     paper: {
-                        className: 'pos-console__payment-dialog',
+                        className: 'pos-console__payment-dialog pos-console__shift-dialog',
                         style: {
                             '--pos-primary': theme.palette.primary.main,
                             '--pos-primary-strong': theme.palette.primary.dark,
                             '--pos-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                            '--color-primary': theme.palette.primary.main,
+                            '--color-primary-dark': theme.palette.primary.dark,
+                            '--color-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                            '--color-surface': theme.palette.background.paper,
+                            '--color-soft': theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.045) : theme.palette.grey[50],
+                            '--color-border': theme.palette.divider,
+                            '--color-text': theme.palette.text.primary,
+                            '--color-muted': theme.palette.text.secondary,
                         },
                         sx: {
                             width: 'min(520px, calc(100vw - 24px))',
@@ -1761,7 +1638,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             >
                 <Box className="pos-console__payment-window" component="form" onSubmit={checkout}>
                     <DialogTitle
-                        className="pos-console__payment-titlebar"
+                        className="pos-console__payment-titlebar pos-console__shift-titlebar"
                         sx={{
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -1776,23 +1653,11 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         }}
                     >
                         <Stack direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
-                            <Box
-                                sx={{
-                                    width: 28,
-                                    height: 28,
-                                    flex: '0 0 auto',
-                                    display: 'grid',
-                                    placeItems: 'center',
-                                    borderRadius: 1.25,
-                                    border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                                    bgcolor: alpha(theme.palette.primary.main, 0.08),
-                                    color: 'primary.main',
-                                }}
-                            >
+                            <Box className="pos-console__shift-title-icon">
                                 <CheckoutIcon sx={{ fontSize: 16 }} />
                             </Box>
                             <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', minHeight: 28 }}>
-                                <Typography component="h2" sx={{ fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>
+                                <Typography component="h2" className="pos-console__shift-title">
                                     {tp('Complete Sale')}
                                 </Typography>
                             </Box>
@@ -1801,61 +1666,186 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             <CloseIcon sx={{ fontSize: 18 }} />
                         </IconButton>
                     </DialogTitle>
-                    <DialogContent className="pos-console__payment-body" sx={{ p: 1.25, bgcolor: 'grey.50', overflowY: 'auto' }}>
+                    <DialogContent className="pos-console__payment-body pos-console__shift-body" sx={{ p: 1.25, bgcolor: 'grey.50', overflowY: 'auto' }}>
                         {paymentFormContent}
                     </DialogContent>
-                    <DialogActions className="pos-console__payment-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
+                    <DialogActions className="pos-console__payment-actions pos-console__shift-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
                         <Button type="button" variant="outlined" onClick={() => setPaymentDialogOpen(false)} disabled={busy}>{tp('Cancel')}</Button>
                         {completeSaleButtons}
                     </DialogActions>
                 </Box>
             </Dialog>
 
-            <Dialog open={openShiftDialogOpen && !activeShift} onClose={() => !shiftBusy && setOpenShiftDialogOpen(false)} maxWidth="xs" fullWidth>
-                <Box component="form" onSubmit={openShift}>
-                    <DialogTitle sx={{ fontWeight: 800 }}>{tp('Open cash shift')}</DialogTitle>
-                    <DialogContent dividers>
-                        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <Dialog
+                open={openShiftDialogOpen && !activeShift}
+                onClose={hideOpenShiftDialog}
+                aria-labelledby="pos-open-shift-title"
+                maxWidth={false}
+                slotProps={{
+                    paper: {
+                        className: 'pos-console__shift-dialog',
+                        style: {
+                            '--color-primary': theme.palette.primary.main,
+                            '--color-primary-dark': theme.palette.primary.dark,
+                            '--color-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                            '--color-surface': theme.palette.background.paper,
+                            '--color-soft': theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.045) : theme.palette.grey[50],
+                            '--color-border': theme.palette.divider,
+                            '--color-text': theme.palette.text.primary,
+                            '--color-muted': theme.palette.text.secondary,
+                        },
+                    },
+                    backdrop: { sx: { bgcolor: 'rgba(10, 19, 24, 0.35)' } },
+                }}
+            >
+                <Box className="pos-console__shift-window" component="form" onSubmit={openShift}>
+                    <DialogTitle id="pos-open-shift-title" className="pos-console__shift-titlebar">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                            <Box className="pos-console__shift-title-icon"><ShiftIcon /></Box>
+                            <Typography component="span" className="pos-console__shift-title">{tp('Open shift')}</Typography>
+                        </Stack>
+                        <IconButton size="small" aria-label={tp('Close')} onClick={hideOpenShiftDialog} disabled={shiftBusy}>
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent className="pos-console__shift-body" dividers>
+                        <Stack spacing={1.25}>
                             <Alert severity="info">{tp('An open shift is required before making POS sales.')}</Alert>
-                            <TextField select label={tp('Warehouse')} value={locationId} onChange={(event) => setLocationId(event.target.value)} fullWidth>
-                                {locations.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}
-                            </TextField>
-                            <TextField select required label={tp('Register')} value={registerId} onChange={(event) => setRegisterId(event.target.value)} fullWidth error={!locationRegisters.length} helperText={!locationRegisters.length ? tp('Create or activate a POS register for this warehouse first.') : ''}>
+                            {openShiftGeneralError && <Alert severity="error">{openShiftGeneralError}</Alert>}
+                            <Box className="pos-console__shift-context">
+                                <Typography variant="caption">{tp('Warehouse')}</Typography>
+                                <Typography variant="body2">{location?.name || tp('No warehouse selected')}</Typography>
+                            </Box>
+                            <TextField
+                                select
+                                required
+                                size="small"
+                                label={tp('POS register')}
+                                value={registerId}
+                                onChange={(event) => setRegisterId(event.target.value)}
+                                fullWidth
+                                error={!locationRegisters.length || Boolean(openShiftRegisterError)}
+                                helperText={openShiftRegisterError || (!locationRegisters.length ? tp('Create or activate a POS register for this warehouse first.') : '')}
+                            >
                                 {locationRegisters.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.code}</MenuItem>)}
                             </TextField>
-                            <TextField required type="number" label={tp('Opening cash')} value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} inputProps={{ min: 0, step: 0.01 }} fullWidth />
-                            <TextField label={tp('Opening note')} value={openingNotes} onChange={(event) => setOpeningNotes(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
+                            <TextField
+                                required
+                                autoFocus
+                                size="small"
+                                type="number"
+                                label={tp('Opening cash')}
+                                value={openingCash}
+                                onChange={(event) => setOpeningCash(event.target.value)}
+                                error={Boolean(openShiftCashError)}
+                                helperText={openShiftCashError || tp('Enter the cash physically available in the drawer.')}
+                                slotProps={{
+                                    htmlInput: { min: 0, step: 100 },
+                                    input: { endAdornment: <InputAdornment position="end">MMK</InputAdornment> },
+                                }}
+                                fullWidth
+                            />
+                            <TextField
+                                size="small"
+                                label={tp('Opening note')}
+                                value={openingNotes}
+                                onChange={(event) => setOpeningNotes(event.target.value)}
+                                error={Boolean(openShiftNotesError)}
+                                helperText={openShiftNotesError}
+                                inputProps={{ maxLength: 500 }}
+                                multiline
+                                minRows={2}
+                                fullWidth
+                            />
                         </Stack>
                     </DialogContent>
-                    <DialogActions>
+                    <DialogActions className="pos-console__shift-actions">
                         {!locationRegisters.length && can.manageRegisters && (
-                            <Button component={Link} href={routeWithBase('/admin/registers', app_base)}>{tp('Manage registers')}</Button>
+                            <Button variant="outlined" component={Link} href={routeWithBase('/admin/registers', app_base)}>{tp('Manage registers')}</Button>
                         )}
-                        <Button type="button" onClick={() => setOpenShiftDialogOpen(false)} disabled={shiftBusy}>{tp('Cancel')}</Button>
-                        <Button type="submit" variant="contained" disabled={shiftBusy || !registerId || openingCash === ''}>{shiftBusy ? tp('Opening...') : tp('Open Shift')}</Button>
+                        <Box sx={{ flex: 1 }} />
+                        <Button type="button" variant="outlined" onClick={hideOpenShiftDialog} disabled={shiftBusy}>{tp('Cancel')}</Button>
+                        <Button type="submit" variant="contained" startIcon={<ShiftIcon />} disabled={shiftBusy || !registerId || openingCash === ''}>{shiftBusy ? tp('Opening...') : tp('Open shift')}</Button>
                     </DialogActions>
                 </Box>
             </Dialog>
 
-            <Dialog open={closeShiftOpen} onClose={() => !shiftBusy && setCloseShiftOpen(false)} maxWidth="xs" fullWidth>
-                <Box component="form" onSubmit={closeShift}>
-                    <DialogTitle sx={{ fontWeight: 800 }}>{tp('Close cash shift')}</DialogTitle>
-                    <DialogContent dividers>
-                        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <Dialog
+                open={closeShiftOpen}
+                onClose={hideCloseShiftDialog}
+                aria-labelledby="pos-close-shift-title"
+                maxWidth={false}
+                slotProps={{
+                    paper: {
+                        className: 'pos-console__shift-dialog',
+                        style: {
+                            '--color-primary': theme.palette.primary.main,
+                            '--color-primary-dark': theme.palette.primary.dark,
+                            '--color-primary-soft': alpha(theme.palette.primary.main, 0.11),
+                            '--color-surface': theme.palette.background.paper,
+                            '--color-soft': theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.045) : theme.palette.grey[50],
+                            '--color-border': theme.palette.divider,
+                            '--color-text': theme.palette.text.primary,
+                            '--color-muted': theme.palette.text.secondary,
+                        },
+                    },
+                    backdrop: { sx: { bgcolor: 'rgba(10, 19, 24, 0.35)' } },
+                }}
+            >
+                <Box className="pos-console__shift-window" component="form" onSubmit={closeShift}>
+                    <DialogTitle id="pos-close-shift-title" className="pos-console__shift-titlebar">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                            <Box className="pos-console__shift-title-icon"><ShiftIcon /></Box>
+                            <Typography component="span" className="pos-console__shift-title">{tp('Close shift')}</Typography>
+                        </Stack>
+                        <IconButton size="small" aria-label={tp('Close')} onClick={hideCloseShiftDialog} disabled={shiftBusy}>
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent className="pos-console__shift-body" dividers>
+                        <Stack spacing={1.25}>
+                            {closeShiftGeneralError && <Alert severity="error">{closeShiftGeneralError}</Alert>}
                             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
                                 <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Opening cash')}</Typography><Typography fontWeight={800}>{money(activeShift?.opening_cash || 0)}</Typography></Paper>
                                 <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Expected cash')}</Typography><Typography fontWeight={800}>{money(activeShift?.expected_cash || 0)}</Typography></Paper>
                                 <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Cash received')}</Typography><Typography fontWeight={800}>{money(activeShift?.cash_received_total || 0)}</Typography></Paper>
                                 <Paper variant="outlined" sx={{ p: 1.25 }}><Typography variant="caption" color="text.secondary">{tp('Change given')}</Typography><Typography fontWeight={800}>{money(activeShift?.change_given_total || 0)}</Typography></Paper>
                             </Box>
-                            <TextField required type="number" label={tp('Counted cash')} value={countedCash} onChange={(event) => setCountedCash(event.target.value)} inputProps={{ min: 0, step: 0.01 }} fullWidth />
-                            <TextField label={tp('Closing note')} value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
+                            <TextField
+                                required
+                                autoFocus
+                                size="small"
+                                type="number"
+                                label={tp('Counted cash')}
+                                value={countedCash}
+                                onChange={(event) => setCountedCash(event.target.value)}
+                                error={Boolean(closeShiftCashError)}
+                                helperText={closeShiftCashError || tp('Enter the cash physically counted in the drawer.')}
+                                slotProps={{
+                                    htmlInput: { min: 0, step: 100 },
+                                    input: { endAdornment: <InputAdornment position="end">MMK</InputAdornment> },
+                                }}
+                                fullWidth
+                            />
+                            <TextField
+                                size="small"
+                                label={tp('Closing note')}
+                                value={closingNotes}
+                                onChange={(event) => setClosingNotes(event.target.value)}
+                                error={Boolean(closeShiftNotesError)}
+                                helperText={closeShiftNotesError}
+                                inputProps={{ maxLength: 500 }}
+                                multiline
+                                minRows={2}
+                                fullWidth
+                            />
                             {countedCash !== '' && <Alert severity={Math.abs(Number(countedCash) - Number(activeShift?.expected_cash || 0)) < 0.01 ? 'success' : Number(countedCash) > Number(activeShift?.expected_cash || 0) ? 'warning' : 'error'}>{tp('Difference')}: {money(Number(countedCash) - Number(activeShift?.expected_cash || 0))}</Alert>}
                         </Stack>
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setCloseShiftOpen(false)} disabled={shiftBusy}>{tp('Cancel')}</Button>
-                        <Button type="submit" color="error" variant="contained" disabled={shiftBusy || countedCash === ''}>{shiftBusy ? tp('Closing...') : tp('Confirm Close')}</Button>
+                    <DialogActions className="pos-console__shift-actions">
+                        <Box sx={{ flex: 1 }} />
+                        <Button type="button" variant="outlined" onClick={hideCloseShiftDialog} disabled={shiftBusy}>{tp('Cancel')}</Button>
+                        <Button type="submit" color="error" variant="contained" disabled={shiftBusy || countedCash === ''}>{shiftBusy ? tp('Closing...') : tp('Confirm close')}</Button>
                     </DialogActions>
                 </Box>
             </Dialog>
@@ -1904,3 +1894,4 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         </Box>
     );
 }
+import PosCartItem from '@/Components/Admin/PosCartItem';

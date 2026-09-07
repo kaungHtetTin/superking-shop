@@ -17,7 +17,10 @@ class SettingController extends Controller
     {
         return Spa::render('Admin/Settings/Edit', [
             'settings' => $settings->publicSettings(),
-            'initialSection' => in_array($request->query('section'), ['general', 'branding', 'contacts', 'profile', 'security', 'danger'], true)
+            'pricing' => app(PricingRuleController::class)->settingsData($request),
+            'pricingAction' => in_array($request->query('price_action'), ['create', 'edit'], true) ? $request->query('price_action') : null,
+            'pricingRule' => $request->query('section') === 'prices' && $request->query('price_action') === 'edit' ? \App\Models\PricingRule::findOrFail($request->integer('rule_id')) : null,
+            'initialSection' => in_array($request->query('section'), ['general', 'branding', 'contacts', 'prices', 'profile', 'security', 'danger'], true)
                 ? $request->query('section')
                 : 'general',
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,

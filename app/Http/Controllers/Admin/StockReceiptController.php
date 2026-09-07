@@ -50,6 +50,7 @@ class StockReceiptController extends Controller
 
         return Spa::render('Admin/Inventory/Receipts/Show', [
             'receipt' => $receipt,
+            'priceChanges' => DB::table('price_changes')->where('operation_id', 'receipt:'.$receipt->id)->orderBy('id')->get(),
         ]);
     }
 
@@ -61,13 +62,16 @@ class StockReceiptController extends Controller
         abort_unless($request->user()->canAccessLocation($location), 403);
 
         try {
-            DB::transaction(function () use ($service, $audit, $location, $validated, $request) {
+            $posted = DB::transaction(function () use ($service, $audit, $location, $validated, $request) {
                 $receipt = $service->createDraft($location, $validated['items'], $request->user(), $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
                 $audit->record('inventory.receipt.created', $receipt, ['location_id' => $location->id], $request);
 
-                $receipt = $service->post($receipt, $request->user());
+                $receipt = $service->post($receipt, $request->user(), $request->boolean('acknowledge_below_cost'));
                 $audit->record('inventory.receipt.posted', $receipt, ['location_id' => $receipt->location_id], $request);
+                return $receipt;
             }, 3);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             report($exception);
 
@@ -76,7 +80,7 @@ class StockReceiptController extends Controller
             ]);
         }
 
-        return redirect()->route('admin.inventory.receipts.index')->with('success', 'Receipt posted and stock updated.');
+        return redirect()->route('admin.inventory.receipts.show', $posted)->with('success', 'Receipt posted. '.($posted->pricing_summary['changed_row_count'] ?? 0).' prices updated; '.($posted->pricing_summary['skipped_cost_count'] ?? 0).' rows need cost.');
     }
 
     public function edit(Request $request, StockReceipt $receipt)
@@ -101,6 +105,8 @@ class StockReceiptController extends Controller
                     'product_id' => $item->product_id,
                     'product_unit_id' => $item->product_unit_id,
                     'received_quantity' => $item->received_quantity,
+                    'free_quantity' => $item->free_quantity,
+                    'notes' => $item->notes,
                     'unit_cost' => $item->unit_cost,
                     'unit' => $this->receiptUnitPayload($item->unit, $item->product),
                 ])->values(),
@@ -118,13 +124,16 @@ class StockReceiptController extends Controller
         abort_unless($request->user()->canAccessLocation($location), 403);
 
         try {
-            DB::transaction(function () use ($service, $audit, $receipt, $location, $validated, $request) {
+            $posted = DB::transaction(function () use ($service, $audit, $receipt, $location, $validated, $request) {
                 $updatedReceipt = $service->updateDraft($receipt, $location, $validated['items'], $validated['supplier_reference'] ?? null, $validated['notes'] ?? null);
                 $audit->record('inventory.receipt.updated', $updatedReceipt, ['location_id' => $location->id], $request);
 
-                $postedReceipt = $service->post($updatedReceipt, $request->user());
+                $postedReceipt = $service->post($updatedReceipt, $request->user(), $request->boolean('acknowledge_below_cost'));
                 $audit->record('inventory.receipt.posted', $postedReceipt, ['location_id' => $postedReceipt->location_id], $request);
+                return $postedReceipt;
             }, 3);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             report($exception);
 
@@ -133,7 +142,7 @@ class StockReceiptController extends Controller
             ]);
         }
 
-        return redirect()->route('admin.inventory.receipts.index')->with('success', 'Receipt posted and stock updated.');
+        return redirect()->route('admin.inventory.receipts.show', $posted)->with('success', 'Receipt posted. '.($posted->pricing_summary['changed_row_count'] ?? 0).' prices updated; '.($posted->pricing_summary['skipped_cost_count'] ?? 0).' rows need cost.');
     }
 
     public function destroy(Request $request, StockReceipt $receipt, StockReceiptService $service, AuditLogService $audit)
@@ -142,12 +151,12 @@ class StockReceiptController extends Controller
         $receiptNumber = $receipt->receipt_number;
         $locationId = $receipt->location_id;
 
-        $service->delete($receipt, $request->user());
+        $summary = $service->delete($receipt, $request->user());
         $audit->record('inventory.receipt.deleted', null, ['receipt_number' => $receiptNumber, 'location_id' => $locationId], $request);
 
         return redirect()
             ->route('admin.inventory.receipts.index', [], 303)
-            ->with('success', "Receipt {$receiptNumber} deleted and stock adjusted.");
+            ->with('success', "Receipt {$receiptNumber} deleted and stock adjusted. {$summary['changed_row_count']} prices updated; {$summary['skipped_cost_count']} rows need cost.");
     }
 
     private function receiptRules(): array
@@ -160,8 +169,10 @@ class StockReceiptController extends Controller
             'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
             'items.*.product_unit_id' => ['required', 'integer', 'exists:product_units,id'],
             'items.*.expected_quantity' => ['nullable', 'numeric', 'min:0'],
-            'items.*.received_quantity' => ['required', 'numeric', 'gt:0'],
-            'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'acknowledge_below_cost' => ['sometimes', 'boolean'],
+            'items.*.free_quantity' => ['sometimes', 'numeric', 'min:0', 'max:9999999999'],
+            'items.*.received_quantity' => ['required', 'numeric', 'min:0.0001', 'max:9999999999'],
+            'items.*.unit_cost' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'items.*.notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

@@ -253,7 +253,8 @@ class OrderController extends Controller
             return back()->withErrors($e->errors());
         }
 
-        $message = 'Order cancelled.'.($hadPaidStock ? ' Stock has been restored.' : '');
+        $message = 'Order cancelled.'.($hadPaidStock ? ' Stock has been restored.' : '')
+            .(($order->payment_status === 'paid' || (float) $order->paid_amount > 0) ? ' Collected payments are retained; any refund due must still be paid.' : '');
 
         return redirect()
             ->route('admin.orders.show', $order)
@@ -272,16 +273,14 @@ class OrderController extends Controller
             return back()->withErrors($e->errors());
         }
 
+        $retained = Order::query()->whereKey($order->id)->exists();
+        $message = $retained
+            ? 'Sale cancelled. Payment history retained for audit; any refund due must still be paid.'
+            : 'Order deleted. Stock and finance records were reversed.';
         if ($request->header('X-SPA') === 'true') {
-            return response()->json([
-                'deleted' => true,
-                'redirect' => route('admin.orders.index'),
-                'message' => 'Order deleted. Stock and POS finance records were reversed.',
-            ]);
+            return response()->json(['deleted' => ! $retained, 'redirect' => route('admin.orders.index'), 'message' => $message]);
         }
 
-        return redirect()
-            ->route('admin.orders.index')
-            ->with('success', 'Order deleted. Stock and POS finance records were reversed.');
+        return redirect()->route('admin.orders.index')->with('success', $message);
     }
 }

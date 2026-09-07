@@ -17,7 +17,7 @@ const formatDateTime = (value) => value
     ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
     : '-';
 
-export default function ReceiptShow({ receipt }) {
+export default function ReceiptShow({ receipt, priceChanges = [] }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
     const lineCount = receipt.items.length;
@@ -45,6 +45,7 @@ export default function ReceiptShow({ receipt }) {
         >
             <Head title={receipt.receipt_number} />
             <AdminFlash flash={flash} />
+            {priceChanges.length > 0 && <section className="panel pricing-panel"><h2>{priceChanges.length} automatic prices updated</h2><details><summary>View committed price changes</summary><div className="table-wrap"><table><thead><tr><th>Product / unit</th><th>Price type</th><th>Old price</th><th>New price</th><th>Buying cost</th></tr></thead><tbody>{priceChanges.map(change => { const snapshot = typeof change.rule_snapshot === 'string' ? JSON.parse(change.rule_snapshot) : change.rule_snapshot; const item = receipt.items.find(item => item.product_id === change.product_id); return <tr key={change.id}><td>{item?.product?.name || `Product #${change.product_id}`} / unit #{change.product_unit_id}</td><td>{snapshot?.name}</td><td>{formatMoney(change.old_price)}</td><td>{formatMoney(change.new_price)}</td><td>{change.cost_used}</td></tr>; })}</tbody></table></div></details></section>}
 
             <section className="panel glass record-detail-card">
                 <header className="record-detail-header">

@@ -10,11 +10,11 @@ class ProductUnitPrice extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['product_unit_id', 'product_price_type_id', 'price'];
+    protected $fillable = ['product_unit_id', 'product_price_type_id', 'price', 'is_manual', 'calculation_status', 'applied_rule_version'];
 
     protected $appends = ['price_type'];
 
-    protected $casts = ['price' => 'decimal:2'];
+    protected $casts = ['price' => 'decimal:2', 'is_manual' => 'boolean'];
 
     public function unit(): BelongsTo
     {

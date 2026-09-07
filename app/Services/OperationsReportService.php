@@ -93,7 +93,8 @@ class OperationsReportService
                 DB::raw('COUNT(DISTINCT adjustments.id) as documents'),
                 DB::raw('SUM(items.quantity_delta) as net_quantity'),
                 DB::raw('SUM(ABS(items.quantity_delta)) as absolute_quantity'),
-                DB::raw('SUM(CASE WHEN items.quantity_delta < 0 THEN ABS(items.quantity_delta) * products.original_price ELSE 0 END) as loss_value'),
+                DB::raw('SUM(CASE WHEN items.value_delta IS NULL AND items.quantity_delta <> 0 THEN 1 ELSE 0 END) as unvalued_lines'),
+                DB::raw('SUM(CASE WHEN items.quantity_delta < 0 THEN ABS(items.value_delta) ELSE 0 END) as loss_value'),
             ]);
 
         $transfers = DB::table('stock_transfers as transfers')
@@ -112,7 +113,7 @@ class OperationsReportService
 
         $sales = DB::table('order_items as items')
             ->join('orders', 'orders.id', '=', 'items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->where('orders.created_at', '>=', now()->subDays(30))
             ->groupBy('items.product_id')
@@ -148,7 +149,7 @@ class OperationsReportService
         $ownOnly = $user->adminRoleName() === 'staff';
         $orders = DB::table('orders')
             ->where('orders.sales_channel', 'pos')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->whereBetween('orders.created_at', [$from, $to])
             ->when($ownOnly, fn ($query) => $query->where('orders.served_by', $user->id));

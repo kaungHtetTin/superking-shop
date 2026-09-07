@@ -4,12 +4,14 @@ import { Box, Button, IconButton, InputAdornment, Stack, TextField, Typography }
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import SettingsField from '@/Components/Admin/SettingsField';
 
 export default function UpdatePasswordForm({ className, showHeading = true }) {
     const { url, props } = usePage();
     const { app_base } = props;
     const t = usePhraseTranslation();
     const isAdminContext = typeof url === 'string' && url.includes('/admin');
+    const PasswordField = isAdminContext && !showHeading ? SettingsField : TextField;
     const passwordEndpoint = routeWithBase(isAdminContext ? '/admin/profile/password' : '/password', app_base);
     const passwordInput = useRef();
     const currentPasswordInput = useRef();
@@ -83,7 +85,7 @@ export default function UpdatePasswordForm({ className, showHeading = true }) {
 
             <Box component="form" onSubmit={updatePassword} sx={{ mt: showHeading ? '20px' : 0 }}>
                 <Stack spacing={isAdminContext ? '12px' : '16px'}>
-                    <TextField
+                    <PasswordField
                         id="current_password"
                         type={passwordVisibility.current_password ? 'text' : 'password'}
                         label={t('Current Password')}
@@ -97,7 +99,7 @@ export default function UpdatePasswordForm({ className, showHeading = true }) {
                         slotProps={{ input: visibilityControl('current_password', 'current password') }}
                     />
 
-                    <TextField
+                    <PasswordField
                         id="password"
                         type={passwordVisibility.password ? 'text' : 'password'}
                         label={t('New Password')}
@@ -111,7 +113,7 @@ export default function UpdatePasswordForm({ className, showHeading = true }) {
                         slotProps={{ input: visibilityControl('password', 'new password') }}
                     />
 
-                    <TextField
+                    <PasswordField
                         id="password_confirmation"
                         type={passwordVisibility.password_confirmation ? 'text' : 'password'}
                         label={t('Confirm Password')}
@@ -124,10 +126,8 @@ export default function UpdatePasswordForm({ className, showHeading = true }) {
                         slotProps={{ input: visibilityControl('password_confirmation', 'password confirmation') }}
                     />
 
-                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                        <Button type="submit" variant="contained" disabled={processing}>
-                            {t('Save')}
-                        </Button>
+                    <Stack className={isAdminContext && !showHeading ? 'settings-form-actions' : undefined} direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        {isAdminContext && !showHeading ? <button className="btn primary" type="submit" disabled={processing}>{t(processing ? 'Saving...' : 'Update password')}</button> : <Button type="submit" variant="contained" disabled={processing}>{t('Save')}</Button>}
                     </Stack>
                 </Stack>
             </Box>

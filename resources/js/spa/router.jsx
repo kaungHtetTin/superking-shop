@@ -219,6 +219,14 @@ async function parseSpaResponse(response, options = {}) {
         return { errors };
     }
 
+    if (response.status === 409 && contentType.includes('application/json')) {
+        const payload = await response.json();
+        if (payload?.component) { await applyPage(payload, options); return payload; }
+        const errors = flattenErrors(payload.errors || { conflict: payload.message || 'This record changed. Reload and review it before saving.' });
+        options.onError?.(errors);
+        return { errors };
+    }
+
     if (!response.ok && response.status !== 409) {
         if (contentType.includes('application/json')) {
             const payload = await response.json();

@@ -1,8 +1,10 @@
 import Icon from '@/Components/Admin/icons';
 import { PanelHeading } from '@/Components/Admin/shared';
-import { storageUrl } from '@/Utils/url';
+import { storageUrl, routeWithBase } from '@/Utils/url';
+import { Link, usePage } from '@/spa/router';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatErrorMessage } from '@/Utils/formatErrorMessage';
+import { automaticPrice } from '@/Utils/automaticPricing';
 
 export default function ProductFormUI({
     data,
@@ -10,6 +12,7 @@ export default function ProductFormUI({
     errors,
     processing,
     categories,
+    pricingRules = [],
     previews,
     product = { images: [] },
     appUrl,
@@ -21,6 +24,8 @@ export default function ProductFormUI({
     onClearAllImages,
 }) {
     const t = usePhraseTranslation();
+    const { app_base, auth, is_super_admin } = usePage().props;
+    const buyingCost = product.pricing_source_receipt_id ? product.pricing_buying_cost : (data.pricing_base_cost ?? data.original_price);
     const existingImages = (product.images || []).filter((image) => data.imageAttachmentIds.includes(image.id));
     const fieldError = (path) => errors[path] ? formatErrorMessage(errors[path]) : null;
 
@@ -45,7 +50,7 @@ export default function ProductFormUI({
         setData({
             ...data,
             units: nextUnits,
-            price_types: data.price_types.map((type) => ({ ...type, prices: [...type.prices, 0] })),
+            price_types: data.price_types.map((type) => ({ ...type, prices: [...type.prices, 0], is_manual: [...(type.is_manual || type.prices.map(() => true)), product.id ? true : pricingRules.find(rule => rule.code === type.name)?.pricing_mode !== 'automatic'] })),
         });
     };
 
@@ -61,6 +66,7 @@ export default function ProductFormUI({
             price_types: data.price_types.map((type) => ({
                 ...type,
                 prices: type.prices.filter((_, unitIndex) => unitIndex !== index),
+                is_manual: (type.is_manual || type.prices.map(() => true)).filter((_, unitIndex) => unitIndex !== index),
             })),
         });
     };
@@ -74,7 +80,7 @@ export default function ProductFormUI({
         patchPriceType(typeIndex, { prices });
     };
 
-    const addPriceType = () => setData('price_types', [...data.price_types, { name: '', prices: data.units.map(() => 0) }]);
+    const addPriceType = () => setData('price_types', [...data.price_types, { name: '', prices: data.units.map(() => 0), is_manual: data.units.map(() => true) }]);
 
     const removePriceType = (typeIndex) => setData('price_types', data.price_types.filter((_, index) => index !== typeIndex));
 
@@ -101,14 +107,16 @@ export default function ProductFormUI({
                         </label>
                         <label className="form-field">
                             <span>{t('Original price / base-unit cost')}</span>
-                            <input type="number" min="0" step="0.01" value={data.original_price} onChange={(event) => setData('original_price', event.target.value)} required />
-                            <small>{t('Used for inventory valuation and profit calculations.')}</small>
+                            <input type="number" min="0" step="0.01" value={data.original_price} readOnly={!!product.id} onChange={(event) => setData('original_price', event.target.value)} required />
+                            <small>{t(product.id ? 'Accounting cost is managed by inventory operations, not selling-price edits.' : 'Opening accounting cost for inventory valuation and profit calculations.')}</small>
+                            {errors.original_price && <small className="field-error">{formatErrorMessage(errors.original_price)}</small>}
                         </label>
                         <label className="form-field">
                             <span>{t('Minimum quantity')}</span>
                             <input type="number" min="0" step="0.0001" value={data.min_quantity} onChange={(event) => setData('min_quantity', event.target.value)} required />
                             <small>{t('Low-stock threshold, always stored in the base unit.')}</small>
                         </label>
+                        <label className="form-field"><span>Opening cost for automatic pricing</span><input type="number" min="0" step="0.000001" value={data.pricing_base_cost ?? data.original_price} onChange={event => setData('pricing_base_cost', event.target.value)} /><small>Used when no posted purchase exists. Current buying cost: {buyingCost || 0} per base unit.</small></label>
                         <label className="form-field full-span product-description-field">
                             <span>{t('Description')}</span>
                             <textarea rows={5} value={data.description} onChange={(event) => setData('description', event.target.value)} />
@@ -148,7 +156,7 @@ export default function ProductFormUI({
                     {errors.units && <div className="flash error">{formatErrorMessage(errors.units)}</div>}
                     <div className="product-price-matrix">
                         <div className="unit-prices__heading">
-                            <div><strong>{t('Selling price types')}</strong><small>{t('Define each type once, then enter its amount for every unit.')}</small></div>
+                            <div><strong>{t('Selling price types')}</strong><small>{t('Define each type once, then enter its amount for every unit.')}</small>{(is_super_admin || auth?.user?.permissions?.includes('settings.manage')) && <Link className="product-price-matrix__rules-link" href={routeWithBase('/admin/settings/prices', app_base)}>Manage rules in Settings → Prices</Link>}</div>
                             <button type="button" className="btn secondary" onClick={addPriceType}><Icon name="plus" size={13} />{t('Add price type')}</button>
                         </div>
                         <div className="product-price-matrix__scroll">
@@ -159,18 +167,26 @@ export default function ProductFormUI({
                             </div>
                             {data.price_types.map((type, typeIndex) => (
                                 <div className="product-price-matrix__grid product-price-matrix__row" style={{ '--price-unit-count': data.units.length }} key={type.id || `price-type-${typeIndex}`}>
-                                    <label className="form-field"><span>{t('Price name')}</span><input value={type.name} disabled={type.name === 'retail'} placeholder={t('wholesale, vip')} onChange={(event) => patchPriceType(typeIndex, { name: event.target.value })} aria-invalid={!!fieldError(`price_types.${typeIndex}.name`)} required /></label>
-                                    {data.units.map((unit, unitIndex) => (
-                                        <label className="form-field" key={unit.id || unitIndex}>
-                                            <span>{unit.name || `${t('Unit')} ${unitIndex + 1}`}</span>
-                                            <input type="number" min="0" step="0.01" value={type.prices[unitIndex] ?? 0} onChange={(event) => patchUnitPrice(typeIndex, unitIndex, event.target.value)} aria-invalid={!!fieldError(`price_types.${typeIndex}.prices.${unitIndex}`)} required />
-                                        </label>
-                                    ))}
+                                    <label className="form-field"><span>{t('Price name')}</span><input list="pricing-rule-codes" value={type.name} disabled={type.name === 'retail' || (!!type.id && pricingRules.some(rule => rule.code === type.name))} placeholder={t('wholesale, vip')} onChange={(event) => patchPriceType(typeIndex, { name: event.target.value })} required /><small>{pricingRules.find(rule => rule.code === type.name)?.name}</small></label>
+                                    {data.units.map((unit, unitIndex) => {
+                                        const rule = pricingRules.find(rule => rule.code === type.name);
+                                        const automatic = rule?.pricing_mode === 'automatic' && type.is_manual?.[unitIndex] === false;
+                                        const preview = automatic ? automaticPrice(buyingCost, rule, unit.conversion_factor) : null;
+                                        const amount = automatic ? (preview ?? type.prices[unitIndex] ?? 0) : (type.prices[unitIndex] ?? 0);
+                                        const profit = Number(amount) - Number(buyingCost || 0) * Number(unit.conversion_factor);
+                                        return <div className="form-field product-price-matrix__price-cell" key={unit.id || unitIndex}>
+                                            <select aria-label={`${type.name} ${unit.name || `Unit ${unitIndex + 1}`} pricing mode`} value={automatic ? 'auto' : 'manual'} onChange={event => patchPriceType(typeIndex, { is_manual: data.units.map((_, i) => i === unitIndex ? event.target.value === 'manual' : (type.is_manual?.[i] ?? true)) })}><option value="manual">Manual</option>{rule?.pricing_mode === 'automatic' && <option value="auto">Automatic</option>}</select>
+                                            <input aria-label={`${type.name} ${unit.name} price`} type="number" min="0" step="0.01" value={amount} readOnly={automatic} onChange={event => patchUnitPrice(typeIndex, unitIndex, event.target.value)} required />
+                                            <small className={profit < 0 ? 'field-error' : 'muted'}>{automatic && preview === null ? 'Cost required — saved price retained' : `Markup over buying cost ${profit.toFixed(2)}${profit < 0 ? ' · Below buying cost' : ''}`}</small>
+                                            <small className="muted">Before discounts and free items; accounting profit uses weighted-average cost.</small>
+                                        </div>;
+                                    })}
                                     <button type="button" className="icon-btn danger" onClick={() => removePriceType(typeIndex)} disabled={type.name === 'retail'} aria-label={t('Remove price type')} title={t('Remove price type')}><Icon name="trash" size={14} /></button>
                                 </div>
                             ))}
                         </div>
                         {errors.price_types && <div className="flash error">{formatErrorMessage(errors.price_types)}</div>}
+                        <datalist id="pricing-rule-codes">{pricingRules.map(rule => <option key={rule.id} value={rule.code}>{rule.name}</option>)}</datalist>
                     </div>
                 </section>
 

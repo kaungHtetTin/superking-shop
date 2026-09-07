@@ -1,4 +1,5 @@
-import { Head, Link, usePage } from '@/spa/router';
+import { useState } from 'react';
+import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { AdminFlash } from '@/Components/Admin/AdminFlash';
@@ -25,9 +26,10 @@ function formatUpdateTime(value) {
     }).format(new Date(value));
 }
 
-export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 20000 }) {
-    const { app_base, flash } = usePage().props;
+export default function TransferShow({ transfer, canDelete = false, lastUpdated, pollIntervalMs = 20000 }) {
+    const { app_base, flash, errors } = usePage().props;
     const t = usePhraseTranslation();
+    const [deleting, setDeleting] = useState(false);
     const { state: realtimeState, lastEventAt } = useInventoryRealtime({
         locationIds: [transfer.source_location_id, transfer.destination_location_id],
         transferId: transfer.id,
@@ -40,20 +42,31 @@ export default function TransferShow({ transfer, lastUpdated, pollIntervalMs = 2
     const lineCount = transfer.items.length;
     const completedAt = transfer.received_at || transfer.created_at;
     const creatorName = transfer.creator?.name || t('Admin');
+    const destroy = () => {
+        if (!confirm(t('Delete :number? This will reverse stock at both shops and remove every related financial entry. This cannot be undone.', { number: transfer.transfer_number }))) return;
+
+        setDeleting(true);
+        router.delete(
+            routeWithBase(`/admin/inventory/transfers/${transfer.id}`, app_base),
+            {},
+            { preserveScroll: true, onFinish: () => setDeleting(false) },
+        );
+    };
 
     return (
         <AdminLayout
             title={transfer.transfer_number}
             eyebrow={t('Stock transfer')}
             contentClassName="transfer-detail-page"
-            action={
+            action={<div className="inline-actions">
                 <Link className="btn secondary" href={routeWithBase('/admin/inventory/transfers', app_base)}>
                     <Icon name="arrowLeft" size={14} /> {t('Back to transfers')}
                 </Link>
-            }
+                {canDelete && <button type="button" className="btn danger" onClick={destroy} disabled={deleting}><Icon name="trash" size={14} /> {deleting ? t('Deleting...') : t('Delete transfer')}</button>}
+            </div>}
         >
             <Head title={transfer.transfer_number} />
-            <AdminFlash flash={flash} />
+            <AdminFlash flash={flash} errors={errors} />
 
             <section className="panel glass transfer-detail-document">
                 <header className="transfer-detail-header">

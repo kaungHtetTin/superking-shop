@@ -20,6 +20,10 @@ class Product extends Model
         'description',
         'min_quantity',
         'original_price',
+        'pricing_base_cost',
+        'pricing_buying_cost',
+        'pricing_source_receipt_id',
+        'pricing_version',
         'status',
         'metadata',
         'is_featured',
@@ -29,6 +33,9 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'pricing_base_cost' => 'decimal:6',
+        'pricing_buying_cost' => 'decimal:6',
+        'pricing_version' => 'integer',
         'is_featured' => 'boolean',
         'is_active' => 'boolean',
         'metadata' => 'json',

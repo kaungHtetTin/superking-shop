@@ -59,9 +59,12 @@ export default function DeleteUserForm({ className, showHeading = true }) {
                 </Typography>
             </Stack>}
 
-            <Button color="error" variant="outlined" sx={{ mt: showHeading ? '16px' : 0 }} onClick={confirmUserDeletion}>
+            {isAdminContext && !showHeading ? <>
+                <div className="settings-danger-notice" role="note"><strong>{t('Permanent account deletion')}</strong><p>{t('This action cannot be undone. You will be asked to confirm with your password.')}</p></div>
+                <div className="settings-form-actions"><button type="button" className="btn secondary settings-danger-button" onClick={confirmUserDeletion}>{t('Delete Account')}</button></div>
+            </> : <Button color="error" variant="outlined" sx={{ mt: showHeading ? '16px' : 0 }} onClick={confirmUserDeletion}>
                 {t('Delete Account')}
-            </Button>
+            </Button>}
 
             <Dialog open={confirmingUserDeletion} onClose={closeModal} fullWidth maxWidth="sm">
                 <DialogTitle sx={{ fontWeight: 700 }}>{t('Are you sure you want to delete your account?')}</DialogTitle>

@@ -58,6 +58,7 @@ class ProductController extends Controller
     public function create()
     {
         return Spa::render('Admin/Products/Create', [
+            'pricingRules' => \App\Models\PricingRule::orderBy('id')->get(),
             'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -109,9 +110,11 @@ class ProductController extends Controller
         $validated['barcode'] = trim((string) ($validated['barcode'] ?? '')) ?: $this->generateUniqueBarcode();
 
         return DB::transaction(function () use ($request, $validated, $inventoryService) {
+            app(\App\Services\AutomaticPricingService::class)->lock();
             $product = Product::create($this->productPayload($validated));
             $this->storeImages($request, $product);
-            $this->syncUnits($product, $validated['units'], $validated['price_types']);
+            $this->syncUnits($product, $validated['units'], $validated['price_types'], true);
+            app(\App\Services\AutomaticPricingService::class)->refreshProduct($product, 'product_create', $request->user()->id);
 
             if ($location = Location::query()->where('is_default_fulfillment', true)->where('is_active', true)->first()) {
                 $inventoryService->ensureBalance($location, $product);
@@ -123,8 +126,12 @@ class ProductController extends Controller
 
     public function edit(Request $request, Product $product)
     {
+        $pricing = app(\App\Services\AutomaticPricingService::class);
+        $product->setAttribute('pricing_buying_cost', $pricing->readCost($product));
+        $product->setAttribute('pricing_source_receipt_id', $pricing->latestLine($product)?->stock_receipt_id);
         return Spa::render('Admin/Products/Edit', [
             'product' => $product->load(['images', 'units', 'priceTypes.unitPrices']),
+            'pricingRules' => \App\Models\PricingRule::orderBy('id')->get(),
             'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'returnPage' => max(1, $request->integer('return_page', 1)),
         ]);
@@ -137,9 +144,19 @@ class ProductController extends Controller
         $validated['barcode'] = trim((string) ($validated['barcode'] ?? '')) ?: $this->generateUniqueBarcode();
 
         return DB::transaction(function () use ($request, $validated, $product, $inventoryService, $returnPage) {
+            app(\App\Services\AutomaticPricingService::class)->lock();
+            $product = Product::lockForUpdate()->findOrFail($product->id);
+            if (bccomp((string) $validated['original_price'], (string) $product->original_price, 2) !== 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['original_price' => 'Accounting cost cannot be changed in the product editor. Reload current cost; use stock receiving for purchases.']);
+            }
+            $hasAuto = \App\Models\ProductUnitPrice::whereHas('unit', fn ($q) => $q->where('product_id', $product->id))->where('is_manual', false)->exists();
+            if (($request->has('pricing_version') || $hasAuto) && (int) $request->input('pricing_version', 0) !== (int) $product->pricing_version) {
+                abort(409, 'Product prices changed while you were editing. Reload to review the current prices.');
+            }
             $product->update($this->productPayload($validated, $product));
             $this->syncImages($request, $product, $validated);
             $this->syncUnits($product, $validated['units'], $validated['price_types']);
+            app(\App\Services\AutomaticPricingService::class)->refreshProduct($product, 'product_save', $request->user()->id);
 
             if ($location = Location::query()->where('is_default_fulfillment', true)->where('is_active', true)->first()) {
                 $inventoryService->ensureBalance($location, $product);
@@ -153,6 +170,9 @@ class ProductController extends Controller
 
     public function destroy(Request $request, Product $product)
     {
+        return DB::transaction(function () use ($request, $product) {
+        app(\App\Services\AutomaticPricingService::class)->lock();
+        $product = Product::lockForUpdate()->findOrFail($product->id);
         if ($product->inventoryMovements()->exists() || $product->orderItems()->exists()) {
             if ($request->headers->has('X-SPA')) {
                 return response()->json([
@@ -173,10 +193,14 @@ class ProductController extends Controller
         }
 
         return back()->with('success', 'Product deleted successfully.');
+        });
     }
 
     public function toggleStatus(Product $product)
     {
+        return DB::transaction(function () use ($product) {
+        app(\App\Services\AutomaticPricingService::class)->lock();
+        $product = Product::lockForUpdate()->findOrFail($product->id);
         $activate = $product->status !== 'active';
         $product->update([
             'status' => $activate ? 'active' : 'inactive',
@@ -186,6 +210,7 @@ class ProductController extends Controller
         return back()->with('success', $activate
             ? 'Product activated successfully.'
             : 'Product deactivated successfully. Sales and inventory history were preserved.');
+        });
     }
 
     private function validateProduct(Request $request, ?Product $product = null): array
@@ -196,7 +221,9 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'min_quantity' => ['required', 'numeric', 'min:0'],
-            'original_price' => ['required', 'numeric', 'min:0'],
+            'original_price' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+            'pricing_base_cost' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
+            'pricing_version' => ['sometimes', 'integer', 'min:1'],
             'status' => ['required', Rule::in(['active', 'inactive', 'draft'])],
             'is_featured' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
@@ -210,7 +237,7 @@ class ProductController extends Controller
             'units.*.id' => ['nullable', 'integer'],
             'units.*.name' => ['required', 'string', 'max:80'],
             'units.*.code' => ['required', 'string', 'max:30'],
-            'units.*.conversion_factor' => ['required', 'numeric', 'gt:0'],
+            'units.*.conversion_factor' => ['required', 'numeric', 'min:0.000001', 'max:999999999999'],
             'units.*.is_base' => ['required', 'boolean'],
             'units.*.is_default_selling' => ['required', 'boolean'],
             'units.*.is_active' => ['sometimes', 'boolean'],
@@ -218,7 +245,9 @@ class ProductController extends Controller
             'price_types.*.id' => ['nullable', 'integer'],
             'price_types.*.name' => ['required', 'string', 'max:60'],
             'price_types.*.prices' => ['required', 'array'],
-            'price_types.*.prices.*' => ['required', 'numeric', 'min:0'],
+            'price_types.*.prices.*' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+            'price_types.*.is_manual' => ['sometimes', 'array'],
+            'price_types.*.is_manual.*' => ['boolean'],
         ]);
 
         $baseUnits = collect($validated['units'])->where('is_base', true);
@@ -261,6 +290,8 @@ class ProductController extends Controller
         }
 
         if ($product) {
+            $invalidTypes = collect($validated['price_types'])->pluck('id')->filter()->diff($product->priceTypes()->pluck('id'));
+            if ($invalidTypes->isNotEmpty()) throw ValidationException::withMessages(['price_types' => 'A price type does not belong to this product.']);
             $submittedIds = collect($validated['units'])->pluck('id')->filter()->map(fn ($id) => (int) $id);
             $invalid = $submittedIds->diff($product->units()->pluck('id'));
             if ($invalid->isNotEmpty()) {
@@ -289,6 +320,7 @@ class ProductController extends Controller
             'description' => $validated['description'] ?? null,
             'min_quantity' => $validated['min_quantity'],
             'original_price' => $validated['original_price'],
+            'pricing_base_cost' => $validated['pricing_base_cost'] ?? $product?->pricing_base_cost ?? $validated['original_price'],
             'status' => $validated['status'],
             'is_featured' => $validated['is_featured'] ?? false,
             'is_active' => $validated['is_active'] ?? true,
@@ -296,7 +328,7 @@ class ProductController extends Controller
         ];
     }
 
-    private function syncUnits(Product $product, array $units, ?array $priceTypes = null): void
+    private function syncUnits(Product $product, array $units, ?array $priceTypes = null, bool $isNew = false): void
     {
         $submittedIds = collect($units)->pluck('id')->filter()->map(fn ($id) => (int) $id)->all();
         $removed = $product->units()->whereNotIn('id', $submittedIds)->get();
@@ -325,20 +357,33 @@ class ProductController extends Controller
         }
 
         $priceTypes ??= [];
-        $product->priceTypes()->delete();
+        if ($isNew) {
+            foreach (\App\Models\PricingRule::where('pricing_mode', 'automatic')->get() as $rule) {
+                if (! collect($priceTypes)->contains('name', $rule->code)) $priceTypes[] = ['name' => $rule->code, 'prices' => array_fill(0, count($savedUnits), 0)];
+            }
+        }
+        $keptTypes = [];
         foreach (array_values($priceTypes) as $typeIndex => $typeData) {
-            $type = $product->priceTypes()->create([
+            $rule = \App\Models\PricingRule::where('code', $typeData['name'])->first();
+            $type = isset($typeData['id']) ? $product->priceTypes()->findOrFail($typeData['id']) : $product->priceTypes()->firstOrNew(['name' => $typeData['name']]);
+            if ($type->exists && $type->pricing_rule_id && $type->name !== $typeData['name']) throw ValidationException::withMessages(['price_types' => 'Rename shared price types in Settings → Prices.']);
+            $type->fill([
                 'name' => $typeData['name'],
                 'is_default' => $typeData['name'] === 'retail',
                 'sort_order' => $typeIndex,
+                'pricing_rule_id' => $rule?->id,
             ]);
+            $type->save();
+            $keptTypes[] = $type->id;
             foreach ($savedUnits as $unitIndex => $unit) {
-                $unit->prices()->create([
-                    'product_price_type_id' => $type->id,
-                    'price' => $typeData['prices'][$unitIndex],
-                ]);
+                $price = $unit->prices()->firstOrNew(['product_price_type_id' => $type->id]);
+                $manual = $rule?->pricing_mode !== 'automatic' || ($typeData['is_manual'][$unitIndex] ?? ($price->exists ? $price->is_manual : ! $isNew));
+                $price->fill(['price' => $manual ? $typeData['prices'][$unitIndex] : ($price->exists ? $price->price : 0),
+                    'is_manual' => $manual, 'calculation_status' => $manual ? 'manual' : ($price->calculation_status ?? 'cost_required')]);
+                $price->save();
             }
         }
+        $product->priceTypes()->whereNotIn('id', $keptTypes)->delete();
     }
 
     private function storeImages(Request $request, Product $product): void

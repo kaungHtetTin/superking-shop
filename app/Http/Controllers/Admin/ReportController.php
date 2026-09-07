@@ -41,7 +41,7 @@ class ReportController extends Controller
         $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
         $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
         $paidOrders = Order::query()
-            ->where('payment_status', 'paid')
+            ->recognizedSale()
             ->whereIn('location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('created_at', '<=', $to));
@@ -51,14 +51,14 @@ class ReportController extends Controller
         $discounts = (float) (clone $paidOrders)->sum('discount_amount');
         $costOfGoods = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->selectRaw('COALESCE(SUM((order_items.cost_price * order_items.quantity) + order_items.foc_cost_price), 0) as total_cost')
             ->value('total_cost');
         $grossProfit = round($paidRevenue - $costOfGoods, 2);
-        $financeEntries = FinancialEntry::query()
+        $financeEntries = FinancialEntry::query()->external()
             ->where('status', 'approved')
             ->when($requestedLocationId, fn ($query) => $query->where('location_id', $requestedLocationId))
             ->when(! $requestedLocationId, function ($query) use ($locationIds, $user) {
@@ -72,12 +72,12 @@ class ReportController extends Controller
             ->when($from, fn ($query) => $query->where('entry_date', '>=', $from->toDateString()))
             ->when($to, fn ($query) => $query->where('entry_date', '<=', $to->toDateString()));
         $manualIncome = (float) (clone $financeEntries)->where('type', 'income')->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)->sum('amount');
-        $expenses = (float) (clone $financeEntries)->where('type', 'expense')->where('category', '!=', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
+        $expenses = (float) (clone $financeEntries)->where('type', 'expense')->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])->sum('amount');
         $stockExpenses = (float) (clone $financeEntries)->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidCustomerCount = (clone $paidOrders)->distinct('user_id')->count('user_id');
         $unitsSold = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
@@ -85,7 +85,7 @@ class ReportController extends Controller
         $repeatCustomerCount = DB::query()
             ->fromSub(
                 Order::query()
-                    ->where('payment_status', 'paid')
+                    ->recognizedSale()
                     ->whereNotNull('user_id')
                     ->whereIn('location_id', $locationIds)
                     ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
@@ -100,7 +100,7 @@ class ReportController extends Controller
         $topProducts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
@@ -115,7 +115,7 @@ class ReportController extends Controller
             ]);
 
         $salesByDay = Order::query()
-            ->where('payment_status', 'paid')
+            ->recognizedSale()
             ->whereIn('location_id', $locationIds)
             ->where('created_at', '>=', $from ?? now()->subDays(30)->startOfDay())
             ->when($to, fn ($query) => $query->where('created_at', '<=', $to))
@@ -128,7 +128,7 @@ class ReportController extends Controller
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->join('categories', 'categories.id', '=', 'products.category_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
@@ -148,7 +148,7 @@ class ReportController extends Controller
             ->fromSub(
                 OrderItem::query()
                     ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                    ->where('orders.payment_status', 'paid')
+                    ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
                     ->whereIn('orders.location_id', $locationIds)
                     ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
                     ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
@@ -178,7 +178,7 @@ class ReportController extends Controller
             ->join('orders', 'orders.id', '=', 'first_items.order_id')
             ->join('products as first_products', 'first_products.id', '=', 'first_items.product_id')
             ->join('products as second_products', 'second_products.id', '=', 'second_items.product_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
@@ -194,7 +194,7 @@ class ReportController extends Controller
         $couponPerformance = Coupon::query()
             ->leftJoin('orders', function ($join) use ($locationIds, $from, $to) {
                 $join->on('orders.coupon_id', '=', 'coupons.id')
-                    ->where('orders.payment_status', '=', 'paid');
+                    ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'));
                 $join->whereIn('orders.location_id', $locationIds);
                 if ($from) {
                     $join->where('orders.created_at', '>=', $from);
@@ -264,7 +264,9 @@ class ReportController extends Controller
             'posReport' => $view === 'pos' ? $operations->pos($user, $filters) : null,
             'healthReport' => $view === 'health' ? $operations->health($user) : null,
             'summary' => [
-                'paid_orders' => $paidOrderCount,
+                'paid_orders' => (clone $paidOrders)->where('payment_status', 'paid')->count(),
+                'recognized_orders' => $paidOrderCount,
+                'unvalued_adjustment_lines' => \App\Services\FinancialIntegrityService::unvaluedAdjustmentLines($locationIds, $from, $to),
                 'revenue' => $paidRevenue,
                 'customers' => (clone $paidOrders)->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
                 'products' => DB::table('inventory_balances')->whereIn('location_id', $locationIds)->where('on_hand_qty', '>', 0)->distinct('product_id')->count('product_id'),
@@ -318,7 +320,7 @@ class ReportController extends Controller
             $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
             $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
             $orders = Order::query()->with(['location:id,code,name', 'user:id,name,email,phone'])->withCount('items')
-                ->where('payment_status', 'paid')->whereIn('location_id', $locationIds)
+                ->recognizedSale()->whereIn('location_id', $locationIds)
                 ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
                 ->when($to, fn ($query) => $query->where('created_at', '<=', $to));
 

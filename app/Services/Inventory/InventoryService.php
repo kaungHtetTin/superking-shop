@@ -79,11 +79,21 @@ class InventoryService
         return $this->mutate($location, $product, 'sale', -$quantity, -$reservedQuantity, $actor, $idempotencyKey, $reference, 'sale', null, $unit, $unitQuantity);
     }
 
-    public function returnSale(Location $location, Product $product, float $quantity, ?User $actor = null, ?string $idempotencyKey = null, ?Model $reference = null, ?ProductUnit $unit = null, ?float $unitQuantity = null): InventoryMovement
+    public function returnSale(Location $location, Product $product, float $quantity, ?User $actor = null, ?string $idempotencyKey = null, ?Model $reference = null, ?ProductUnit $unit = null, ?float $unitQuantity = null, ?float $baseCost = null): InventoryMovement
     {
         $this->requirePositive($quantity, 'Returned quantity');
 
-        return $this->mutate($location, $product, 'sale_return', $quantity, 0, $actor, $idempotencyKey, $reference, 'sale_return', null, $unit, $unitQuantity);
+        return DB::transaction(function () use ($location, $product, $quantity, $actor, $idempotencyKey, $reference, $unit, $unitQuantity, $baseCost) {
+            $lockedProduct = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $existing = $idempotencyKey && InventoryMovement::query()->where('idempotency_key', $idempotencyKey)->exists();
+            $quantityBefore = (float) InventoryBalance::query()->where('product_id', $product->id)->sum('on_hand_qty');
+            $movement = $this->mutate($location, $product, 'sale_return', $quantity, 0, $actor, $idempotencyKey, $reference, 'sale_return', null, $unit, $unitQuantity);
+            if (! $existing && $baseCost !== null) {
+                $lockedProduct->update(['original_price' => round(($quantityBefore * (float) $lockedProduct->original_price + $quantity * $baseCost)
+                    / max($quantityBefore + $quantity, 0.000001), 2)]);
+            }
+            return $movement;
+        }, 3);
     }
 
     public function shipTransfer(Location $source, Product $product, float $quantity, ?User $actor = null, ?string $idempotencyKey = null, ?Model $reference = null, ?string $notes = null, ?ProductUnit $unit = null, ?float $unitQuantity = null): InventoryMovement
@@ -106,6 +116,8 @@ class InventoryService
         $reservedDelta = round($reservedDelta, 4);
 
         $result = DB::transaction(function () use ($location, $product, $type, $quantityDelta, $reservedDelta, $actor, $idempotencyKey, $reference, $reasonCode, $notes, $unit, $unitQuantity) {
+            // Serialize quantity changes with product-wide receipt valuation.
+            Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
             $this->ensureBalance($location, $product);
             $balance = InventoryBalance::query()->where('location_id', $location->id)->where('product_id', $product->id)->lockForUpdate()->firstOrFail();
 

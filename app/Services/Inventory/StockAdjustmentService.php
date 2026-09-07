@@ -3,6 +3,8 @@
 namespace App\Services\Inventory;
 
 use App\Models\InventoryBalance;
+use App\Models\FinancialEntry;
+use App\Models\Product;
 use App\Models\Location;
 use App\Models\ProductUnit;
 use App\Models\StockAdjustment;
@@ -29,6 +31,20 @@ class StockAdjustmentService
                     $unitDelta = round((float) $line['quantity_delta'] / max((float) $unit->conversion_factor, 0.000001), 4);
                     $movement = $this->inventoryService->adjust($location, $unit->product, (float) $line['quantity_delta'], $reasonCode, $actor, "adjustment:{$adjustment->id}:item:{$item->id}", $adjustment, $line['notes'] ?? null, $unit, $unitDelta);
                     $item->update(['movement_id' => $movement->id]);
+                    if (abs((float) $line['value_delta']) >= 0.01) {
+                        FinancialEntry::create([
+                            'recorded_by' => $actor->id,
+                            'location_id' => $location->id,
+                            'type' => $line['value_delta'] < 0 ? 'expense' : 'income',
+                            'category' => FinancialEntry::CATEGORY_STOCK_ADJUSTMENT,
+                            'title' => "Inventory adjustment {$adjustment->adjustment_number}",
+                            'amount' => abs($line['value_delta']),
+                            'entry_date' => $adjustment->posted_at->toDateString(),
+                            'reference' => $adjustment->adjustment_number.':'.$item->id,
+                            'status' => 'approved',
+                            'notes' => $line['notes'] ?? $notes,
+                        ]);
+                    }
                 }
             }
 
@@ -50,6 +66,7 @@ class StockAdjustmentService
             if ($counted < 0) {
                 throw ValidationException::withMessages(['items' => 'Counted quantity cannot be negative.']);
             }
+            $product = Product::query()->whereKey($unit->product_id)->lockForUpdate()->firstOrFail();
             $this->inventoryService->ensureBalance($location, $unit->product);
             $balance = InventoryBalance::query()->where('location_id', $location->id)->where('product_id', $unit->product_id)->lockForUpdate()->firstOrFail();
             $system = (float) $balance->on_hand_qty;
@@ -59,6 +76,8 @@ class StockAdjustmentService
                 throw ValidationException::withMessages(['items' => 'A note is required for stock losses.']);
             }
             $normalized[] = ['product_id' => $unit->product_id, 'product_unit_id' => $unit->id, 'conversion_factor' => $unit->conversion_factor, 'system_quantity' => $system, 'counted_quantity' => $counted, 'base_counted_quantity' => $baseCounted, 'quantity_delta' => $delta, 'notes' => $line['notes'] ?? null];
+            $normalized[array_key_last($normalized)]['base_cost'] = (float) $product->original_price;
+            $normalized[array_key_last($normalized)]['value_delta'] = round($delta * (float) $product->original_price, 2);
         }
         if (! $normalized) {
             throw ValidationException::withMessages(['items' => 'Add at least one adjustment item.']);

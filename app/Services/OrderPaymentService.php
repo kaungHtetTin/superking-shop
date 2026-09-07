@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\FinancialEntry;
 use App\Models\User;
 use App\Services\Inventory\StockReservationService;
 use Illuminate\Support\Facades\DB;
@@ -69,11 +70,38 @@ class OrderPaymentService
                 'admin_discount_amount' => $discount['amount'],
                 'final_amount' => $discount['final_amount'],
                 'payment_status' => 'paid',
+                'paid_amount' => $discount['final_amount'],
                 'status' => 'processing',
                 'payment_rejection_reason' => null,
                 'payment_reviewed_at' => now(),
                 'payment_reviewed_by' => $reviewer->id,
             ])->save();
+
+            $order->payments()->firstOrCreate(['transaction_id' => 'online-payment:'.$order->id], [
+                'received_by' => $reviewer->id,
+                'amount' => $order->final_amount,
+                'amount_tendered' => $order->final_amount,
+                'change_due' => 0,
+                'method' => $order->payment_method ?: 'online',
+                'tender_type' => $order->payment_method ?: 'online',
+                'status' => 'paid',
+                'payment_details' => ['confirmed_by_admin' => true],
+            ]);
+            if ((float) $order->final_amount > 0) {
+                FinancialEntry::firstOrCreate([
+                    'category' => FinancialEntry::CATEGORY_POS_SALE,
+                    'reference' => $order->order_number,
+                ], [
+                    'recorded_by' => $reviewer->id,
+                    'location_id' => $order->location_id,
+                    'type' => 'income',
+                    'title' => "Online sale payment {$order->order_number}",
+                    'amount' => $order->final_amount,
+                    'entry_date' => now()->toDateString(),
+                    'payment_method' => $order->payment_method,
+                    'status' => 'approved',
+                ]);
+            }
 
             $this->loyaltyService->awardForPaidOrder($order->fresh('user'));
             $this->auditLogService->record('order.payment_confirmed', $order, [

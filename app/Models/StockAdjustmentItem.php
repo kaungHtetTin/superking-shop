@@ -12,7 +12,7 @@ class StockAdjustmentItem extends Model
 
     protected $fillable = [
         'stock_adjustment_id', 'product_id', 'product_unit_id', 'conversion_factor', 'system_quantity',
-        'counted_quantity', 'base_counted_quantity', 'quantity_delta', 'notes', 'movement_id',
+        'counted_quantity', 'base_counted_quantity', 'quantity_delta', 'notes', 'movement_id', 'base_cost', 'value_delta',
     ];
 
     protected $casts = [
@@ -21,6 +21,8 @@ class StockAdjustmentItem extends Model
         'counted_quantity' => 'decimal:4',
         'base_counted_quantity' => 'decimal:4',
         'quantity_delta' => 'decimal:4',
+        'base_cost' => 'decimal:2',
+        'value_delta' => 'decimal:2',
     ];
 
     public function adjustment(): BelongsTo

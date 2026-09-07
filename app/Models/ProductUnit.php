@@ -78,6 +78,13 @@ class ProductUnit extends Model
 
     public function priceFor(string $priceType = 'retail'): ?ProductUnitPrice
     {
-        return $this->prices->firstWhere('price_type', strtolower($priceType));
+        $price = $this->prices->firstWhere('price_type', strtolower($priceType));
+        return $price && ! $price->is_manual && $price->calculation_status === 'cost_required' && (float) $price->price <= 0 ? null : $price;
+    }
+
+    public function hasUnavailableAutomaticPrice(string $priceType = 'retail'): bool
+    {
+        $price = $this->prices->firstWhere('price_type', strtolower($priceType));
+        return $price && ! $price->is_manual && $price->calculation_status === 'cost_required' && (float) $price->price <= 0;
     }
 }

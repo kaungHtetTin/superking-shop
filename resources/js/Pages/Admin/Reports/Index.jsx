@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Head, Link, usePage } from '@/spa/router';
+import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
@@ -183,47 +183,115 @@ function ReportTabs({ view, canViewSales, canViewInventory, appBase }) {
 
 function ReportFilters({ view, filters, locations, appBase, showDates = false, showStock = false }) {
     const t = usePhraseTranslation();
-    const query = new URLSearchParams({ view });
-    Object.entries(filters || {}).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') query.set(key, value);
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [filterState, setFilterState] = useState({
+        location_id: filters?.location_id || '',
+        from: filters?.from || '',
+        to: filters?.to || '',
+        q: filters?.q || '',
+        stock_status: filters?.stock_status || '',
     });
+    const canExport = ['sales', 'inventory', 'pos'].includes(view);
+    const activeFilterCount = [
+        filterState.location_id,
+        ...(showDates ? [filterState.from, filterState.to] : []),
+        ...(showStock ? [filterState.q, filterState.stock_status] : []),
+    ].filter(Boolean).length;
 
-    return (
-        <div className="report-filter-bar">
-            <form method="get" action={routeWithBase('/admin/reports', appBase)}>
-                <input type="hidden" name="view" value={view} />
-                <label>
-                    <span>{t('Store / warehouse')}</span>
-                    <select name="location_id" defaultValue={filters?.location_id || ''}>
-                        <option value="">{t('All accessible')}</option>
-                        {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+    useEffect(() => {
+        if (!filterDrawerOpen) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [filterDrawerOpen]);
+
+    const requestFilters = {
+        view,
+        location_id: filterState.location_id || undefined,
+        ...(showDates ? { from: filterState.from || undefined, to: filterState.to || undefined } : {}),
+        ...(showStock ? { q: filterState.q.trim() || undefined, stock_status: filterState.stock_status || undefined } : {}),
+    };
+    const query = new URLSearchParams();
+    Object.entries(requestFilters).forEach(([key, value]) => value !== undefined && query.set(key, value));
+
+    const submitFilters = (event) => {
+        event.preventDefault();
+        setFilterDrawerOpen(false);
+        router.get(routeWithBase('/admin/reports', appBase), requestFilters, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const resetFilters = () => {
+        const empty = { location_id: '', from: '', to: '', q: '', stock_status: '' };
+        setFilterState(empty);
+        setFilterDrawerOpen(false);
+        router.get(routeWithBase('/admin/reports', appBase), { view }, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const renderFilterFields = (autoFocus = false) => (
+        <>
+            {showStock && (
+                <label className="form-field reports-filter__search">
+                    <span>{t('Search products')}</span>
+                    <span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Product name, code, or barcode')} /></span>
+                </label>
+            )}
+            <label className="form-field reports-filter__location">
+                <span>{t('Store / warehouse')}</span>
+                <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
+                    <option value="">{t('All accessible')}</option>
+                    {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+            </label>
+            {showDates && (
+                <>
+                    <label className="form-field reports-filter__date"><span>{t('From')}</span><input autoFocus={autoFocus} type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>
+                    <label className="form-field reports-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>
+                </>
+            )}
+            {showStock && (
+                <label className="form-field reports-filter__stock">
+                    <span>{t('Stock status')}</span>
+                    <select value={filterState.stock_status} onChange={(event) => setFilterState((current) => ({ ...current, stock_status: event.target.value }))}>
+                        <option value="">{t('All stock')}</option><option value="low">{t('Low stock')}</option><option value="out">{t('Out of stock')}</option>
                     </select>
                 </label>
-                {showDates && (
-                    <>
-                        <label><span>{t('From')}</span><input type="date" name="from" defaultValue={filters?.from || ''} /></label>
-                        <label><span>{t('To')}</span><input type="date" name="to" defaultValue={filters?.to || ''} /></label>
-                    </>
-                )}
-                {showStock && (
-                    <>
-                        <label><span>{t('Search')}</span><input type="search" name="q" defaultValue={filters?.q || ''} placeholder={t('Product name, code, or barcode')} /></label>
-                        <label>
-                            <span>{t('Stock status')}</span>
-                            <select name="stock_status" defaultValue={filters?.stock_status || ''}>
-                                <option value="">{t('All stock')}</option>
-                                <option value="low">{t('Low stock')}</option>
-                                <option value="out">{t('Out of stock')}</option>
-                            </select>
-                        </label>
-                    </>
-                )}
-                <button className="btn secondary" type="submit"><Icon name="search" size={14} /> {t('Apply')}</button>
-            </form>
-            {['sales', 'inventory', 'pos'].includes(view) && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}>
-                <Icon name="download" size={14} /> CSV
-            </a>}
-        </div>
+            )}
+        </>
+    );
+
+    return (
+        <>
+            <section className="panel glass reports-filter-panel">
+                <PanelHeading
+                    eyebrow={t('Report controls')}
+                    title={t('Report filters')}
+                    action={<button type="button" className="btn secondary reports-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}><Icon name="search" size={14} /> {t('Filter')}{activeFilterCount > 0 && <span className="reports-filter__count">{activeFilterCount}</span>}</button>}
+                />
+                <form className="reports-filter" onSubmit={submitFilters} aria-label={t('Report filters')}>
+                    <div className="reports-filter__scroll"><div className="reports-filter__fields">{renderFilterFields()}</div></div>
+                    <div className="inline-actions reports-filter__actions">
+                        <button className="btn primary" type="submit"><Icon name="search" size={14} /> {t('Apply')}</button>
+                        {canExport && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> CSV</a>}
+                        {activeFilterCount > 0 && <button className="btn secondary" type="button" onClick={resetFilters}>{t('Reset')}</button>}
+                    </div>
+                </form>
+            </section>
+
+            {filterDrawerOpen && (
+                <div className="modal-backdrop reports-filter__backdrop" onMouseDown={() => setFilterDrawerOpen(false)}>
+                    <form className="drawer glass reports-filter__drawer" onSubmit={submitFilters} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="reports-filter-title">
+                        <div className="drawer-header"><div><small className="eyebrow">{t('Report controls')}</small><h2 id="reports-filter-title">{t('Report filters')}</h2></div><button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}><Icon name="close" size={16} /></button></div>
+                        <div className="reports-filter__drawer-body">{renderFilterFields(true)}{canExport && <a className="btn secondary reports-filter__drawer-export" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> CSV</a>}</div>
+                        <div className="drawer-actions"><button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button><button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Apply')}</button></div>
+                    </form>
+                </div>
+            )}
+        </>
     );
 }
 
@@ -272,7 +340,7 @@ function InventoryReport({ report, filters, locations, appBase }) {
                     <section className="panel glass">
                         <PanelHeading eyebrow={t('Shrinkage')} title={t('Adjustment variance')} />
                         <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Reason')}</th><th>{t('Documents')}</th><th>{t('Variance')}</th><th>{t('Loss value')}</th></tr></thead><tbody>
-                            {report.adjustments.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No posted adjustments.')}</span></td></tr> : report.adjustments.map((row) => <tr key={row.reason_code}><td><strong>{t(row.reason_code.replaceAll('_', ' '))}</strong></td><td>{row.documents}</td><td>{row.net_quantity}</td><td>{money(row.loss_value)}</td></tr>)}
+                            {report.adjustments.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No posted adjustments.')}</span></td></tr> : report.adjustments.map((row) => <tr key={row.reason_code}><td><strong>{t(row.reason_code.replaceAll('_', ' '))}</strong></td><td>{row.documents}</td><td>{row.net_quantity}</td><td>{Number(row.unvalued_lines) > 0 ? t('Historical cost unavailable') : money(row.loss_value)}</td></tr>)}
                         </tbody></table></div>
                     </section>
                 </div>
@@ -355,9 +423,10 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
             {view === 'sales' && (
             <>
             <ReportFilters view="sales" filters={filters} locations={locations} appBase={app_base} showDates />
+            {Number(summary.unvalued_adjustment_lines) > 0 && <p role="status" className="muted">{t('Historical stock adjustments are missing cost snapshots. Profit is incomplete until those records are reconciled.')} ({summary.unvalued_adjustment_lines})</p>}
             <div className="metrics-grid four">
-                <MetricCard label="Paid orders" value={summary.paid_orders} hint="Confirmed payments" icon="receipt" />
-                <MetricCard label="Revenue" value={money(summary.revenue)} hint="Paid order total" icon="wallet" tone="success" />
+                <MetricCard label="Completed sales" value={summary.recognized_orders} hint="Includes credit sales" icon="receipt" />
+                <MetricCard label="Revenue" value={money(summary.revenue)} hint="Completed sales, including credit" icon="wallet" tone="success" />
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} hint="Original product cost at sale" icon="box" />
                 <MetricCard label="Gross profit" value={money(summary.gross_profit)} hint={`${summary.gross_margin}% margin`} icon="chart" tone="success" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} hint="Excludes stock purchases" icon="card" tone="danger" />
