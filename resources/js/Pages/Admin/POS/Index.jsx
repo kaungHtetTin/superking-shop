@@ -83,7 +83,7 @@ const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
 ) + 0.00005;
 
 export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
-    const { app_base, app_url, flash = {}, errors: pageErrors = {} } = usePage().props;
+    const { app_base, app_url, app_settings = {}, flash = {}, errors: pageErrors = {} } = usePage().props;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const t = useTranslation();
@@ -706,7 +706,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     credit_deposit_method: tenderType === 'credit' ? creditDepositMethod : null,
                 },
             });
-            if (checkoutIntentRef.current === 'print' && data.receipt_url) {
+            if ((checkoutIntentRef.current === 'print' || app_settings.receipt?.auto_print) && data.receipt_url) {
                 const separator = data.receipt_url.includes('?') ? '&' : '?';
                 window.location.assign(`${data.receipt_url}${separator}print=1`);
                 return;

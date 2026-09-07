@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Cache;
 
 class AppSettingsService
 {
+    public const RECEIPT_DEFAULTS = [
+        'shop_name' => '', 'address' => '', 'phone' => '',
+        'footer' => 'Thank you for shopping with us!', 'paper_size' => '80mm',
+        'show_logo' => true, 'show_customer' => true, 'show_cashier' => true,
+        'show_foc' => true, 'auto_print' => false,
+    ];
     public const DEFAULTS = [
         'app_name' => 'LaLaPick',
         'currency_label' => 'MMK',
@@ -22,7 +28,7 @@ class AppSettingsService
         ],
     ];
 
-    private const CACHE_KEY = 'app_settings.public';
+    private const CACHE_KEY = 'app_settings.public.v2';
 
     public function all(): array
     {
@@ -36,6 +42,7 @@ class AppSettingsService
                 'logo_path' => $settings['logo_path'] ?? null,
                 'favicon_path' => $settings['favicon_path'] ?? null,
                 'contacts' => $this->normalizeContacts($this->decodeJson($settings['contacts'] ?? null)),
+                'receipt' => array_replace(self::RECEIPT_DEFAULTS, $this->decodeJson($settings['receipt'] ?? null) ?? []),
             ];
         });
     }
@@ -116,6 +123,7 @@ class AppSettingsService
         return match ($key) {
             'logo_path', 'favicon_path', 'theme_color' => 'theme',
             'contacts' => 'contacts',
+            'receipt' => 'receipt',
             default => 'general',
         };
     }

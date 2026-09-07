@@ -65,6 +65,7 @@ class PasswordUpdateTest extends TestCase
                 'password_confirmation' => 'new-password',
             ])
             ->assertSessionHasNoErrors()
+            ->assertStatus(303)
             ->assertRedirect('/admin/profile?saved=password');
 
         $this->assertTrue(Hash::check('new-password', $admin->fresh()->password));

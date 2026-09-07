@@ -11,6 +11,8 @@ import UpdatePasswordForm from '@/Pages/Profile/Partials/UpdatePasswordForm';
 import DeleteUserForm from '@/Pages/Profile/Partials/DeleteUserForm';
 import PricingIndex from '@/Pages/Admin/Pricing/Index';
 import PricingForm from '@/Pages/Admin/Pricing/Form';
+import ReceiptSettings from './ReceiptSettings';
+import { receiptDefaults } from '@/Components/Admin/ReceiptPaper';
 
 const contactMeta = {
     email: { label: 'Email', type: 'email', placeholder: 'support@example.com' },
@@ -141,11 +143,11 @@ function ContactRows({ type, values, errors, onChange, onAdd, onRemove, t }) {
     );
 }
 
-export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null, pricing, pricingAction, pricingRule }) {
+export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null, pricing, pricingAction, pricingRule, canManageSettings = false }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
-    const [activeSection, setActiveSection] = useState(status === 'password-updated' ? 'security' : status === 'profile-updated' ? 'profile' : initialSection);
-    const applicationSections = ['general', 'branding', 'contacts'];
+    const [activeSection, setActiveSection] = useState(!canManageSettings ? 'prices' : status === 'password-updated' ? 'security' : status === 'profile-updated' ? 'profile' : initialSection);
+    const applicationSections = ['general', 'branding', 'contacts', 'receipts'];
     useEffect(() => { setActiveSection(initialSection); }, [initialSection, pricingAction, pricingRule?.id, pricing?.rules?.current_page, pricing?.filters?.q]);
     const initialData = useMemo(() => ({
         app_name: settings.app_name || '',
@@ -156,13 +158,16 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
         remove_logo: false,
         remove_favicon: false,
         contacts: ensureContacts(settings.contacts),
+        receipt: { ...receiptDefaults, ...settings.receipt },
     }), [settings]);
     const form = useForm(initialData);
     const hasChanges = serializeEditorData(form.data) !== serializeEditorData(initialData);
 
     useEffect(() => {
         const errorKeys = Object.keys(form.errors || {});
-        if (errorKeys.some((key) => key.startsWith('contacts.'))) {
+        if (errorKeys.some((key) => key === 'receipt' || key.startsWith('receipt.'))) {
+            setActiveSection('receipts');
+        } else if (errorKeys.some((key) => key.startsWith('contacts.'))) {
             setActiveSection('contacts');
         } else if (errorKeys.some((key) => ['theme_color', 'logo', 'favicon'].includes(key))) {
             setActiveSection('branding');
@@ -236,11 +241,12 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                             { id: 'general', label: 'General', description: 'Name and currency', icon: 'settings' },
                             { id: 'branding', label: 'Branding', description: 'Color and assets', icon: 'palette' },
                             { id: 'contacts', label: 'Contacts', description: 'Public channels', icon: 'chat' },
+                            { id: 'receipts', label: 'Receipts', description: 'POS layout and printing', icon: 'receipt' },
                             { id: 'prices', label: 'Prices', description: 'Price types and automatic pricing', icon: 'wallet' },
                             { id: 'profile', label: 'Edit profile', description: 'Personal information', icon: 'user' },
                             { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
                             { id: 'danger', label: 'Account deletion', description: 'Delete account', icon: 'trash' },
-                        ].map((section) => (
+                        ].filter((section) => canManageSettings || section.id === 'prices').map((section) => (
                             <button
                                 key={section.id}
                                 type="button"
@@ -260,6 +266,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                     <section className="settings-work-surface">
                         {activeSection === 'prices' && <div className="settings-section-content">{pricingAction ? <PricingForm key={`${pricingAction}-${pricingRule?.id || 'new'}`} embedded rule={pricingRule} app_base={app_base} /> : <PricingIndex key={`${pricing.rules.current_page}-${pricing.filters.q}`} embedded {...pricing} app_base={app_base} />}</div>}
                         {applicationSections.includes(activeSection) && <form id="application-settings-form" onSubmit={submit}>
+                        {activeSection === 'receipts' && <ReceiptSettings form={form} settings={settings} logoUrl={logoPreviewUrl} />}
                         {activeSection === 'general' && (
                             <div className="settings-section-content">
                                 <PanelHeading eyebrow={t('General')} title={t('Application identity')} />
@@ -398,7 +405,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                         <span className={hasChanges ? 'is-dirty' : 'is-clean'} />
                         <div>
                             <strong>{form.recentlySuccessful ? t('Settings saved') : hasChanges ? t('Unsaved changes') : t('All changes saved')}</strong>
-                            <small>{t('General, branding, and contacts are saved together.')}</small>
+                            <small>{t('General, branding, contacts, and receipts are saved together.')}</small>
                         </div>
                     </div>
                     <div className="editor-action-buttons">

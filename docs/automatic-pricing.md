@@ -36,7 +36,7 @@ Receipts include paid quantity, free quantity, purchase unit and effective base-
 - A database pricing-state lock serializes rule/product/receipt pricing changes. Transactions roll back stock, cost, finance and pricing together if recalculation fails. Bulk processing is synchronous, not a background job; very large catalogs should be applied during a quiet period.
 - Audit table `price_changes` records only actual changed amounts with cost, rule snapshot/version, trigger, actor and operation ID. Shared rule saves/deletes also use the existing audit log.
 - POS fetches current cart prices when the payment dialog opens. Checkout checks expected amounts against current server prices and rejects stale totals; changing pricing never silently charges a different displayed POS amount.
-- BCMath is required. The current repository lock also contains pre-existing packages requiring PHP 8.4, while the local PHP executable is 8.2; the lock metadata refresh preserves those existing versions and does not install them.
+- PHP 8.2+ and BCMath are required. The release lock is resolved against PHP 8.2.12 and uses Laravel 12. Run `composer check-platform-reqs --no-dev` on the deployment host; use a currently patched PHP release.
 
 ## Verification
 

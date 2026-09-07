@@ -136,4 +136,71 @@ class RolePermissionTest extends TestCase
 
         return $user->fresh();
     }
+
+    public function test_permission_catalog_explains_current_features_and_legacy_keys(): void
+    {
+        $response = $this->actingAs($this->staffWithRole('super_admin'))->getJson('/admin/roles')->assertOk();
+        $items = collect($response->json('props.permissionGroups'))->pluck('items')->flatten(1)->keyBy('value');
+
+        $this->assertStringContainsString('receipt', $items['settings.manage']['label']);
+        $this->assertStringContainsString('reversals', $items['inventory.transfer.create']['label']);
+        $this->assertStringContainsString('shifts', $items['pos.access']['label']);
+        $this->assertStringContainsString('PDFs', $items['orders.view']['label']);
+        $this->assertTrue($items['pos.refund']['inactive']);
+        $this->assertTrue($items['inventory.adjust.approve']['inactive']);
+        $this->assertFalse($items['pricing.manage']['inactive']);
+    }
+
+    public function test_pricing_only_role_can_manage_prices_but_not_other_settings(): void
+    {
+        $user = $this->staffWithPermissions(['pricing.manage']);
+        $this->actingAs($user)->get('/admin/settings')->assertRedirect('/admin/settings?section=prices');
+        $this->getJson('/admin/settings?section=prices')->assertOk()
+            ->assertJsonPath('props.canManageSettings', false)
+            ->assertJsonPath('props.initialSection', 'prices');
+        $this->get('/admin/settings/prices')->assertRedirect();
+        foreach (['general', 'branding', 'contacts', 'receipts', 'security'] as $section) {
+            $this->getJson('/admin/settings?section='.$section)->assertForbidden();
+        }
+        $this->postJson('/admin/settings', ['app_name' => 'Unauthorized change'])->assertForbidden();
+        $this->postJson('/admin/settings/prices', [
+            'name' => 'Permission test price', 'pricing_mode' => 'manual',
+            'markup_percent' => 0, 'rounding' => 1, 'minimum_profit' => 0,
+        ])->assertStatus(303);
+        $this->assertDatabaseHas('pricing_rules', ['name' => 'Permission test price']);
+        $this->get('/admin/roles')->assertForbidden();
+        $this->getJson('/admin/profile')->assertOk()->assertJsonPath('component', 'Profile/Edit');
+    }
+
+    public function test_settings_permission_preserves_access_to_prices_and_receipts(): void
+    {
+        $this->actingAs($this->staffWithPermissions(['settings.manage']))
+            ->getJson('/admin/settings?section=receipts')->assertOk()
+            ->assertJsonPath('props.canManageSettings', true);
+        $this->getJson('/admin/settings?section=prices')->assertOk();
+        $this->get('/admin/settings/prices/create')->assertRedirect();
+    }
+
+    public function test_staff_without_pricing_permission_cannot_read_or_mutate_rules(): void
+    {
+        $this->actingAs($this->staffWithRole('staff'));
+        $rule = \App\Models\PricingRule::firstOrFail();
+        $this->getJson('/admin/settings?section=prices')->assertForbidden();
+        $this->get('/admin/settings/prices')->assertForbidden();
+        $this->postJson('/admin/settings/prices', [])->assertForbidden();
+        $this->postJson('/admin/settings/prices/preview', [])->assertForbidden();
+        $this->patchJson('/admin/settings/prices/'.$rule->id, [])->assertForbidden();
+        $this->deleteJson('/admin/settings/prices/'.$rule->id)->assertForbidden();
+        $this->assertDatabaseHas('pricing_rules', ['id' => $rule->id]);
+    }
+
+    private function staffWithPermissions(array $permissions): User
+    {
+        $role = Role::create([
+            'name' => 'scoped_settings', 'display_name' => 'Scoped Settings',
+            'is_admin' => true, 'is_system' => false, 'sort_order' => 60,
+        ]);
+        $role->permissions()->sync(Permission::whereIn('name', $permissions)->pluck('id'));
+        return $this->staffWithRole($role->name);
+    }
 }

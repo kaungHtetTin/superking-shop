@@ -1,1 +1,0 @@
-import{r as e}from"./app-a9a0c2a6.js";function p(l){const{controlled:t,default:n,name:d,state:f="value"}=l,{current:o}=e.useRef(t!==void 0),[a,s]=e.useState(n),u=o?t:a,r=e.useCallback(c=>{o||s(c)},[]);return[u,r]}export{p as u};

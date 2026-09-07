@@ -1,0 +1,1 @@
+import{j as o}from"./app-Ckk1aNkJ.js";import t from"./Form-B7_w4WE-.js";import"./AdminFlash-CY-yENrA.js";import"./formatErrorMessage-BapYbJEK.js";import"./CropImageModal-4UYZ_FUc.js";function s(r){return o.jsx(t,{...r,mode:"create"})}export{s as default};

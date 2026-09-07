@@ -304,7 +304,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::delete('/inventory/transfers/{transfer}', [StockTransferController::class, 'destroy'])
         ->middleware('admin.permission:inventory.transfer.create')->name('inventory.transfers.destroy');
 
-    Route::middleware('admin.permission:settings.manage')->group(function () {
+    Route::middleware('admin.any_permission:settings.manage,pricing.manage')->group(function () {
         Route::get('/settings/prices', [\App\Http\Controllers\Admin\PricingRuleController::class, 'index'])->name('pricing.index');
         Route::get('/settings/prices/create', [\App\Http\Controllers\Admin\PricingRuleController::class, 'create'])->name('pricing.create');
         Route::post('/settings/prices/preview', [\App\Http\Controllers\Admin\PricingRuleController::class, 'preview'])->name('pricing.preview');
@@ -313,7 +313,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::patch('/settings/prices/{rule}', [\App\Http\Controllers\Admin\PricingRuleController::class, 'update'])->name('pricing.update');
         Route::delete('/settings/prices/{rule}', [\App\Http\Controllers\Admin\PricingRuleController::class, 'destroy'])->name('pricing.destroy');
         Route::get('/settings', [SettingController::class, 'edit'])->name('settings.edit');
-        Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings', [SettingController::class, 'update'])->middleware('admin.permission:settings.manage')->name('settings.update');
     });
 
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

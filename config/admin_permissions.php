@@ -1,0 +1,30 @@
+<?php
+
+// UI documentation for existing permission keys; this does not assign permissions.
+return [
+    'roles.manage' => ['label' => 'Manage custom roles and permissions', 'description' => 'Create, edit and delete custom admin roles. System roles remain fixed.'],
+    'settings.manage' => ['label' => 'Manage application and receipt settings', 'description' => 'General, branding, contacts, POS receipt layout (thermal/A4/A5), printing defaults and price rules.'],
+    'pricing.manage' => ['label' => 'Manage automatic pricing and price types', 'description' => 'Access Settings → Prices, edit rules, preview and explicitly apply bulk repricing. Does not grant other settings tabs.'],
+    'catalog.manage' => ['description' => 'Create and edit products, units, manual selling prices and categories. Existing accounting cost is protected.'],
+    'orders.view' => ['label' => 'View orders, invoices and PDFs', 'description' => 'View order details, invoice vouchers and download invoice PDFs.'],
+    'orders.manage' => ['description' => 'Update fulfillment and generate public invoice links. Payment review, cancellation and returns use separate permissions.'],
+    'orders.cancel' => ['description' => 'Cancel eligible orders with the implemented inventory and financial reversals.'],
+    'orders.returns' => ['description' => 'Process eligible returns and their inventory/financial effects.'],
+    'view_customers' => ['label' => 'Manage customer accounts', 'description' => 'List, create, edit and delete eligible customers. Credit configuration requires credit.manage.'],
+    'credit.manage' => ['description' => 'Manage credit accounts, limits, collections and statements; permits credit tender in POS.'],
+    'pos.access' => ['label' => 'POS sales, shifts and receipts', 'description' => 'Open/close own shifts, view accessible shift records, sell to walk-in/registered customers, select sale-wide price type, change units, add FOC and print receipts.'],
+    'pos.discount' => ['description' => 'Apply sale-level discounts in POS; below-cost protection still applies.'],
+    'pos.hold' => ['description' => 'Hold/resume sales and remove own held carts. Requires POS access for the screen.'],
+    'pos.void' => ['label' => 'Remove other cashiers’ held carts', 'description' => 'With pos.hold, permits deletion of another cashier’s held cart. Does not void completed sales.'],
+    'pos.refund' => ['label' => 'Legacy POS refund permission', 'description' => 'Not used by the current workflow. Use orders.returns for order returns.', 'inactive' => true],
+    'inventory.receive' => ['label' => 'Manage purchases and receipt reversals', 'description' => 'Receive/post purchases, update drafts and delete eligible receipts with stock, cost, pricing and financial reversal. Location access is also required.'],
+    'inventory.adjust.create' => ['label' => 'Post stock adjustments', 'description' => 'View and post counted-stock corrections with inventory and financial effects. No separate approval step.'],
+    'inventory.adjust.approve' => ['label' => 'Legacy adjustment approval', 'description' => 'No approval action exists in the current adjustment workflow. Use inventory.adjust.create.', 'inactive' => true],
+    'inventory.transfer.create' => ['label' => 'Manage transfers and reversals', 'description' => 'View/export transfers, transfer stock immediately, and delete eligible transfers with reversal. Both locations must be accessible for creation/deletion.'],
+    'locations.manage' => ['description' => 'Manage warehouses and grant access to all active locations. This affects inventory and report visibility.'],
+    'inventory.history' => ['description' => 'View and export stock movement history for accessible locations.'],
+    'manage_finance' => ['description' => 'Manage financial entries and access finance summaries/exports, subject to location access.'],
+    'view_reports' => ['description' => 'Access all report views, including sales, POS, inventory and operational health.'],
+    'reports.sales' => ['description' => 'Access sales and POS reports for accessible locations.'],
+    'reports.inventory' => ['description' => 'Access inventory and operational health reports for accessible locations.'],
+];

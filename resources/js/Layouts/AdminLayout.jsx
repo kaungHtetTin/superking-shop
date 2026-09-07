@@ -375,7 +375,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                         : []),
                 ],
             },
-            ...(can('staff.manage') || can('roles.manage') || can('settings.manage')
+            ...(can('staff.manage') || can('roles.manage') || can('settings.manage') || can('pricing.manage')
                 ? [
                       {
                           title: t('admin.sections.team', 'Team'),
@@ -398,11 +398,11 @@ function AdminChrome({ children, mainClassName = '' }) {
                                         },
                                     ]
                                   : []),
-                              ...(can('settings.manage')
+                              ...(can('settings.manage') || can('pricing.manage')
                                   ? [
                                         {
                                             label: t('admin.items.settings', 'Settings'),
-                                            href: routeWithBase('/admin/settings', app_base),
+                                            href: routeWithBase(can('settings.manage') ? '/admin/settings' : '/admin/settings?section=prices', app_base),
                                             icon: 'settings',
                                         },
                                     ]
@@ -578,7 +578,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                                 <small>{authUser?.email || roleLabel}</small>
                                             </div>
                                         </div>
-                                        <Link href={routeWithBase('/admin/settings?section=profile', app_base)} role="menuitem" onClick={closeProfile}>
+                                        <Link href={routeWithBase(can('settings.manage') ? '/admin/settings?section=profile' : '/admin/profile', app_base)} role="menuitem" onClick={closeProfile}>
                                             <Icon name="user" size={14} />
                                             {t('admin.profile_settings', 'Profile settings')}
                                         </Link>

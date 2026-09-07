@@ -35,13 +35,15 @@ class RoleController extends Controller
         $permissions = Permission::query()
             ->orderBy('group')
             ->orderBy('display_name')
-            ->get(['id', 'name', 'display_name', 'group'])
+            ->get(['id', 'name', 'display_name', 'group', 'description'])
             ->groupBy('group')
             ->map(fn ($items, string $group) => [
                 'group' => $group,
                 'items' => $items->map(fn (Permission $permission) => [
                     'value' => $permission->name,
-                    'label' => $permission->display_name,
+                    'label' => config('admin_permissions')[$permission->name]['label'] ?? $permission->display_name,
+                    'description' => config('admin_permissions')[$permission->name]['description'] ?? $permission->description,
+                    'inactive' => config('admin_permissions')[$permission->name]['inactive'] ?? false,
                 ])->values()->all(),
             ])
             ->values();

@@ -6349,6 +6349,30 @@
   min-width: 0;
   color: var(--color-text);
   font-size: 12px;
+  align-items: flex-start;
+  padding-block: 4px;
+}
+
+.permission-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.permission-copy small,
+.permission-help {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.permission-copy code {
+  color: var(--color-muted);
+  font-size: 10px;
+  white-space: normal;
+}
+
+.permission-help {
+  margin: 10px 0 16px;
 }
 
 .permission-option.static {

@@ -71,7 +71,7 @@ class OrderVoucherService
         File::put($htmlPath, $this->renderHtml($order, pdf: true));
 
         $process = new Process([
-            env('NODE_PATH', 'node'),
+            config('voucher.node_binary', 'node'),
             base_path('scripts/generate-voucher-pdf.cjs'),
             $htmlPath,
             $pdfPath,
@@ -79,13 +79,16 @@ class OrderVoucherService
             'PUPPETEER_CACHE_DIR' => storage_path('app/puppeteer'),
         ]);
         $process->setTimeout(60);
-        $process->run();
-
-        File::delete($htmlPath);
-
-        if (! $process->isSuccessful() || ! File::exists($pdfPath) || File::size($pdfPath) === 0) {
+        try {
+            $process->run();
+            if (! $process->isSuccessful() || ! File::exists($pdfPath) || File::size($pdfPath) === 0) {
+                throw new \RuntimeException('Could not generate voucher PDF. '.$process->getErrorOutput());
+            }
+        } catch (\Throwable $exception) {
             File::delete($pdfPath);
-            throw new \RuntimeException('Could not generate voucher PDF. '.$process->getErrorOutput());
+            throw $exception;
+        } finally {
+            File::delete($htmlPath);
         }
 
         return $pdfPath;

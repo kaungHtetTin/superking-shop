@@ -46,7 +46,8 @@ class PasswordController extends Controller
                 return response()->json(['status' => 'password-updated']);
             }
 
-            return back()->with('status', 'password-updated');
+            return redirect()->route('admin.profile.edit', ['saved' => 'password'], 303)
+                ->with('status', 'password-updated');
         }
 
         return back()->with('status', 'password-updated');

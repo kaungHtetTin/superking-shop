@@ -15,8 +15,16 @@ const createDefaults = {
 };
 
 function PermissionGroups({ groups, selected, disabled, onChange }) {
+    const [search, setSearch] = useState('');
+    const t = usePhraseTranslation();
+    const query = search.trim().toLowerCase();
+    const visibleGroups = groups.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => (!disabled || selected.includes(item.value)) &&
+            `${group.group} ${item.label} ${item.value} ${item.description || ''}`.toLowerCase().includes(query)),
+    })).filter((group) => group.items.length);
     const toggleGroup = (items, checked) => {
-        const names = items.map((item) => item.value);
+        const names = items.filter((item) => !item.inactive).map((item) => item.value);
         const next = checked
             ? [...new Set([...selected, ...names])]
             : selected.filter((name) => !names.includes(name));
@@ -24,10 +32,20 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
     };
 
     return (
-        <div className="permission-group-grid">
-            {groups.map((group) => {
+        <div className="permission-browser">
+            <label className="form-field">
+                <span>{t('Find a permission')}</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
+                    placeholder={t('Search features or permission keys')} />
+            </label>
+            <p className="permission-help">{disabled
+                ? t('System roles are read-only. Create a custom role to choose a different access level.')
+                : t('Permissions apply to every staff member assigned to this role. Location restrictions still apply. Legacy permissions do not enable a current action.')}</p>
+            <div className="permission-group-grid">
+            {visibleGroups.map((group) => {
                 const selectedCount = group.items.filter((item) => selected.includes(item.value)).length;
-                const allSelected = selectedCount === group.items.length;
+                const activeItems = group.items.filter((item) => !item.inactive);
+                const allSelected = activeItems.length > 0 && activeItems.every((item) => selected.includes(item.value));
 
                 if (disabled && selectedCount === 0) return null;
 
@@ -42,6 +60,8 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
                                     <input
                                         type="checkbox"
                                         checked={allSelected}
+                                        disabled={!activeItems.length}
+                                        aria-label={`${t('Select visible active permissions')}: ${group.group}`}
                                         onChange={(event) => toggleGroup(group.items, event.target.checked)}
                                     />
                                     <small>{selectedCount}/{group.items.length}</small>
@@ -57,13 +77,18 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
                                 return disabled ? (
                                     <span key={permission.value} className="permission-option static">
                                         <Icon name="check" size={13} />
-                                        <span>{permission.label}</span>
+                                        <span className="permission-copy">
+                                            <strong>{t(permission.label)}</strong>
+                                            <small>{t(permission.description || '')}</small>
+                                            <code>{permission.value}{permission.inactive ? ` · ${t('Legacy / inactive')}` : ''}</code>
+                                        </span>
                                     </span>
                                 ) : (
                                     <label key={permission.value} className="permission-option">
                                         <input
                                             type="checkbox"
                                             checked={checked}
+                                            disabled={permission.inactive && !checked}
                                             onChange={(event) => {
                                                 onChange(
                                                     event.target.checked
@@ -72,7 +97,11 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
                                                 );
                                             }}
                                         />
-                                        <span>{permission.label}</span>
+                                        <span className="permission-copy">
+                                            <strong>{t(permission.label)}</strong>
+                                            <small>{t(permission.description || '')}</small>
+                                            <code>{permission.value}{permission.inactive ? ` · ${t('Legacy / inactive')}` : ''}</code>
+                                        </span>
                                     </label>
                                 );
                             })}
@@ -80,6 +109,8 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
                     </fieldset>
                 );
             })}
+            </div>
+            {!visibleGroups.length && <p className="permission-help" role="status">{t('No matching permissions.')}</p>}
         </div>
     );
 }
