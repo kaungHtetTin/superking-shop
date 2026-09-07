@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminUserSeeder::class,
+            FinancialCategorySeeder::class,
+
+            // Demo/sample catalog, POS registers, and inventory balances are intentionally disabled.
             // PosDemoProductSeeder::class,
         ]);
     }
