@@ -16,7 +16,7 @@ class ProductCsvImportService
     public const MAX_ROWS = 10000;
 
     public const HEADERS = [
-        'name', 'category', 'barcode', 'base_unit_name', 'base_unit_code',
+        'name', 'parent_category', 'category', 'sku', 'barcode', 'base_unit_name', 'base_unit_code',
         'cost_price', 'retail_price', 'min_quantity', 'status', 'description',
     ];
 
@@ -45,14 +45,36 @@ class ProductCsvImportService
                 ->first();
 
             $createdCategories = 0;
-            $categoryIds = Category::query()->get(['id', 'name'])
-                ->mapWithKeys(fn (Category $category) => [Str::lower(trim($category->name)) => $category->id])
+            $categories = Category::query()->get(['id', 'parent_id', 'name']);
+            $parentIds = $categories->whereNull('parent_id')
+                ->mapWithKeys(fn (Category $category) => [$this->categoryNameKey($category->name) => $category->id])
+                ->all();
+            $categoryIds = $categories
+                ->mapWithKeys(fn (Category $category) => [$this->categoryPathKey($category->parent_id, $category->name) => $category->id])
                 ->all();
 
             foreach ($rows as $row) {
-                $categoryKey = Str::lower($row['category']);
+                $parentId = null;
+                if ($row['parent_category'] !== '') {
+                    $parentNameKey = $this->categoryNameKey($row['parent_category']);
+                    if (! isset($parentIds[$parentNameKey])) {
+                        $parent = Category::create([
+                            'parent_id' => null,
+                            'name' => $row['parent_category'],
+                            'slug' => $this->uniqueCategorySlug($row['parent_category']),
+                            'is_active' => false,
+                        ]);
+                        $parentIds[$parentNameKey] = $parent->id;
+                        $categoryIds[$this->categoryPathKey(null, $parent->name)] = $parent->id;
+                        $createdCategories++;
+                    }
+                    $parentId = $parentIds[$parentNameKey];
+                }
+
+                $categoryKey = $this->categoryPathKey($parentId, $row['category']);
                 if (! isset($categoryIds[$categoryKey])) {
                     $category = Category::create([
+                        'parent_id' => $parentId,
                         'name' => $row['category'],
                         'slug' => $this->uniqueCategorySlug($row['category']),
                         'is_active' => false,
@@ -63,6 +85,7 @@ class ProductCsvImportService
 
                 $product = Product::create([
                     'category_id' => $categoryIds[$categoryKey],
+                    'sku' => $row['sku'] ?: null,
                     'barcode' => $row['barcode'] ?: $this->uniqueBarcode(),
                     'name' => $row['name'],
                     'slug' => $this->uniqueSlug($row['name']),
@@ -132,11 +155,17 @@ class ProductCsvImportService
             return [[], ['CSV columns must exactly match the downloaded template.'], $this->emptyStats()];
         }
 
-        $categories = Category::query()->get(['id', 'name'])
-            ->keyBy(fn (Category $category) => Str::lower(trim($category->name)));
+        $categories = Category::query()->get(['id', 'parent_id', 'name']);
+        $parentIds = $categories->whereNull('parent_id')
+            ->mapWithKeys(fn (Category $category) => [$this->categoryNameKey($category->name) => $category->id]);
+        $categoryIds = $categories
+            ->mapWithKeys(fn (Category $category) => [$this->categoryPathKey($category->parent_id, $category->name) => $category->id]);
         $existingBarcodes = Product::query()->whereNotNull('barcode')->pluck('barcode')
             ->mapWithKeys(fn ($barcode) => [trim((string) $barcode) => true])->all();
+        $existingSkus = Product::query()->whereNotNull('sku')->pluck('sku')
+            ->mapWithKeys(fn ($sku) => [Str::lower(trim((string) $sku)) => true])->all();
         $fileBarcodes = [];
+        $fileSkus = [];
         $rows = [];
         $errors = [];
         $line = 1;
@@ -170,12 +199,29 @@ class ProductCsvImportService
                 }
             }
             if (mb_strlen($row['name']) > 255) $rowErrors[] = 'name is too long';
+            if (mb_strlen($row['sku']) > 128) $rowErrors[] = 'SKU is too long';
             if (mb_strlen($row['barcode']) > 128) $rowErrors[] = 'barcode is too long';
             if (mb_strlen($row['base_unit_name']) > 80) $rowErrors[] = 'base unit name is too long';
             if (mb_strlen($row['base_unit_code']) > 30) $rowErrors[] = 'base unit code is too long';
 
-            $category = $categories->get(Str::lower($row['category']));
-            if (! $category && ! $createMissingCategories) $rowErrors[] = "category '{$row['category']}' does not exist";
+            if (mb_strlen($row['parent_category']) > 255) $rowErrors[] = 'parent category is too long';
+            if (mb_strlen($row['category']) > 255) $rowErrors[] = 'category is too long';
+            if ($row['parent_category'] !== '' && $this->categoryNameKey($row['parent_category']) === $this->categoryNameKey($row['category'])) {
+                $rowErrors[] = 'parent category and category must be different';
+            }
+
+            if (! $createMissingCategories) {
+                $parentId = null;
+                if ($row['parent_category'] !== '') {
+                    $parentId = $parentIds->get($this->categoryNameKey($row['parent_category']));
+                    if (! $parentId) $rowErrors[] = "parent category '{$row['parent_category']}' does not exist as a top-level category";
+                }
+                if (($row['parent_category'] === '' || $parentId)
+                    && ! $categoryIds->has($this->categoryPathKey($parentId, $row['category']))) {
+                    $path = $row['parent_category'] === '' ? $row['category'] : $row['parent_category'].' > '.$row['category'];
+                    $rowErrors[] = "category '{$path}' does not exist";
+                }
+            }
 
             foreach (['cost_price', 'retail_price', 'min_quantity'] as $number) {
                 $row[$number] = $row[$number] === '' && $number === 'min_quantity' ? '0' : $row[$number];
@@ -191,6 +237,12 @@ class ProductCsvImportService
                 if (isset($existingBarcodes[$row['barcode']])) $rowErrors[] = 'barcode already exists';
                 if (isset($fileBarcodes[$row['barcode']])) $rowErrors[] = 'barcode is duplicated in this file';
                 $fileBarcodes[$row['barcode']] = true;
+            }
+            if ($row['sku'] !== '') {
+                $skuKey = Str::lower($row['sku']);
+                if (isset($existingSkus[$skuKey])) $rowErrors[] = 'SKU already exists';
+                if (isset($fileSkus[$skuKey])) $rowErrors[] = 'SKU is duplicated in this file';
+                $fileSkus[$skuKey] = true;
             }
 
             if ($rowErrors !== []) {
@@ -234,6 +286,16 @@ class ProductCsvImportService
         $suffix = 2;
         while (Category::query()->where('slug', $slug)->exists()) $slug = $base.'-'.$suffix++;
         return $slug;
+    }
+
+    private function categoryNameKey(string $name): string
+    {
+        return Str::lower(trim($name));
+    }
+
+    private function categoryPathKey(?int $parentId, string $name): string
+    {
+        return ($parentId ?? 0).'|'.$this->categoryNameKey($name);
     }
 
     private function uniqueBarcode(): string

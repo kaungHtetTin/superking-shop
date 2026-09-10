@@ -17,6 +17,7 @@ export default function Edit({ product, categories, app_base, returnPage = 1, pr
     const { data, setData, post, processing, errors } = useForm({
         _method: 'PATCH',
         category_id: product.category_id,
+        sku: product.sku || '',
         barcode: product.barcode || '',
         name: product.name,
         description: product.description || '',

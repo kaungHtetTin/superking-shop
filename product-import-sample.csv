@@ -1,4 +1,4 @@
-﻿name,category,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description
-Test Coffee,Beverages,990000000001,Piece,pc,800,1000,5,active,Coffee import test
-Test Tea,Beverages,,Packet,pkt,500,750,2,active,Barcode will be generated automatically
-Drinking Water,Beverages,990000000003,Bottle,btl,250,350,10,active,One bottle is the base unit
+name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description
+Test Coffee,Drinks,Beverages,COFFEE-001,990000000001,Piece,pc,800,1000,5,active,Coffee import test
+Test Tea,,Beverages,,,Packet,pkt,500,750,2,active,Barcode will be generated automatically
+Drinking Water,Drinks,Beverages,WATER-001,990000000003,Bottle,btl,250,350,10,active,One bottle is the base unit

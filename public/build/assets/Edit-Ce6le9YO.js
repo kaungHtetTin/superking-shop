@@ -1,0 +1,1 @@
+import{j as r}from"./app-B_UFHWh1.js";import m from"./Form-7KNFHuXO.js";import"./AdminFlash-DI5zw3Re.js";import"./formatErrorMessage-BapYbJEK.js";import"./unitLabel--UWlFAlG.js";function l({productOptions:t,flashSale:o}){return r.jsx(m,{productOptions:t,flashSale:o,mode:"edit"})}export{l as default};

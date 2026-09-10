@@ -35,6 +35,7 @@ class ProductController extends Controller
                 $query->where(fn ($scope) => $scope
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('product_code', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
                     ->orWhere('barcode', 'like', "%{$search}%"));
             })
             ->when($filters['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))
@@ -215,8 +216,13 @@ class ProductController extends Controller
 
     private function validateProduct(Request $request, ?Product $product = null): array
     {
+        $request->merge([
+            'sku' => trim((string) $request->input('sku')) ?: null,
+        ]);
+
         $validated = $request->validate([
             'category_id' => ['required', 'exists:categories,id'],
+            'sku' => ['nullable', 'string', 'max:128', Rule::unique('products', 'sku')->ignore($product?->id)],
             'barcode' => ['nullable', 'string', 'max:128', Rule::unique('products', 'barcode')->ignore($product?->id)],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -314,6 +320,7 @@ class ProductController extends Controller
 
         return [
             'category_id' => $validated['category_id'],
+            'sku' => trim((string) ($validated['sku'] ?? '')) ?: null,
             'barcode' => $validated['barcode'],
             'name' => $validated['name'],
             'slug' => $slug,

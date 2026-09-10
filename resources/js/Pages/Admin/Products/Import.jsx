@@ -31,7 +31,10 @@ export default function Import({ categories, app_base }) {
                     </a>
                 </div>
                 <p><strong>{t('Existing categories')}:</strong> {categories.map((category) => category.name).join(', ') || t('None')}</p>
-                <p className="muted">Barcode may be blank; the system will generate one. Status may be active, inactive, or draft. Existing products are never updated by this import.</p>
+                <p className="muted">
+                    Parent category is optional; leave it blank for a top-level category. Category is required. SKU and barcode may be blank,
+                    and the system will generate a barcode. Status may be active, inactive, or draft. Existing products are never updated by this import.
+                </p>
 
                 <form onSubmit={submit} style={{ marginTop: 20 }}>
                     <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, cursor: 'pointer' }}>

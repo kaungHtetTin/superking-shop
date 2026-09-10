@@ -22,7 +22,7 @@ class ProductImportController extends Controller
     {
         $rows = [
             ProductCsvImportService::HEADERS,
-            ['Example Coffee', 'Beverages', '', 'Piece', 'pc', '800', '1000', '5', 'active', 'Example row - replace or delete'],
+            ['Example Coffee', 'Drinks', 'Beverages', 'COFFEE-001', '', 'Piece', 'pc', '800', '1000', '5', 'active', 'Example row - replace or delete'],
         ];
 
         return response()->streamDownload(function () use ($rows) {
@@ -41,7 +41,7 @@ class ProductImportController extends Controller
             fputcsv($output, ProductCsvImportService::HEADERS);
 
             Product::query()
-                ->with(['category:id,name', 'baseUnit.prices.typeDefinition'])
+                ->with(['category:id,parent_id,name', 'category.parent:id,name', 'baseUnit.prices.typeDefinition'])
                 ->orderBy('id')
                 ->chunkById(500, function ($products) use ($output) {
                     foreach ($products as $product) {
@@ -51,7 +51,9 @@ class ProductImportController extends Controller
 
                         fputcsv($output, [
                             $this->excelSafe($product->name),
+                            $this->excelSafe($product->category?->parent?->name),
                             $this->excelSafe($product->category?->name),
+                            $this->excelSafe($product->sku),
                             $this->excelSafe($product->barcode),
                             $this->excelSafe($baseUnit?->name),
                             $this->excelSafe($baseUnit?->code),

@@ -129,6 +129,7 @@ class InventoryController extends Controller
                 ->when($term !== '', fn ($scope) => $scope->where(fn ($inner) => $inner
                     ->where('name', 'like', "%{$term}%")
                     ->orWhere('product_code', 'like', "%{$term}%")
+                    ->orWhere('sku', 'like', "%{$term}%")
                     ->orWhere('barcode', 'like', "%{$term}%")
                     ->orWhereHas('units', fn ($units) => $units->where('is_active', true)->where(fn ($unit) => $unit
                         ->where('name', 'like', "%{$term}%")
@@ -147,6 +148,7 @@ class InventoryController extends Controller
                     'product_unit_id' => $unit->id,
                     'product_id' => $product->id,
                     'product_code' => $product->product_code,
+                    'product_sku' => $product->sku,
                     'barcode' => $product->barcode,
                     'product_name' => $product->name,
                     'unit_name' => $unit->name,
@@ -176,11 +178,11 @@ class InventoryController extends Controller
 
         $query = ProductUnit::query()
             ->where('is_active', true)
-            ->with(['prices', 'product:id,name,product_code,barcode,original_price,category_id', 'product.primaryImage:id,product_id,image_path', 'product.inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id)])
+            ->with(['prices', 'product:id,name,product_code,sku,barcode,original_price,category_id', 'product.primaryImage:id,product_id,image_path', 'product.inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id)])
             ->when($term !== '', fn ($scope) => $scope->where(fn ($inner) => $inner
                 ->where('name', 'like', "%{$term}%")
                 ->orWhere('code', 'like', "%{$term}%")
-                ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$term}%")->orWhere('product_code', 'like', "%{$term}%")->orWhere('barcode', 'like', "%{$term}%"))))
+                ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$term}%")->orWhere('product_code', 'like', "%{$term}%")->orWhere('sku', 'like', "%{$term}%")->orWhere('barcode', 'like', "%{$term}%"))))
             ->when(! empty($validated['category_id']), fn ($scope) => $scope->whereHas('product', fn ($product) => $product->where('category_id', $validated['category_id'])))
             ->whereHas('product', fn ($scope) => $scope->where('is_active', true))
             ->orderBy(Product::select('name')->whereColumn('products.id', 'product_units.product_id'))
@@ -195,6 +197,7 @@ class InventoryController extends Controller
                 'product_unit_id' => $unit->id,
                 'product_id' => $unit->product_id,
                 'product_code' => $unit->product->product_code,
+                'product_sku' => $unit->product->sku,
                 'barcode' => $unit->product->barcode,
                 'product_name' => $unit->product->name,
                 'unit_name' => $unit->name,

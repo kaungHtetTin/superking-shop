@@ -96,6 +96,11 @@ export default function ProductFormUI({
                             {errors.name && <small className="field-error">{formatErrorMessage(errors.name)}</small>}
                         </label>
                         <label className="form-field">
+                            <span>{t('SKU')} <small>({t('Optional')})</small></span>
+                            <input value={data.sku || ''} onChange={(event) => setData('sku', event.target.value)} maxLength={128} />
+                            {errors.sku && <small className="field-error">{formatErrorMessage(errors.sku)}</small>}
+                        </label>
+                        <label className="form-field">
                             <span>{t('Barcode')}</span>
                             <div className="field-with-action">
                                 <input value={data.barcode} onChange={(event) => setData('barcode', event.target.value)} placeholder={t('Generated automatically when empty')} />
@@ -136,21 +141,21 @@ export default function ProductFormUI({
                     </div>
                     <div className="product-unit-matrix">
                         <div className="product-unit-matrix__scroll">
-                            <div className="product-unit-matrix__grid product-unit-matrix__header" aria-hidden="true">
-                                <span>#</span><span>{t('Unit name')}</span><span>{t('Short code')}</span><span>{t('Conversion factor')}</span><span>{t('Base unit')}</span><span>{t('Default selling')}</span><span>{t('Active')}</span><span />
-                            </div>
-                            {data.units.map((unit, unitIndex) => (
-                                <div className="product-unit-matrix__grid product-unit-matrix__row" key={unit.id || `new-unit-${unitIndex}`}>
-                                    <span className="unit-editor__index">{String(unitIndex + 1).padStart(2, '0')}</span>
-                                    <label className="form-field product-unit-table-field"><span>{t('Unit name')}</span><input value={unit.name} placeholder={t('Piece, Box, Carton')} onChange={(event) => patchUnit(unitIndex, { name: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.name`)} required />{fieldError(`units.${unitIndex}.name`) && <small className="field-error">{fieldError(`units.${unitIndex}.name`)}</small>}</label>
-                                    <label className="form-field product-unit-table-field"><span>{t('Short code')}</span><input value={unit.code} placeholder={t('pc, box, ctn')} onChange={(event) => patchUnit(unitIndex, { code: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.code`)} required />{fieldError(`units.${unitIndex}.code`) && <small className="field-error">{fieldError(`units.${unitIndex}.code`)}</small>}</label>
-                                    <label className="form-field product-unit-table-field"><span>{t('Conversion factor')}</span><input type="number" min="0.000001" step="0.000001" value={unit.conversion_factor} disabled={unit.is_base} onChange={(event) => patchUnit(unitIndex, { conversion_factor: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.conversion_factor`)} required />{fieldError(`units.${unitIndex}.conversion_factor`) && <small className="field-error">{fieldError(`units.${unitIndex}.conversion_factor`)}</small>}</label>
-                                    <label className={`product-unit-table-toggle${unit.is_base ? ' selected' : ''}`} title={t('Set as base unit')}><input type="radio" name="base-unit" checked={!!unit.is_base} onChange={() => chooseSingleFlag(unitIndex, 'is_base')} /><span>{t('Base')}</span></label>
-                                    <label className={`product-unit-table-toggle${unit.is_default_selling ? ' selected' : ''}`} title={t('Set as default selling unit')}><input type="radio" name="selling-unit" checked={!!unit.is_default_selling} onChange={() => chooseSingleFlag(unitIndex, 'is_default_selling')} /><span>{t('Default')}</span></label>
-                                    <label className={`product-unit-table-toggle${unit.is_active ? ' selected' : ''}`}><input type="checkbox" checked={!!unit.is_active} onChange={(event) => patchUnit(unitIndex, { is_active: event.target.checked })} /><span>{t('Active')}</span></label>
-                                    <button type="button" className="icon-btn danger" onClick={() => removeUnit(unitIndex)} disabled={data.units.length === 1} aria-label={t('Remove unit')} title={t('Remove unit')}><Icon name="trash" size={14} /></button>
-                                </div>
-                            ))}
+                            <table className="product-spreadsheet product-unit-spreadsheet">
+                                <thead><tr><th>#</th><th>{t('Unit name')}</th><th>{t('Short code')}</th><th>{t('Conversion factor')}</th><th>{t('Base unit')}</th><th>{t('Default selling')}</th><th>{t('Active')}</th><th aria-label={t('Actions')} /></tr></thead>
+                                <tbody>{data.units.map((unit, unitIndex) => (
+                                    <tr key={unit.id || `new-unit-${unitIndex}`}>
+                                        <th scope="row">{String(unitIndex + 1).padStart(2, '0')}</th>
+                                        <td><input className="sheet-input" aria-label={t('Unit name')} value={unit.name} placeholder={t('Piece, Box, Carton')} onChange={(event) => patchUnit(unitIndex, { name: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.name`)} required />{fieldError(`units.${unitIndex}.name`) && <small className="sheet-error">{fieldError(`units.${unitIndex}.name`)}</small>}</td>
+                                        <td><input className="sheet-input" aria-label={t('Short code')} value={unit.code} placeholder={t('pc, box, ctn')} onChange={(event) => patchUnit(unitIndex, { code: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.code`)} required />{fieldError(`units.${unitIndex}.code`) && <small className="sheet-error">{fieldError(`units.${unitIndex}.code`)}</small>}</td>
+                                        <td><input className="sheet-input" aria-label={t('Conversion factor')} type="number" min="0.000001" step="0.000001" value={unit.conversion_factor} disabled={unit.is_base} onChange={(event) => patchUnit(unitIndex, { conversion_factor: event.target.value })} aria-invalid={!!fieldError(`units.${unitIndex}.conversion_factor`)} required />{fieldError(`units.${unitIndex}.conversion_factor`) && <small className="sheet-error">{fieldError(`units.${unitIndex}.conversion_factor`)}</small>}</td>
+                                        <td className={unit.is_base ? 'sheet-choice selected' : 'sheet-choice'}><label title={t('Set as base unit')}><input type="radio" name="base-unit" checked={!!unit.is_base} onChange={() => chooseSingleFlag(unitIndex, 'is_base')} /><span>{t('Base')}</span></label></td>
+                                        <td className={unit.is_default_selling ? 'sheet-choice selected' : 'sheet-choice'}><label title={t('Set as default selling unit')}><input type="radio" name="selling-unit" checked={!!unit.is_default_selling} onChange={() => chooseSingleFlag(unitIndex, 'is_default_selling')} /><span>{t('Default')}</span></label></td>
+                                        <td className={unit.is_active ? 'sheet-choice selected' : 'sheet-choice'}><label><input type="checkbox" checked={!!unit.is_active} onChange={(event) => patchUnit(unitIndex, { is_active: event.target.checked })} /><span>{t('Active')}</span></label></td>
+                                        <td className="sheet-action"><button type="button" className="icon-btn danger" onClick={() => removeUnit(unitIndex)} disabled={data.units.length === 1} aria-label={t('Remove unit')} title={t('Remove unit')}><Icon name="trash" size={14} /></button></td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
                         </div>
                     </div>
                     {errors.units && <div className="flash error">{formatErrorMessage(errors.units)}</div>}
@@ -160,30 +165,31 @@ export default function ProductFormUI({
                             <button type="button" className="btn secondary" onClick={addPriceType}><Icon name="plus" size={13} />{t('Add price type')}</button>
                         </div>
                         <div className="product-price-matrix__scroll">
-                            <div className="product-price-matrix__grid product-price-matrix__header" style={{ '--price-unit-count': data.units.length }}>
-                                <span>{t('Price type')}</span>
-                                {data.units.map((unit, index) => <span key={unit.id || index}>{unit.name || `${t('Unit')} ${index + 1}`}<small>{unit.code || '—'}</small></span>)}
-                                <span />
-                            </div>
-                            {data.price_types.map((type, typeIndex) => (
-                                <div className="product-price-matrix__grid product-price-matrix__row" style={{ '--price-unit-count': data.units.length }} key={type.id || `price-type-${typeIndex}`}>
-                                    <label className="form-field"><span>{t('Price name')}</span><input list="pricing-rule-codes" value={type.name} disabled={type.name === 'retail' || (!!type.id && pricingRules.some(rule => rule.code === type.name))} placeholder={t('wholesale, vip')} onChange={(event) => patchPriceType(typeIndex, { name: event.target.value })} required /><small>{pricingRules.find(rule => rule.code === type.name)?.name}</small></label>
+                            <table className="product-spreadsheet product-price-spreadsheet" style={{ '--price-unit-count': data.units.length }}>
+                                <thead>
+                                    <tr><th rowSpan="2">#</th><th rowSpan="2">{t('Price type')}</th>{data.units.map((unit, index) => <th colSpan="2" key={unit.id || index}>{unit.name || `${t('Unit')} ${index + 1}`} <small>{unit.code || '—'}</small></th>)}<th rowSpan="2" aria-label={t('Actions')} /></tr>
+                                    <tr>{data.units.flatMap((unit, index) => [<th key={`mode-${unit.id || index}`}>{t('Mode')}</th>, <th key={`price-${unit.id || index}`}>{t('Price')}</th>])}</tr>
+                                </thead>
+                                <tbody>{data.price_types.map((type, typeIndex) => (
+                                <tr key={type.id || `price-type-${typeIndex}`}>
+                                    <th scope="row">{String(typeIndex + 1).padStart(2, '0')}</th>
+                                    <td><input className="sheet-input" aria-label={t('Price name')} list="pricing-rule-codes" value={type.name} disabled={type.name === 'retail' || (!!type.id && pricingRules.some(rule => rule.code === type.name))} placeholder={t('wholesale, vip')} onChange={(event) => patchPriceType(typeIndex, { name: event.target.value })} required /></td>
                                     {data.units.map((unit, unitIndex) => {
                                         const rule = pricingRules.find(rule => rule.code === type.name);
                                         const automatic = rule?.pricing_mode === 'automatic' && type.is_manual?.[unitIndex] === false;
                                         const preview = automatic ? automaticPrice(buyingCost, rule, unit.conversion_factor) : null;
                                         const amount = automatic ? (preview ?? type.prices[unitIndex] ?? 0) : (type.prices[unitIndex] ?? 0);
                                         const profit = Number(amount) - Number(buyingCost || 0) * Number(unit.conversion_factor);
-                                        return <div className="form-field product-price-matrix__price-cell" key={unit.id || unitIndex}>
-                                            <select aria-label={`${type.name} ${unit.name || `Unit ${unitIndex + 1}`} pricing mode`} value={automatic ? 'auto' : 'manual'} onChange={event => patchPriceType(typeIndex, { is_manual: data.units.map((_, i) => i === unitIndex ? event.target.value === 'manual' : (type.is_manual?.[i] ?? true)) })}><option value="manual">Manual</option>{rule?.pricing_mode === 'automatic' && <option value="auto">Automatic</option>}</select>
-                                            <input aria-label={`${type.name} ${unit.name} price`} type="number" min="0" step="0.01" value={amount} readOnly={automatic} onChange={event => patchUnitPrice(typeIndex, unitIndex, event.target.value)} required />
-                                            <small className={profit < 0 ? 'field-error' : 'muted'}>{automatic && preview === null ? 'Cost required — saved price retained' : `Markup over buying cost ${profit.toFixed(2)}${profit < 0 ? ' · Below buying cost' : ''}`}</small>
-                                            <small className="muted">Before discounts and free items; accounting profit uses weighted-average cost.</small>
-                                        </div>;
+                                        const priceStatus = automatic && preview === null ? t('Cost required') : `${profit < 0 ? t('Below cost') : t('Markup')} ${profit.toFixed(2)}`;
+                                        return [
+                                            <td key={`mode-${unit.id || unitIndex}`} title={priceStatus}><select className="sheet-input" aria-label={`${type.name} ${unit.name || `Unit ${unitIndex + 1}`} pricing mode`} value={automatic ? 'auto' : 'manual'} onChange={event => patchPriceType(typeIndex, { is_manual: data.units.map((_, i) => i === unitIndex ? event.target.value === 'manual' : (type.is_manual?.[i] ?? true)) })}><option value="manual">Manual</option>{rule?.pricing_mode === 'automatic' && <option value="auto">Automatic</option>}</select></td>,
+                                            <td className={profit < 0 ? 'is-below-cost' : ''} key={`price-${unit.id || unitIndex}`} title={`${priceStatus}. ${t('Accounting profit uses weighted-average cost before discounts and free items.')}`}><input className="sheet-input" aria-label={`${type.name} ${unit.name} price`} type="number" min="0" step="0.01" value={amount} readOnly={automatic} onChange={event => patchUnitPrice(typeIndex, unitIndex, event.target.value)} required /></td>,
+                                        ];
                                     })}
-                                    <button type="button" className="icon-btn danger" onClick={() => removePriceType(typeIndex)} disabled={type.name === 'retail'} aria-label={t('Remove price type')} title={t('Remove price type')}><Icon name="trash" size={14} /></button>
-                                </div>
-                            ))}
+                                    <td className="sheet-action"><button type="button" className="icon-btn danger" onClick={() => removePriceType(typeIndex)} disabled={type.name === 'retail'} aria-label={t('Remove price type')} title={t('Remove price type')}><Icon name="trash" size={14} /></button></td>
+                                </tr>
+                            ))}</tbody>
+                            </table>
                         </div>
                         {errors.price_types && <div className="flash error">{formatErrorMessage(errors.price_types)}</div>}
                         <datalist id="pricing-rule-codes">{pricingRules.map(rule => <option key={rule.id} value={rule.code}>{rule.name}</option>)}</datalist>

@@ -169,7 +169,7 @@ export default function Index({ products, filters = {}, app_base }) {
                                                     )}
                                                     <div>
                                                         <strong>{product.name}</strong>
-                                                        <small>{product.product_code} · {product.default_selling_unit?.name || t('No selling unit')}</small>
+                                                        <small>{[product.product_code, product.sku, product.default_selling_unit?.name || t('No selling unit')].filter(Boolean).join(' · ')}</small>
                                                     </div>
                                                 </div>
                                             </td>

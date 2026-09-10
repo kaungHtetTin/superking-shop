@@ -19,7 +19,7 @@ class ProductCsvImportTest extends TestCase
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
         Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
         $location = Location::query()->where('is_default_fulfillment', true)->firstOrFail();
-        $csv = "name,category,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nCoffee,Beverages,885001,Piece,pc,800,1000,5,active,Test coffee\nTea,Beverages,,Packet,pkt,500,750,2,draft,\n";
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nCoffee,,Beverages,COFFEE-001,885001,Piece,pc,800,1000,5,active,Test coffee\nTea,,Beverages,,,Packet,pkt,500,750,2,draft,\n";
 
         $this->actingAs($admin)->post('/admin/products/import', [
             'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
@@ -31,6 +31,7 @@ class ProductCsvImportTest extends TestCase
         $this->assertSame(1.0, (float) $coffee->baseUnit->conversion_factor);
         $this->assertSame(1000.0, (float) $coffee->baseUnit->prices->first()->price);
         $this->assertSame('retail', $coffee->priceTypes->first()->name);
+        $this->assertSame('COFFEE-001', $coffee->sku);
         $this->assertDatabaseHas('inventory_balances', ['location_id' => $location->id, 'product_id' => $coffee->id, 'on_hand_qty' => 0]);
         $this->assertNotEmpty(Product::where('name', 'Tea')->value('barcode'));
     }
@@ -39,7 +40,7 @@ class ProductCsvImportTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
         Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
-        $csv = "name,category,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nValid,Beverages,1001,Piece,pc,10,20,0,active,\nNew Product,New Category,1002,Piece,pc,10,15,0,active,\n";
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nValid,,Beverages,,1001,Piece,pc,10,20,0,active,\nNew Product,,New Category,,1002,Piece,pc,10,15,0,active,\n";
 
         $this->actingAs($admin)->post('/admin/products/import', [
             'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
@@ -58,7 +59,7 @@ class ProductCsvImportTest extends TestCase
     public function test_missing_category_is_rejected_when_auto_create_is_disabled(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
-        $csv = "name,category,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nProduct,Missing,1002,Piece,pc,10,15,0,active,\n";
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nProduct,,Missing,,1002,Piece,pc,10,15,0,active,\n";
 
         $this->actingAs($admin)->from('/admin/products/import')->post('/admin/products/import', [
             'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
@@ -74,15 +75,17 @@ class ProductCsvImportTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin/products/import/template')->assertOk();
 
         $content = $response->streamedContent();
-        $this->assertStringStartsWith("\xEF\xBB\xBFname,category,barcode", $content);
+        $this->assertStringStartsWith("\xEF\xBB\xBFname,parent_category,category,sku,barcode", $content);
     }
 
     public function test_export_uses_the_same_columns_as_the_new_product_import(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
-        $category = Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
+        $parent = Category::create(['name' => 'Drinks', 'slug' => 'drinks', 'is_active' => true]);
+        $category = Category::create(['parent_id' => $parent->id, 'name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
         $product = Product::create([
             'category_id' => $category->id,
+            'sku' => 'EXPORT-COFFEE-001',
             'barcode' => '8850099',
             'name' => 'Export Coffee',
             'slug' => 'export-coffee',
@@ -97,7 +100,7 @@ class ProductCsvImportTest extends TestCase
 
         $content = $this->actingAs($admin)->get('/admin/products/export')->assertOk()->streamedContent();
 
-        $this->assertStringStartsWith("\xEF\xBB\xBFname,category,barcode", $content);
+        $this->assertStringStartsWith("\xEF\xBB\xBFname,parent_category,category,sku,barcode", $content);
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, preg_replace('/^\xEF\xBB\xBF/', '', $content));
         rewind($stream);
@@ -105,7 +108,24 @@ class ProductCsvImportTest extends TestCase
         $row = fgetcsv($stream);
         fclose($stream);
 
-        $this->assertSame(['name', 'category', 'barcode', 'base_unit_name', 'base_unit_code', 'cost_price', 'retail_price', 'min_quantity', 'status', 'description'], $headers);
-        $this->assertSame(['Export Coffee', 'Beverages', '8850099', 'Piece', 'pc', '800.00', '1000.00', '5.0000', 'active', ''], $row);
+        $this->assertSame(['name', 'parent_category', 'category', 'sku', 'barcode', 'base_unit_name', 'base_unit_code', 'cost_price', 'retail_price', 'min_quantity', 'status', 'description'], $headers);
+        $this->assertSame(['Export Coffee', 'Drinks', 'Beverages', 'EXPORT-COFFEE-001', '8850099', 'Piece', 'pc', '800.00', '1000.00', '5.0000', 'active', ''], $row);
+    }
+
+    public function test_import_creates_and_assigns_parent_and_child_categories(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nCoffee,Drinks,Hot Drinks,COFFEE-HOT,8850100,Piece,pc,10,20,0,active,\n";
+
+        $this->actingAs($admin)->post('/admin/products/import', [
+            'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+            'create_missing_categories' => true,
+        ])->assertRedirect('/admin/products');
+
+        $parent = Category::query()->where('name', 'Drinks')->whereNull('parent_id')->firstOrFail();
+        $child = Category::query()->where('name', 'Hot Drinks')->where('parent_id', $parent->id)->firstOrFail();
+        $this->assertFalse($parent->is_active);
+        $this->assertFalse($child->is_active);
+        $this->assertDatabaseHas('products', ['name' => 'Coffee', 'category_id' => $child->id]);
     }
 }

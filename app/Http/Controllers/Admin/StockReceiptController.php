@@ -44,7 +44,7 @@ class StockReceiptController extends Controller
             'creator:id,name',
             'receiver:id,name',
             'inventoryImport:id,batch_number,original_filename',
-            'items.product:id,name,product_code,barcode,original_price',
+            'items.product:id,name,product_code,sku,barcode,original_price',
             'items.unit:id,product_id,name,code,conversion_factor',
         ]);
 
@@ -88,7 +88,7 @@ class StockReceiptController extends Controller
         $this->authorize('update', $receipt);
         abort_unless($receipt->status === 'draft', 404);
         $receipt->load([
-            'items.product:id,name,product_code,barcode,original_price',
+            'items.product:id,name,product_code,sku,barcode,original_price',
             'items.product.inventoryBalances' => fn ($query) => $query->where('location_id', $receipt->location_id),
             'items.product.units' => fn ($query) => $query->where('is_active', true)->with('prices')->orderByDesc('is_base')->orderBy('sort_order'),
             'items.unit.prices',
@@ -106,7 +106,6 @@ class StockReceiptController extends Controller
                     'product_unit_id' => $item->product_unit_id,
                     'received_quantity' => $item->received_quantity,
                     'free_quantity' => $item->free_quantity,
-                    'notes' => $item->notes,
                     'unit_cost' => $item->unit_cost,
                     'unit' => $this->receiptUnitPayload($item->unit, $item->product),
                 ])->values(),
@@ -186,6 +185,7 @@ class StockReceiptController extends Controller
             'product_unit_id' => $option->id,
             'product_id' => $option->product_id,
             'product_code' => $product->product_code,
+            'product_sku' => $product->sku,
             'barcode' => $product->barcode,
             'product_name' => $product->name,
             'unit_name' => $option->name,

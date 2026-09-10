@@ -12,6 +12,34 @@ class ProductCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_optional_sku_can_be_saved_and_must_be_unique(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $category = Category::create(['name' => 'Test', 'slug' => 'test', 'is_active' => true]);
+        $payload = [
+            'category_id' => $category->id,
+            'sku' => 'SKU-001',
+            'name' => 'SKU Product',
+            'min_quantity' => 0,
+            'original_price' => 10,
+            'status' => 'active',
+            'units' => [
+                ['name' => 'Piece', 'code' => 'pc', 'conversion_factor' => 1, 'is_base' => true, 'is_default_selling' => true],
+            ],
+            'price_types' => [
+                ['name' => 'retail', 'prices' => [20]],
+            ],
+        ];
+
+        $this->actingAs($admin)->post('/admin/products', $payload)->assertRedirect('/admin/products');
+        $this->assertDatabaseHas('products', ['name' => 'SKU Product', 'sku' => 'SKU-001']);
+
+        $payload['name'] = 'Duplicate SKU Product';
+        $this->actingAs($admin)->from('/admin/products/create')->post('/admin/products', $payload)
+            ->assertRedirect('/admin/products/create')
+            ->assertSessionHasErrors('sku');
+    }
+
     public function test_product_creation_requires_exactly_one_base_and_default_unit(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
