@@ -7,6 +7,7 @@ import { ColumnVisibilityControl, PanelHeading, StatusBadge } from '@/Components
 import { routeWithBase, storageUrl } from '@/Utils/url';
 import useInventoryRealtime from '@/Utils/useInventoryRealtime';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatCompoundQuantity } from '@/Utils/unitLabel';
 
 export default function InventoryIndex({ balances, locations, categories, filters, can, lastUpdated, pollIntervalMs = 20000 }) {
     const { app_base, app_url } = usePage().props;
@@ -88,7 +89,7 @@ export default function InventoryIndex({ balances, locations, categories, filter
 
                 <div className="table-wrap">
                     <table className="data-table inventory-table">
-                        <thead><tr>{visibleColumns.image !== false && <th className="inventory-image-column">{t('Image')}</th>}<th className="inventory-product-column">{t('Product')}</th>{visibleColumns.warehouse !== false && <th>{t('Warehouse')}</th>}<th className="numeric-cell">{t('On hand (base)')}</th>{visibleColumns.reserved !== false && <th className="numeric-cell">{t('Reserved (base)')}</th>}<th className="numeric-cell">{t('Available')}</th>{visibleColumns.reorder !== false && <th className="numeric-cell">{t('Minimum')}</th>}{visibleColumns.status !== false && <th>{t('Status')}</th>}<th className="table-actions-column" /></tr></thead>
+                        <thead><tr>{visibleColumns.image !== false && <th className="inventory-image-column">{t('Image')}</th>}<th className="inventory-product-column">{t('Product')}</th>{visibleColumns.warehouse !== false && <th>{t('Warehouse')}</th>}<th className="numeric-cell">{t('On hand')}</th>{visibleColumns.reserved !== false && <th className="numeric-cell">{t('Reserved')}</th>}<th className="numeric-cell">{t('Available')}</th>{visibleColumns.reorder !== false && <th className="numeric-cell">{t('Minimum')}</th>}{visibleColumns.status !== false && <th>{t('Status')}</th>}<th className="table-actions-column" /></tr></thead>
                         <tbody>
                             {balances.data.length === 0 ? (
                                 <tr><td colSpan={4 + Object.values(visibleColumns).filter(Boolean).length} className="empty-table-cell">{t('No products match these filters.')}</td></tr>
@@ -96,6 +97,7 @@ export default function InventoryIndex({ balances, locations, categories, filter
                                 const available = balance.on_hand_qty - balance.reserved_qty;
                                 const status = available <= 0 ? 'danger' : available <= balance.min_quantity ? 'warning' : 'success';
                                 const imagePath = balance.product?.image_path;
+                                const units = balance.product?.units || [];
                                 return (
                                     <tr key={balance.id}>
                                         {visibleColumns.image !== false && <td className="inventory-image-column">
@@ -109,10 +111,10 @@ export default function InventoryIndex({ balances, locations, categories, filter
                                         </td>}
                                         <td className="inventory-product-column"><strong>{balance.product.name}</strong><small className="table-subline">{balance.product.product_code} · {balance.product.base_unit?.code || t('base')}</small></td>
                                         {visibleColumns.warehouse !== false && <td><strong>{balance.location.name}</strong><small className="table-subline">{balance.location.code}</small></td>}
-                                        <td className="quantity-cell">{balance.on_hand_qty}</td>
-                                        {visibleColumns.reserved !== false && <td className="quantity-cell">{balance.reserved_qty}</td>}
-                                        <td className="quantity-cell strong">{balance.stock_display?.quantity ?? available} {balance.stock_display?.unit || ''}</td>
-                                        {visibleColumns.reorder !== false && <td className="quantity-cell">{balance.min_quantity}</td>}
+                                        <td className="quantity-cell">{formatCompoundQuantity(balance.on_hand_qty, units)}</td>
+                                        {visibleColumns.reserved !== false && <td className="quantity-cell">{formatCompoundQuantity(balance.reserved_qty, units)}</td>}
+                                        <td className="quantity-cell strong">{formatCompoundQuantity(available, units)}</td>
+                                        {visibleColumns.reorder !== false && <td className="quantity-cell">{formatCompoundQuantity(balance.min_quantity, units)}</td>}
                                         {visibleColumns.status !== false && <td><StatusBadge status={status} label={t(status === 'danger' ? 'Out' : status === 'warning' ? 'Low' : 'Healthy')} /></td>}
                                         <td className="table-actions-column">
                                             <div className="inline-actions">

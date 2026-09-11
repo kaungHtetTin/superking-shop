@@ -48,7 +48,7 @@ class FinanceController extends Controller
             ->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)
             ->sum('amount');
         $approvedExpenses = (clone $approvedEntries)->where('type', 'expense')->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])->sum('amount');
-        $stockPurchases = (clone $approvedEntries)->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
+        $stockPurchases = (clone $approvedEntries)->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidRevenue = (clone $paidOrders)->sum('final_amount');
         $costOfGoods = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
@@ -91,7 +91,7 @@ class FinanceController extends Controller
                 ->sum('amount'),
             'pending_expenses' => (float) FinancialEntry::query()->external()
                 ->where('type', 'expense')
-                ->where('category', '!=', FinancialEntry::CATEGORY_REFUND_PAYABLE)
+                ->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])
                 ->where('status', 'pending')
                 ->where($entryLocationScope)
                 ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])

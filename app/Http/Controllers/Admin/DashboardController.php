@@ -48,7 +48,7 @@ class DashboardController extends Controller
         $lowStockCount = (clone $lowStockBase)->count();
 
         $lowStockItems = (clone $lowStockBase)
-            ->with(['product:id,name,product_code,min_quantity', 'location:id,name'])
+            ->with(['product:id,name,product_code,min_quantity', 'product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active', 'location:id,name'])
             ->orderByRaw('(on_hand_qty - reserved_qty) asc')
             ->limit(5)
             ->get()
@@ -59,6 +59,7 @@ class DashboardController extends Controller
                 'location' => $balance->location?->name,
                 'available' => $balance->available_qty,
                 'min_quantity' => $balance->product?->min_quantity,
+                'units' => $balance->product?->units?->values(),
             ]);
 
         $topProducts = OrderItem::query()

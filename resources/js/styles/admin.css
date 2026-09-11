@@ -7571,7 +7571,7 @@
 
 .adjustment-primary-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -7641,10 +7641,13 @@
 }
 
 .adjustment-counted-field {
-  align-content: start;
+  align-content: center;
+  margin: 0;
 }
 
 .adjustment-counted-field input {
+  width: 100%;
+  min-width: 0;
   font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -7979,6 +7982,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .adjustment-primary-fields > :last-child {
+    grid-column: 1 / -1;
+  }
+
   .receipt-product-toolbar,
   .receipt-product-row {
     grid-template-columns: 1fr;
@@ -8207,6 +8214,17 @@
   grid-template-columns: minmax(180px, 1fr) minmax(150px, .7fr) minmax(180px, 1fr) auto auto;
   gap: 10px;
   align-items: end;
+}
+
+.register-action-cell {
+  width: 1%;
+  min-width: 48px;
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.register-action-cell .icon-btn {
+  margin-left: auto;
 }
 
 .switch-row {
@@ -16311,6 +16329,73 @@ html[data-theme='dark'] .app-root .receipt-spreadsheet thead th,
 html[data-theme='dark'] .app-root .receipt-spreadsheet tbody th {
   background: color-mix(in srgb, var(--color-soft) 82%, #334155);
   color: var(--color-text);
+}
+
+.app-root .receipt-entry-tabs {
+  margin-bottom: 10px;
+}
+
+.app-root .receipt-entry-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.app-root .receipt-import-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 430px);
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-soft);
+}
+
+.app-root .receipt-import-copy {
+  align-self: start;
+}
+
+.app-root .receipt-import-copy strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.app-root .receipt-import-copy p {
+  max-width: 680px;
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.app-root .receipt-import-actions {
+  display: grid;
+  gap: 9px;
+  padding-left: 16px;
+  border-left: 1px solid var(--color-border);
+}
+
+.app-root .receipt-import-actions .btn {
+  justify-content: center;
+}
+
+.app-root .receipt-import-file {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .app-root .receipt-import-mode {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .app-root .receipt-import-actions {
+    padding: 10px 0 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
 }
 
 /* Numeric fields use plain left-aligned entry without browser spinner controls. */

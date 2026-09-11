@@ -128,4 +128,76 @@ class ProductCsvImportTest extends TestCase
         $this->assertFalse($child->is_active);
         $this->assertDatabaseHas('products', ['name' => 'Coffee', 'category_id' => $child->id]);
     }
+
+    public function test_unit_price_template_exports_existing_matrix_and_import_adds_a_unit(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $category = Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
+        $product = Product::create(['category_id' => $category->id, 'sku' => 'COFFEE-01', 'name' => 'Coffee', 'slug' => 'coffee', 'original_price' => 100, 'status' => 'active', 'is_active' => true]);
+        $piece = $product->units()->create(['name' => 'Piece', 'code' => 'pc', 'conversion_factor' => 1, 'is_base' => true, 'is_default_selling' => true, 'is_active' => true]);
+        $retail = $product->priceTypes()->create(['name' => 'retail', 'is_default' => true]);
+        $piece->prices()->create(['product_price_type_id' => $retail->id, 'price' => 150, 'is_manual' => false, 'calculation_status' => 'cost_required']);
+
+        $export = $this->actingAs($admin)->get('/admin/products/import/unit-prices/template')->assertOk()->streamedContent();
+        $this->assertStringStartsWith("\xEF\xBB\xBFproduct_code,sku,product_name,unit_name,unit_code", $export);
+        $this->assertStringNotContainsString('pricing_mode', $export);
+        $this->assertStringContainsString('COFFEE-01,Coffee', $export);
+
+        $headers = implode(',', \App\Services\ProductUnitPriceCsvService::HEADERS);
+        $csv = $headers."\n"
+            ."{$product->product_code},COFFEE-01,Coffee,Piece,pc,1,yes,no,yes,retail,150\n"
+            ."{$product->product_code},COFFEE-01,Coffee,Box,box,10,no,yes,yes,retail,1400\n";
+
+        $this->actingAs($admin)->post('/admin/products/import/unit-prices', [
+            'unit_price_file' => UploadedFile::fake()->createWithContent('unit-prices.csv', $csv),
+        ])->assertRedirect('/admin/products');
+
+        $box = $product->fresh()->units()->where('code', 'box')->firstOrFail();
+        $this->assertSame(2, $product->fresh()->units()->count());
+        $this->assertSame($piece->id, $product->units()->where('code', 'pc')->firstOrFail()->id);
+        $this->assertSame(10.0, (float) $box->conversion_factor);
+        $this->assertTrue($box->is_default_selling);
+        $this->assertFalse($piece->fresh()->is_default_selling);
+        $this->assertSame(1400.0, (float) $box->prices()->firstOrFail()->price);
+        $this->assertTrue($piece->prices()->firstOrFail()->is_manual);
+        $this->assertSame('manual', $piece->prices()->firstOrFail()->calculation_status);
+    }
+
+    public function test_unit_price_import_rejects_an_incomplete_matrix_without_changes(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $category = Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
+        $product = Product::create(['category_id' => $category->id, 'name' => 'Tea', 'slug' => 'tea', 'original_price' => 100, 'status' => 'active', 'is_active' => true]);
+        $piece = $product->units()->create(['name' => 'Piece', 'code' => 'pc', 'conversion_factor' => 1, 'is_base' => true, 'is_default_selling' => true, 'is_active' => true]);
+        $retail = $product->priceTypes()->create(['name' => 'retail', 'is_default' => true]);
+        $piece->prices()->create(['product_price_type_id' => $retail->id, 'price' => 150, 'is_manual' => true]);
+        $headers = implode(',', \App\Services\ProductUnitPriceCsvService::HEADERS);
+        $csv = $headers."\n{$product->product_code},,Tea,Box,box,10,no,no,yes,retail,1400\n";
+
+        $this->actingAs($admin)->from('/admin/products/import')->post('/admin/products/import/unit-prices', [
+            'unit_price_file' => UploadedFile::fake()->createWithContent('unit-prices.csv', $csv),
+        ])->assertRedirect('/admin/products/import')->assertSessionHasErrors('unit_price_file');
+
+        $this->assertSame(1, $product->units()->count());
+        $this->assertDatabaseMissing('product_units', ['product_id' => $product->id, 'code' => 'box']);
+    }
+
+    public function test_unit_price_import_rejects_a_partial_existing_unit_identity_match(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $category = Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
+        $product = Product::create(['category_id' => $category->id, 'name' => 'Juice', 'slug' => 'juice', 'original_price' => 100, 'status' => 'active', 'is_active' => true]);
+        $piece = $product->units()->create(['name' => 'Piece', 'code' => 'pc', 'conversion_factor' => 1, 'is_base' => true, 'is_default_selling' => true, 'is_active' => true]);
+        $retail = $product->priceTypes()->create(['name' => 'retail', 'is_default' => true]);
+        $piece->prices()->create(['product_price_type_id' => $retail->id, 'price' => 150, 'is_manual' => true]);
+        $headers = implode(',', \App\Services\ProductUnitPriceCsvService::HEADERS);
+        $csv = $headers."\n{$product->product_code},,Juice,Piece,each,1,yes,yes,yes,retail,150\n";
+
+        $this->actingAs($admin)->from('/admin/products/import')->post('/admin/products/import/unit-prices', [
+            'unit_price_file' => UploadedFile::fake()->createWithContent('unit-prices.csv', $csv),
+        ])->assertRedirect('/admin/products/import')->assertSessionHasErrors('unit_price_file');
+
+        $this->assertSame(1, $product->units()->count());
+        $this->assertSame('pc', $piece->fresh()->code);
+    }
 }

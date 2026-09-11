@@ -144,6 +144,7 @@ class StockTransferController extends Controller
                 'sourceLocation:id,code,name,type',
                 'destinationLocation:id,code,name,type',
                 'items.product:id,name,product_code',
+                'items.product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active',
                 'items.unit:id,name,code,conversion_factor',
                 'creator:id,name',
             ]),

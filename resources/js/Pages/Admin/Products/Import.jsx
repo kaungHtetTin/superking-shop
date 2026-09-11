@@ -9,10 +9,15 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 export default function Import({ categories, app_base }) {
     const t = usePhraseTranslation();
     const { data, setData, post, processing, errors } = useForm({ file: null, create_missing_categories: true });
+    const unitPriceForm = useForm({ unit_price_file: null });
 
     const submit = (event) => {
         event.preventDefault();
         post(routeWithBase('/admin/products/import', app_base), { forceFormData: true });
+    };
+    const submitUnitPrices = (event) => {
+        event.preventDefault();
+        unitPriceForm.post(routeWithBase('/admin/products/import/unit-prices', app_base), { forceFormData: true });
     };
 
     return (
@@ -80,6 +85,35 @@ export default function Import({ categories, app_base }) {
                             <Icon name="upload" size={14} /> {processing ? t('Importing...') : t('Import products')}
                         </button>
                         <Link className="btn secondary" href={routeWithBase('/admin/products', app_base)}>{t('Cancel')}</Link>
+                    </div>
+                </form>
+            </section>
+            <section className="panel glass" style={{ maxWidth: 820, marginTop: 16 }}>
+                <PanelHeading eyebrow={t('Existing catalog')} title={t('Import units and selling prices')} />
+                <p className="muted">
+                    Download the current catalog first. Each row represents one product, unit, and price-type combination.
+                    Keep product codes unchanged. Existing units are matched automatically when both unit name and unit code match;
+                    a new name-and-code pair creates a new unit.
+                </p>
+                <div className="inline-actions" style={{ margin: '16px 0' }}>
+                    <a className="btn secondary" href={routeWithBase('/admin/products/import/unit-prices/template', app_base)}>
+                        <Icon name="download" size={14} /> {t('Export unit and price template')}
+                    </a>
+                </div>
+                <p className="muted">
+                    Include the complete unit × price-type matrix for every product in the file. Import updates or adds records; it never deletes units or prices.
+                    Every imported price is saved as a manual selling price.
+                </p>
+                <form onSubmit={submitUnitPrices} style={{ marginTop: 20 }}>
+                    <label className="field">
+                        <span>{t('Unit and price CSV file')}</span>
+                        <input type="file" accept=".csv,text/csv" onChange={(event) => unitPriceForm.setData('unit_price_file', event.target.files?.[0] || null)} />
+                    </label>
+                    {unitPriceForm.errors.unit_price_file && <div className="flash error" role="alert" style={{ whiteSpace: 'pre-line', marginTop: 12 }}>{unitPriceForm.errors.unit_price_file}</div>}
+                    <div className="inline-actions" style={{ marginTop: 20 }}>
+                        <button className="btn primary" type="submit" disabled={unitPriceForm.processing || !unitPriceForm.data.unit_price_file}>
+                            <Icon name="upload" size={14} /> {unitPriceForm.processing ? t('Importing...') : t('Import units and prices')}
+                        </button>
                     </div>
                 </form>
             </section>

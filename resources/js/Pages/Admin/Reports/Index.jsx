@@ -6,6 +6,7 @@ import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
+import { formatCompoundQuantity } from '@/Utils/unitLabel';
 
 const money = formatMoney;
 const percent = (value) => `${Number(value || 0).toFixed(1)}%`;
@@ -302,10 +303,10 @@ function InventoryReport({ report, filters, locations, appBase }) {
         <>
             <ReportFilters view="inventory" filters={filters} locations={locations} appBase={appBase} showStock />
             <div className="metrics-grid six">
-                <MetricCard label="Original valuation" value={money(summary.cost_value)} hint={t(':count units on hand', { count: summary.on_hand || 0 })} icon="wallet" />
-                <MetricCard label="Retail value" value={money(summary.retail_value)} hint={t(':count available', { count: summary.available || 0 })} icon="chart" tone="success" />
+                <MetricCard label="Original valuation" value={money(summary.cost_value)} hint="Inventory asset value" icon="wallet" />
+                <MetricCard label="Retail value" value={money(summary.retail_value)} hint="Potential sales value" icon="chart" tone="success" />
                 <MetricCard label="Low stock" value={summary.low_stock || 0} hint="At reorder point" icon="bell" />
-                <MetricCard label="Out of stock" value={summary.out_of_stock || 0} hint={t(':count units reserved', { count: summary.reserved || 0 })} icon="box" />
+                <MetricCard label="Out of stock" value={summary.out_of_stock || 0} hint="No available stock" icon="box" />
             </div>
 
             <div className="reports-layout">
@@ -318,9 +319,9 @@ function InventoryReport({ report, filters, locations, appBase }) {
                                 {report.stock_rows.length === 0 ? <tr><td colSpan={7}><span className="muted">{t('No balances match these filters.')}</span></td></tr> : report.stock_rows.map((row) => (
                                     <tr key={row.id}>
                                         <td><strong>{row.product_name}</strong><small>{row.product_code}</small></td>
-                                        <td>{row.location_name}</td><td>{row.on_hand_qty}</td><td>{row.reserved_qty}</td>
-                                        <td><StatusBadge status={Number(row.available_qty) <= 0 ? 'failed' : Number(row.available_qty) <= Number(row.min_quantity) ? 'warning' : 'healthy'} label={String(row.available_qty)} /></td>
-                                        <td>{row.min_quantity}</td><td><strong>{money(row.cost_value)}</strong></td>
+                                        <td>{row.location_name}</td><td>{formatCompoundQuantity(row.on_hand_qty, row.units)}</td><td>{formatCompoundQuantity(row.reserved_qty, row.units)}</td>
+                                        <td><StatusBadge status={Number(row.available_qty) <= 0 ? 'failed' : Number(row.available_qty) <= Number(row.min_quantity) ? 'warning' : 'healthy'} label={formatCompoundQuantity(row.available_qty, row.units)} /></td>
+                                        <td>{formatCompoundQuantity(row.min_quantity, row.units)}</td><td><strong>{money(row.cost_value)}</strong></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -333,14 +334,14 @@ function InventoryReport({ report, filters, locations, appBase }) {
                         <PanelHeading eyebrow={t('Last 30 days')} title={t('Movement activity')} />
                         <div className="report-pair-list">
                             {report.movements.length === 0 ? <p className="muted">{t('No recent movements.')}</p> : report.movements.map((row) => (
-                                <article className="report-pair" key={row.type}><strong>{t(row.type.replaceAll('_', ' '))}</strong><small>{t(':count movements', { count: row.movements })}</small><span>{t(':net net / :handled handled', { net: row.net_quantity, handled: row.absolute_quantity })}</span></article>
+                                <article className="report-pair" key={row.type}><strong>{t(row.type.replaceAll('_', ' '))}</strong><small>{t(':count movements', { count: row.movements })}</small></article>
                             ))}
                         </div>
                     </section>
                     <section className="panel glass">
                         <PanelHeading eyebrow={t('Shrinkage')} title={t('Adjustment variance')} />
-                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Reason')}</th><th>{t('Documents')}</th><th>{t('Variance')}</th><th>{t('Loss value')}</th></tr></thead><tbody>
-                            {report.adjustments.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No posted adjustments.')}</span></td></tr> : report.adjustments.map((row) => <tr key={row.reason_code}><td><strong>{t(row.reason_code.replaceAll('_', ' '))}</strong></td><td>{row.documents}</td><td>{row.net_quantity}</td><td>{Number(row.unvalued_lines) > 0 ? t('Historical cost unavailable') : money(row.loss_value)}</td></tr>)}
+                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Reason')}</th><th>{t('Documents')}</th><th>{t('Loss value')}</th></tr></thead><tbody>
+                            {report.adjustments.length === 0 ? <tr><td colSpan={3}><span className="muted">{t('No posted adjustments.')}</span></td></tr> : report.adjustments.map((row) => <tr key={row.reason_code}><td><strong>{t(row.reason_code.replaceAll('_', ' '))}</strong></td><td>{row.documents}</td><td>{Number(row.unvalued_lines) > 0 ? t('Historical cost unavailable') : money(row.loss_value)}</td></tr>)}
                         </tbody></table></div>
                     </section>
                 </div>
@@ -348,14 +349,14 @@ function InventoryReport({ report, filters, locations, appBase }) {
                 <div className="report-analysis-grid">
                     <section className="panel glass">
                         <PanelHeading eyebrow={t('Last 30 days')} title={t('Transfer activity')} />
-                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Transfer')}</th><th>{t('Route')}</th><th>{t('Units')}</th><th>{t('Amount')}</th><th>{t('Date')}</th></tr></thead><tbody>
-                            {report.transfers.length === 0 ? <tr><td colSpan={5}><span className="muted">{t('No recent transfers.')}</span></td></tr> : report.transfers.map((row) => <tr key={row.id}><td><strong>{row.transfer_number}</strong></td><td>{row.source_name} {t('to')} {row.destination_name}</td><td>{row.moved_quantity}</td><td><strong>{money(row.total_amount)}</strong></td><td>{new Date(row.created_at).toLocaleDateString()}</td></tr>)}
+                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Transfer')}</th><th>{t('Route')}</th><th>{t('Amount')}</th><th>{t('Date')}</th></tr></thead><tbody>
+                            {report.transfers.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No recent transfers.')}</span></td></tr> : report.transfers.map((row) => <tr key={row.id}><td><strong>{row.transfer_number}</strong></td><td>{row.source_name} {t('to')} {row.destination_name}</td><td><strong>{money(row.total_amount)}</strong></td><td>{new Date(row.created_at).toLocaleDateString()}</td></tr>)}
                         </tbody></table></div>
                     </section>
                     <section className="panel glass">
                         <PanelHeading eyebrow={t('Last 30 days')} title={t('Product sell-through')} />
-                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Product')}</th><th>{t('Base units sold')}</th><th>{t('On hand')}</th><th>{t('Rate')}</th></tr></thead><tbody>
-                            {report.sell_through.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No paid sales for this warehouse.')}</span></td></tr> : report.sell_through.map((row) => <tr key={row.id}><td><strong>{row.product_name}</strong><small>{row.product_code}</small></td><td>{row.units_sold}</td><td>{row.on_hand_qty || 0}</td><td><strong>{percent(row.sell_through_rate)}</strong></td></tr>)}
+                        <div className="table-wrap report-products-table"><table><thead><tr><th>{t('Product')}</th><th>{t('Units sold')}</th><th>{t('On hand')}</th><th>{t('Rate')}</th></tr></thead><tbody>
+                            {report.sell_through.length === 0 ? <tr><td colSpan={4}><span className="muted">{t('No paid sales for this warehouse.')}</span></td></tr> : report.sell_through.map((row) => <tr key={row.id}><td><strong>{row.product_name}</strong><small>{row.product_code}</small></td><td>{formatCompoundQuantity(row.units_sold, row.units)}</td><td>{formatCompoundQuantity(row.on_hand_qty, row.units)}</td><td><strong>{percent(row.sell_through_rate)}</strong></td></tr>)}
                         </tbody></table></div>
                     </section>
                 </div>
@@ -402,7 +403,7 @@ function HealthReport({ report }) {
             </div>
             <div className="reports-layout">
                 <section className="panel glass"><PanelHeading eyebrow={t('Latest snapshots')} title={t('Operations health')} /><div className="operations-health-grid">{report.checks.length === 0 ? <p className="muted">{t('Run the operations health command to create the first snapshot.')}</p> : report.checks.map((check) => <article key={check.check_name} className="operations-health-row"><StatusBadge status={check.status} label={t(check.status)} /><div><strong>{t(check.check_name.replaceAll('_', ' '))}</strong><p>{check.summary}</p><small>{check.checked_at}</small></div></article>)}</div></section>
-                <section className="panel glass"><PanelHeading eyebrow={t('Stock queue')} title={t('Open stock alerts')} /><div className="table-wrap report-products-table"><table><thead><tr><th>{t('Product')}</th><th>{t('Warehouse')}</th><th>{t('Available')}</th><th>{t('Minimum')}</th><th>{t('Severity')}</th></tr></thead><tbody>{report.alerts.length === 0 ? <tr><td colSpan={5}><span className="muted">{t('No open stock alerts.')}</span></td></tr> : report.alerts.map((alert) => <tr key={alert.id}><td><strong>{alert.product?.name}</strong><small>{alert.product?.product_code}</small></td><td>{alert.location?.name}</td><td>{alert.available_qty}</td><td>{alert.min_quantity}</td><td><StatusBadge status={alert.type === 'out_of_stock' ? 'failed' : 'warning'} label={t(alert.type.replaceAll('_', ' '))} /></td></tr>)}</tbody></table></div></section>
+                <section className="panel glass"><PanelHeading eyebrow={t('Stock queue')} title={t('Open stock alerts')} /><div className="table-wrap report-products-table"><table><thead><tr><th>{t('Product')}</th><th>{t('Warehouse')}</th><th>{t('Available')}</th><th>{t('Minimum')}</th><th>{t('Severity')}</th></tr></thead><tbody>{report.alerts.length === 0 ? <tr><td colSpan={5}><span className="muted">{t('No open stock alerts.')}</span></td></tr> : report.alerts.map((alert) => <tr key={alert.id}><td><strong>{alert.product?.name}</strong><small>{alert.product?.product_code}</small></td><td>{alert.location?.name}</td><td>{formatCompoundQuantity(alert.available_qty, alert.product?.units)}</td><td>{formatCompoundQuantity(alert.min_quantity, alert.product?.units)}</td><td><StatusBadge status={alert.type === 'out_of_stock' ? 'failed' : 'warning'} label={t(alert.type.replaceAll('_', ' '))} /></td></tr>)}</tbody></table></div></section>
             </div>
         </>
     );
@@ -430,7 +431,7 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} hint="Original product cost at sale" icon="box" />
                 <MetricCard label="Gross profit" value={money(summary.gross_profit)} hint={`${summary.gross_margin}% margin`} icon="chart" tone="success" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} hint="Excludes stock purchases" icon="card" tone="danger" />
-                <MetricCard label="Stock expense" value={money(summary.stock_expenses)} hint="Receipt purchases; shown separately from COGS" icon="receipt" tone="danger" />
+                <MetricCard label="Inventory purchases" value={money(summary.stock_purchases)} hint="Capitalized as inventory; excluded from profit until sold" icon="receipt" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} hint="After product cost and expenses" icon="wallet" tone={Number(summary.net_profit) < 0 ? 'danger' : 'success'} />
             </div>
 

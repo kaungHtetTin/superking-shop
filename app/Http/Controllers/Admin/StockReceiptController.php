@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Location;
+use App\Models\Product;
 use App\Models\ProductUnit;
 use App\Models\StockReceipt;
 use App\Services\AuditLogService;
+use App\Services\Inventory\StockReceiptCsvService;
 use App\Services\Inventory\StockReceiptService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Support\Spa;
@@ -36,6 +39,65 @@ class StockReceiptController extends Controller
         ]);
     }
 
+    public function importTemplate(Request $request)
+    {
+        $this->authorize('create', StockReceipt::class);
+
+        return response()->streamDownload(function () {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, StockReceiptCsvService::HEADERS);
+
+            Product::query()
+                ->where('is_active', true)
+                ->whereHas('defaultSellingUnit', fn ($query) => $query->where('is_active', true))
+                ->with('defaultSellingUnit')
+                ->orderBy('name')
+                ->chunkById(500, function ($products) use ($output) {
+                    foreach ($products as $product) {
+                        $unit = $product->defaultSellingUnit;
+                        fputcsv($output, [
+                            $this->excelSafe($product->product_code),
+                            $this->excelSafe($product->sku),
+                            $this->excelSafe($product->name),
+                            $this->excelSafe($unit->name),
+                            $this->excelSafe($unit->code),
+                            '0',
+                            '0',
+                            number_format((float) $product->original_price * (float) $unit->conversion_factor, 2, '.', ''),
+                        ]);
+                    }
+                });
+            fclose($output);
+        }, 'stock-receipt-template-'.now()->format('Y-m-d-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function importPreview(Request $request, StockReceiptCsvService $importer): JsonResponse
+    {
+        $this->authorize('create', StockReceipt::class);
+        $validated = $request->validate([
+            'location_id' => ['required', 'integer', 'exists:locations,id'],
+            'receipt_file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
+        ]);
+        $location = Location::findOrFail($validated['location_id']);
+        abort_unless($request->user()->canAccessLocation($location), 403);
+
+        $rows = $importer->parse($validated['receipt_file'], $location);
+        $items = collect($rows)->map(fn ($row) => [
+            'product_id' => $row['product']->id,
+            'product_unit_id' => $row['unit']->id,
+            'received_quantity' => $row['received_quantity'],
+            'free_quantity' => $row['free_quantity'],
+            'unit_cost' => $row['unit_cost'],
+            'unit' => $this->receiptUnitPayload($row['unit'], $row['product']),
+        ])->values();
+
+        return response()->json([
+            'items' => $items,
+            'message' => $items->count().' receipt lines imported. Review quantities and costs before continuing.',
+        ]);
+    }
+
     public function show(Request $request, StockReceipt $receipt)
     {
         $this->authorize('view', $receipt);
@@ -45,6 +107,7 @@ class StockReceiptController extends Controller
             'receiver:id,name',
             'inventoryImport:id,batch_number,original_filename',
             'items.product:id,name,product_code,sku,barcode,original_price',
+            'items.product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active',
             'items.unit:id,product_id,name,code,conversion_factor',
         ]);
 
@@ -205,5 +268,12 @@ class StockReceiptController extends Controller
         return array_merge($mapUnit($unit), [
             'unit_options' => $product->units->map($mapUnit)->values(),
         ]);
+    }
+
+    private function excelSafe(?string $value): string
+    {
+        $value ??= '';
+
+        return preg_match('/^[=+\-@\t\r]/u', $value) ? "'{$value}" : $value;
     }
 }

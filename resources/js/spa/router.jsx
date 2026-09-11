@@ -585,6 +585,7 @@ export function useForm(initialData = {}) {
                 options.onError?.(nextErrors);
             },
             onSuccess: (page) => {
+                setErrors({});
                 setRecentlySuccessful(true);
                 window.setTimeout(() => setRecentlySuccessful(false), 2000);
                 options.onSuccess?.(page);

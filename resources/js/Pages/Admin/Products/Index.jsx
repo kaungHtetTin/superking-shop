@@ -8,6 +8,7 @@ import { ColumnVisibilityControl, PanelHeading, StatusBadge } from '@/Components
 import { routeWithBase, storageUrl } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
+import { formatCompoundQuantity } from '@/Utils/unitLabel';
 
 export default function Index({ products, filters = {}, app_base }) {
     const { app_url, flash, errors: pageErrors } = usePage().props;
@@ -179,7 +180,7 @@ export default function Index({ products, filters = {}, app_base }) {
                                             </td>
                                             {visibleColumns.stock !== false && <td className="numeric-cell">
                                                 <strong style={{ color: stock <= Number(product.min_quantity || 0) ? '#ce4444' : undefined }}>
-                                                    {product.stock_display?.quantity ?? stock} {product.stock_display?.unit || product.base_unit?.code || ''}
+                                                    {formatCompoundQuantity(stock, product.units)}
                                                 </strong>
                                             </td>}
                                             {visibleColumns.status !== false && <td>

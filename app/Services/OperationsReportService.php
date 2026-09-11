@@ -132,6 +132,15 @@ class OperationsReportService
             ->limit(25)
             ->get();
 
+        $unitsByProduct = DB::table('product_units')
+            ->whereIn('product_id', $stockRows->pluck('product_id')->merge($sellThrough->pluck('id'))->unique())
+            ->where('is_active', true)
+            ->orderByDesc('conversion_factor')
+            ->get(['id', 'product_id', 'name', 'code', 'conversion_factor', 'is_base', 'is_default_selling', 'is_active'])
+            ->groupBy('product_id');
+        $stockRows->each(fn ($row) => $row->units = $unitsByProduct->get($row->product_id, collect())->values());
+        $sellThrough->each(fn ($row) => $row->units = $unitsByProduct->get($row->id, collect())->values());
+
         return [
             'summary' => $summary,
             'stock_rows' => $stockRows,
@@ -214,7 +223,7 @@ class OperationsReportService
             ->orderBy('check_name')
             ->get();
         $alerts = InventoryStockAlert::query()
-            ->with(['location:id,name,code', 'product:id,name,product_code'])
+            ->with(['location:id,name,code', 'product:id,name,product_code', 'product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active'])
             ->where('status', 'open')
             ->whereIn('location_id', $user->accessibleLocationIds())
             ->orderByRaw("FIELD(type, 'out_of_stock', 'low_stock')")

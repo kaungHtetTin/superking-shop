@@ -54,6 +54,7 @@ import {
 } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { formatMoney } from '@/Utils/pricing';
+import { formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 import { formatUnitWithConversion } from '@/Utils/unitLabel';
 
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -508,18 +509,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             updated.quantity = Math.max(1, Math.min(Number(updated.quantity || 1), Number(line.available_qty || 1)));
             updated.unit_price = Math.max(0, Number(updated.unit_price || 0));
             return updated;
-        }));
-    };
-
-    const adjustCartQuantity = (id, delta) => {
-        setCart((prev) => prev.map((line) => {
-            if (line.id !== id) return line;
-            const current = Number(line.quantity || 1);
-            const max = Math.max(1, Number(line.available_qty || 1));
-            return {
-                ...line,
-                quantity: Math.max(1, Math.min(current + delta, max)),
-            };
         }));
     };
 
@@ -1445,7 +1434,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                                                                 <Typography variant="body2" noWrap title={getProductDisplayName(product)}>{getProductDisplayName(product)}</Typography>
                                                                 <Typography variant="caption" color="text.secondary" noWrap>{product.product_code || '-'} · {product.unit_code || product.unit_name}</Typography>
                                                                 <Typography className="pos-console__mobile-product-meta" variant="caption" color="text.secondary" noWrap>
-                                                                    {money(resolveProductPrice(product))} · {product.available_qty} {tp('available')}
+                                                                    {money(resolveProductPrice(product))} · {formatSelectedUnitQuantity(product.available_qty, product, product.unit_options)} {tp('available')}
                                                                 </Typography>
                                                             </Box>
                                                         </Stack>
@@ -1454,7 +1443,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                                                         <Typography variant="body2" noWrap>{money(resolveProductPrice(product))}</Typography>
                                                     </TableCell>
                                                     <TableCell align="right">
-                                                        <Typography variant="body2" sx={{ fontWeight: 700, color: outOfStock ? 'error.main' : 'inherit' }}>{product.available_qty}</Typography>
+                                                        <Typography variant="body2" sx={{ fontWeight: 700, color: outOfStock ? 'error.main' : 'inherit' }}>{formatSelectedUnitQuantity(product.available_qty, product, product.unit_options)}</Typography>
                                                     </TableCell>
                                                     <TableCell align="center">
                                                         <IconButton size="small" color={outOfStock ? 'error' : 'primary'} disabled={outOfStock} onClick={() => addProductToCart(product)} sx={{ width: 30, height: 30 }}>
@@ -1536,7 +1525,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             {cart.map(line => <PosCartItem key={line.id} line={line} money={money} t={tp}
                                 exceedsStock={lineExceedsStock(line)} canFoc={can.discount}
                                 onQuantity={quantity => updateCartLine(line.id, { quantity })}
-                                onStep={delta => adjustCartQuantity(line.id, delta)}
                                 onUnit={unit => changeCartUnit(line.id, unit)}
                                 onFocQuantity={(quantity, normalize) => changeCartFocQuantity(line.id, quantity, normalize)}
                                 onFocUnit={unit => changeCartFocUnit(line.id, unit)}

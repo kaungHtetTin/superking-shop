@@ -4,6 +4,7 @@ import { usePage } from '@/spa/router';
 import Icon from '@/Components/Admin/icons';
 import { routeWithBase, storageUrl } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
 function UnitIdentity({ unit }) {
     const { app_url } = usePage().props;
@@ -104,7 +105,7 @@ export default function WizardProductUnitCatalog({
 
             {catalog.length > 0 && <div className="wizard-sku-list-head" aria-hidden="true"><span>{t('Product / Base unit')}</span><span>{t('On hand')}</span><span>{t('Available')}</span><span>{t('Select')}</span></div>}
             <div className="receipt-product-catalog wizard-sku-catalog-scroll wizard-console-frame" aria-busy={loading}>
-                {loading && catalog.length === 0 ? <div className="spa-inline-list-skeleton" role="status" aria-label={t('Loading products')}>{Array.from({ length: 6 }, (_, index) => <div className="spa-inline-list-skeleton-row" key={index}><span className="spa-skeleton-block media" /><span className="spa-skeleton-block line" /><span className="spa-skeleton-block line short" /><span className="spa-skeleton-block button" /></div>)}</div> : catalog.length === 0 ? <div className="empty-document-lines">{t(emptyLabel)}</div> : catalog.map((unit) => { const selected = selectedProductIdSet.size > 0 ? selectedProductIdSet.has(Number(unit.product_id)) : selectedIdSet.has(Number(unit.id)); const disabled = isDisabled(unit, selected); return <label key={unit.id} className={`receipt-product-row wizard-sku-row${selected ? ' selected' : ''}`}><UnitIdentity unit={unit} /><span><strong>{unit.on_hand_qty}</strong><small>{unit.unit_code}</small></span><span><strong>{unit.available_qty}</strong><small>{unit.unit_code}</small></span><span className="wizard-sku-check"><input type="checkbox" checked={selected} disabled={disabled} onChange={() => !disabled && onToggle(unit, !selected)} /></span></label>; })}
+                {loading && catalog.length === 0 ? <div className="spa-inline-list-skeleton" role="status" aria-label={t('Loading products')}>{Array.from({ length: 6 }, (_, index) => <div className="spa-inline-list-skeleton-row" key={index}><span className="spa-skeleton-block media" /><span className="spa-skeleton-block line" /><span className="spa-skeleton-block line short" /><span className="spa-skeleton-block button" /></div>)}</div> : catalog.length === 0 ? <div className="empty-document-lines">{t(emptyLabel)}</div> : catalog.map((unit) => { const selected = selectedProductIdSet.size > 0 ? selectedProductIdSet.has(Number(unit.product_id)) : selectedIdSet.has(Number(unit.id)); const disabled = isDisabled(unit, selected); const units = unit.unit_options || [unit]; return <label key={unit.id} className={`receipt-product-row wizard-sku-row${selected ? ' selected' : ''}`}><UnitIdentity unit={unit} /><span><strong>{formatSelectedUnitQuantity(unit.on_hand_qty, unit, units)}</strong></span><span><strong>{formatSelectedUnitQuantity(unit.available_qty, unit, units)}</strong></span><span className="wizard-sku-check"><input type="checkbox" checked={selected} disabled={disabled} onChange={() => !disabled && onToggle(unit, !selected)} /></span></label>; })}
             </div>
 
             <div className="receipt-product-pagination" aria-label={t('Product pagination')}>

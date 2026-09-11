@@ -81,7 +81,7 @@ class StockReceiptService
                 $product->update(['original_price' => $appliedCost]);
             }
             $locked->update(['status' => 'posted', 'received_by' => $actor->id, 'received_at' => now()]);
-            $this->recordFinanceExpense($locked, $actor);
+            $this->recordInventoryAsset($locked, $actor);
 
             $summary = ['changed_row_count' => 0, 'skipped_cost_count' => 0, 'price_changes' => []];
             $warnings = [];
@@ -123,7 +123,7 @@ class StockReceiptService
                     $product->update(['original_price' => $item->previous_base_cost]);
                 }
             }
-            FinancialEntry::query()->where('type', 'expense')->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->where('reference', $locked->receipt_number)->delete();
+            FinancialEntry::query()->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->where('reference', $locked->receipt_number)->delete();
             $locked->delete();
             $summary = ['changed_row_count' => 0, 'skipped_cost_count' => 0, 'price_changes' => []];
             foreach ($locked->items as $item) {
@@ -178,15 +178,15 @@ class StockReceiptService
         return $normalized;
     }
 
-    private function recordFinanceExpense(StockReceipt $receipt, User $actor): void
+    private function recordInventoryAsset(StockReceipt $receipt, User $actor): void
     {
         $amount = $receipt->items->sum(fn ($item) => $item->unit_cost === null ? 0 : (float) $item->unit_cost * (float) $item->received_quantity);
         if ($amount <= 0) {
             return;
         }
         FinancialEntry::updateOrCreate(
-            ['type' => 'expense', 'category' => FinancialEntry::CATEGORY_STOCK_RECEIPT, 'reference' => $receipt->receipt_number],
-            ['recorded_by' => $actor->id, 'location_id' => $receipt->location_id, 'title' => "Stock receipt {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]
+            ['category' => FinancialEntry::CATEGORY_STOCK_RECEIPT, 'reference' => $receipt->receipt_number],
+            ['type' => FinancialEntry::TYPE_ASSET, 'recorded_by' => $actor->id, 'location_id' => $receipt->location_id, 'title' => "Inventory purchase {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]
         );
     }
 

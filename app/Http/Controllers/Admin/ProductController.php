@@ -28,7 +28,7 @@ class ProductController extends Controller
         ]);
 
         $products = Product::query()
-            ->with(['category', 'primaryImage', 'baseUnit', 'defaultSellingUnit.prices'])
+            ->with(['category', 'primaryImage', 'baseUnit', 'units', 'defaultSellingUnit.prices'])
             ->withExists(['inventoryMovements as has_inventory_history', 'orderItems as has_sales_history'])
             ->withSum('inventoryBalances as total_on_hand', 'on_hand_qty')
             ->when($filters['q'] ?? null, function ($query, $search) {

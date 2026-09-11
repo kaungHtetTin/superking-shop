@@ -21,7 +21,7 @@ class StockAdjustmentController extends Controller
         return Spa::render('Admin/Inventory/Adjustments/Index', [
             'adjustments' => StockAdjustment::query()
                 ->whereIn('location_id', $request->user()->accessibleLocationIds())
-                ->with(['location:id,code,name', 'items.product:id,name,product_code', 'items.unit:id,name,code'])
+                ->with(['location:id,code,name', 'items.product:id,name,product_code', 'items.product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active', 'items.unit:id,name,code,conversion_factor'])
                 ->latest()->paginate(20)->withQueryString(),
         ]);
     }
@@ -49,6 +49,10 @@ class StockAdjustmentController extends Controller
         $unit = ProductUnit::query()
             ->with([
                 'product:id,name,product_code,barcode',
+                'product.units' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderByDesc('conversion_factor')
+                    ->select(['id', 'product_id', 'name', 'code', 'conversion_factor', 'is_base', 'is_default_selling', 'is_active']),
                 'product.primaryImage:id,product_id,image_path',
             ])
             ->findOrFail($validated['product_unit_id']);
@@ -71,6 +75,7 @@ class StockAdjustmentController extends Controller
                 'unit_code' => $unit->code,
                 'conversion_factor' => (float) $unit->conversion_factor,
                 'image_path' => $unit->product->primaryImage?->image_path,
+                'unit_options' => $unit->product->units->values(),
                 'balances' => $locations->mapWithKeys(fn (Location $location) => [
                     $location->id => (float) ($balances->get($location->id)?->on_hand_qty ?? 0),
                 ]),

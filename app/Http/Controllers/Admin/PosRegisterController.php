@@ -36,7 +36,9 @@ class PosRegisterController extends Controller
         $register = PosRegister::create($validated);
         $audit->record('pos.register.created', $register, ['code' => $register->code], $request);
 
-        return back()->with('success', 'Register created.');
+        $this->clearPreviousErrors($request);
+
+        return redirect()->route('admin.registers.index', [], 303)->with('success', 'Register created.');
     }
 
     public function update(Request $request, PosRegister $register, AuditLogService $audit): \Illuminate\Http\RedirectResponse
@@ -47,7 +49,9 @@ class PosRegisterController extends Controller
         $register->update($validated);
         $audit->record('pos.register.updated', $register, ['code' => $register->code], $request);
 
-        return back()->with('success', 'Register updated.');
+        $this->clearPreviousErrors($request);
+
+        return redirect()->route('admin.registers.index', [], 303)->with('success', 'Register updated.');
     }
 
     private function validated(Request $request, ?PosRegister $register = null): array
@@ -58,5 +62,10 @@ class PosRegisterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'is_active' => ['required', 'boolean'],
         ]);
+    }
+
+    private function clearPreviousErrors(Request $request): void
+    {
+        $request->session()->forget(['error', 'errors']);
     }
 }

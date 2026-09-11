@@ -6,6 +6,7 @@ import { StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
+import { formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
 const statusTone = {
     posted: 'success',
@@ -21,7 +22,6 @@ export default function ReceiptShow({ receipt, priceChanges = [] }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
     const lineCount = receipt.items.length;
-    const totalUnits = receipt.items.reduce((sum, item) => sum + Number(item.received_quantity || 0), 0);
     const totalCost = receipt.items.reduce((sum, item) => sum + Number(item.received_quantity || 0) * Number(item.unit_cost || 0), 0);
     const recordedAt = receipt.received_at || receipt.created_at;
 
@@ -61,7 +61,7 @@ export default function ReceiptShow({ receipt, priceChanges = [] }) {
                 </header>
 
                 <div className="record-detail-facts">
-                    <div><small>{t('Total units')}</small><strong>{totalUnits.toLocaleString()}</strong></div>
+                    <div><small>{t('Quantity format')}</small><strong>{t('Equivalent units')}</strong></div>
                     <div><small>{t('Product lines')}</small><strong>{lineCount.toLocaleString()}</strong></div>
                     <div><small>{t('Stock value')}</small><strong>{formatMoney(totalCost)}</strong></div>
                     <div><small>{t('Received at')}</small><strong>{formatDateTime(recordedAt)}</strong></div>
@@ -91,9 +91,9 @@ export default function ReceiptShow({ receipt, priceChanges = [] }) {
                                 <th>{t('Product / unit')}</th>
                                 <th className="numeric-cell">{t('Expected')}</th>
                                 <th className="numeric-cell">{t('Received')}</th>
+                                <th className="numeric-cell">{t('FOC')}</th>
                                 <th className="numeric-cell">{t('Unit cost')}</th>
                                 <th className="numeric-cell">{t('Line total')}</th>
-                                <th>{t('Note')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -109,21 +109,21 @@ export default function ReceiptShow({ receipt, priceChanges = [] }) {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="numeric-cell">{item.expected_quantity ?? '—'}</td>
-                                    <td className="numeric-cell"><strong>{Number(item.received_quantity).toLocaleString()}</strong></td>
+                                    <td className="numeric-cell">{item.expected_quantity == null ? '—' : formatSelectedUnitQuantity(item.expected_quantity, item.unit, item.product.units)}</td>
+                                    <td className="numeric-cell"><strong>{formatSelectedUnitQuantity(item.received_quantity, item.unit, item.product.units)}</strong></td>
+                                    <td className="numeric-cell"><strong>{formatSelectedUnitQuantity(item.free_quantity, item.unit, item.product.units)}</strong></td>
                                     <td className="numeric-cell">{formatMoney(item.unit_cost || 0)}</td>
                                     <td className="numeric-cell"><strong>{formatMoney(Number(item.received_quantity || 0) * Number(item.unit_cost || 0))}</strong></td>
-                                    <td>{item.notes || '—'}</td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot>
                             <tr>
                                 <td colSpan="3">{t('Receipt total')}</td>
-                                <td className="numeric-cell">{totalUnits.toLocaleString()}</td>
+                                <td />
+                                <td />
                                 <td />
                                 <td className="numeric-cell">{formatMoney(totalCost)}</td>
-                                <td />
                             </tr>
                         </tfoot>
                     </table>

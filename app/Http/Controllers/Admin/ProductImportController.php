@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\ProductCsvImportService;
+use App\Services\ProductUnitPriceCsvService;
 use App\Support\Spa;
 use Illuminate\Http\Request;
 
@@ -70,6 +71,51 @@ class ProductImportController extends Controller
         }, 'products-'.now()->format('Y-m-d-His').'.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    public function unitPriceTemplate()
+    {
+        return response()->streamDownload(function () {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ProductUnitPriceCsvService::HEADERS);
+
+            Product::query()->with(['units', 'priceTypes.unitPrices'])->orderBy('id')->chunkById(250, function ($products) use ($output) {
+                foreach ($products as $product) {
+                    foreach ($product->units as $unit) {
+                        foreach ($product->priceTypes as $type) {
+                            $price = $type->unitPrices->firstWhere('product_unit_id', $unit->id);
+                            fputcsv($output, [
+                                $this->excelSafe($product->product_code),
+                                $this->excelSafe($product->sku),
+                                $this->excelSafe($product->name),
+                                $this->excelSafe($unit->name),
+                                $this->excelSafe($unit->code),
+                                $unit->conversion_factor,
+                                $unit->is_base ? 'yes' : 'no',
+                                $unit->is_default_selling ? 'yes' : 'no',
+                                $unit->is_active ? 'yes' : 'no',
+                                $this->excelSafe($type->name),
+                                $price?->price ?? '0.00',
+                            ]);
+                        }
+                    }
+                }
+            });
+            fclose($output);
+        }, 'product-unit-prices-'.now()->format('Y-m-d-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function storeUnitPrices(Request $request, ProductUnitPriceCsvService $importer)
+    {
+        $validated = $request->validate([
+            'unit_price_file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
+        ]);
+        $result = $importer->import($validated['unit_price_file']);
+
+        return redirect()->route('admin.products.index')->with('success',
+            "Unit and price import completed — {$result['products']} products processed; {$result['units_created']} units created; {$result['units_updated']} units updated; {$result['prices_upserted']} prices saved."
+        );
     }
 
     public function store(Request $request, ProductCsvImportService $importer)

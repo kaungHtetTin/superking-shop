@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import AdminPagination from '@/Components/Admin/AdminPagination';
 import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatCompoundQuantity, formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
 export default function AdjustmentsIndex({ adjustments }) {
     const t = usePhraseTranslation();
@@ -48,10 +49,10 @@ export default function AdjustmentsIndex({ adjustments }) {
                                         <strong>{item.product.name}</strong>
                                         <small className="table-subline">{item.product.product_code} · {item.unit?.name} ({item.unit?.code})</small>
                                     </td>
-                                    <td>{item.system_quantity}</td>
-                                    <td>{item.counted_quantity}</td>
+                                    <td>{formatCompoundQuantity(item.system_quantity, item.product.units)}</td>
+                                    <td>{formatSelectedUnitQuantity(item.counted_quantity, item.unit, item.product.units)}</td>
                                     <td className={item.quantity_delta < 0 ? 'quantity-negative' : item.quantity_delta > 0 ? 'quantity-positive' : ''}>
-                                        {item.quantity_delta > 0 ? '+' : ''}{item.quantity_delta}
+                                        {formatCompoundQuantity(item.quantity_delta, item.product.units, { signed: true })}
                                     </td>
                                     <td>{adjustment.reason_code.replaceAll('_', ' ')}</td>
                                     <td><StatusBadge status="success" label={t('posted')} /></td>

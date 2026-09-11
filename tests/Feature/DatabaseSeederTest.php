@@ -26,6 +26,7 @@ class DatabaseSeederTest extends TestCase
         ]);
         $this->assertDatabaseHas('financial_categories', [
             'value' => FinancialEntry::CATEGORY_STOCK_RECEIPT,
+            'type' => FinancialEntry::TYPE_ASSET,
             'is_system' => true,
         ]);
         $this->assertDatabaseHas('financial_categories', [

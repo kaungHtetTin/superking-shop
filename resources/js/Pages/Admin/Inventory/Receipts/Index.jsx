@@ -13,7 +13,6 @@ export default function ReceiptsIndex({ receipts }) {
     const [visibleReceipts, setVisibleReceipts] = useState(receipts);
     const [deletingId, setDeletingId] = useState(null);
     const deletedReceiptIds = useRef(new Set());
-
     const withoutReceipt = (paginator, receiptId) => {
         const data = paginator.data.filter((item) => Number(item.id) !== Number(receiptId));
         const removedCount = paginator.data.length - data.length;
@@ -82,7 +81,6 @@ export default function ReceiptsIndex({ receipts }) {
                                 <th>{t('Warehouse')}</th>
                                 <th>{t('Reference')}</th>
                                 <th>{t('Lines')}</th>
-                                <th>{t('Units')}</th>
                                 <th>{t('Status')}</th>
                                 <th>{t('Date')}</th>
                                 <th />
@@ -91,7 +89,7 @@ export default function ReceiptsIndex({ receipts }) {
                         <tbody>
                             {visibleReceipts.data.length === 0 ? (
                                 <tr>
-                                    <td colSpan="8" className="empty-table-cell">{t('No receipts yet.')}</td>
+                                    <td colSpan="7" className="empty-table-cell">{t('No receipts yet.')}</td>
                                 </tr>
                             ) : visibleReceipts.data.map((receipt) => (
                                 <tr key={receipt.id}>
@@ -103,7 +101,6 @@ export default function ReceiptsIndex({ receipts }) {
                                     <td>{receipt.location.name}<small className="table-subline">{receipt.location.code}</small></td>
                                     <td>{receipt.supplier_reference || '-'}</td>
                                     <td>{receipt.items.length}</td>
-                                    <td>{receipt.items.reduce((sum, item) => sum + item.received_quantity, 0)}</td>
                                     <td><StatusBadge status={receipt.status === 'posted' ? 'success' : 'warning'} label={t(receipt.status)} /></td>
                                     <td>{new Date(receipt.created_at).toLocaleDateString()}</td>
                                     <td>

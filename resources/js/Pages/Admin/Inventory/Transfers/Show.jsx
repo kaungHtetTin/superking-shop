@@ -7,6 +7,7 @@ import { routeWithBase } from '@/Utils/url';
 import useInventoryRealtime from '@/Utils/useInventoryRealtime';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
+import { formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
 function formatDateTime(value) {
     if (!value) return '-';
@@ -38,7 +39,6 @@ export default function TransferShow({ transfer, canDelete = false, lastUpdated,
         listenBalance: false,
         listenTransfers: true,
     });
-    const totalUnits = transfer.items.reduce((sum, item) => sum + Number(item.requested_quantity || 0), 0);
     const lineCount = transfer.items.length;
     const completedAt = transfer.received_at || transfer.created_at;
     const creatorName = transfer.creator?.name || t('Admin');
@@ -124,8 +124,8 @@ export default function TransferShow({ transfer, canDelete = false, lastUpdated,
 
                 <div className="transfer-detail-facts">
                     <div>
-                        <small>{t('Total units')}</small>
-                        <strong>{totalUnits.toLocaleString()}</strong>
+                        <small>{t('Quantity format')}</small>
+                        <strong>{t('Equivalent units')}</strong>
                     </div>
                     <div>
                         <small>{t('Product lines')}</small>
@@ -184,15 +184,15 @@ export default function TransferShow({ transfer, canDelete = false, lastUpdated,
                                         </div>
                                     </td>
                                     <td className="numeric-cell">
-                                        <span className="transfer-quantity-badge moved">{Number(item.requested_quantity).toLocaleString()}</span>
+                                        <span className="transfer-quantity-badge moved">{formatSelectedUnitQuantity(item.requested_quantity, item.unit, item.product.units)}</span>
                                     </td>
                                     <td className="numeric-cell">{formatMoney(item.unit_cost)}</td>
                                     <td className="numeric-cell"><strong>{formatMoney(item.line_total)}</strong></td>
                                     <td className="numeric-cell">
-                                        <span className="transfer-quantity-badge negative">−{Number(item.requested_quantity).toLocaleString()}</span>
+                                        <span className="transfer-quantity-badge negative">{formatSelectedUnitQuantity(-Number(item.requested_quantity), item.unit, item.product.units)}</span>
                                     </td>
                                     <td className="numeric-cell">
-                                        <span className="transfer-quantity-badge positive">+{Number(item.requested_quantity).toLocaleString()}</span>
+                                        <span className="transfer-quantity-badge positive">{formatSelectedUnitQuantity(item.requested_quantity, item.unit, item.product.units, { signed: true })}</span>
                                     </td>
                                 </tr>
                             ))}
@@ -200,11 +200,11 @@ export default function TransferShow({ transfer, canDelete = false, lastUpdated,
                         <tfoot>
                             <tr>
                                 <td colSpan="2">{t('Transfer total')}</td>
-                                <td className="numeric-cell">{totalUnits.toLocaleString()}</td>
+                                <td />
                                 <td />
                                 <td className="numeric-cell"><strong>{formatMoney(transfer.total_amount)}</strong></td>
-                                <td className="numeric-cell quantity-negative">−{totalUnits.toLocaleString()}</td>
-                                <td className="numeric-cell quantity-positive">+{totalUnits.toLocaleString()}</td>
+                                <td />
+                                <td />
                             </tr>
                         </tfoot>
                     </table>

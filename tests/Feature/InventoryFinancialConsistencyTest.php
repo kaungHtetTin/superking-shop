@@ -59,6 +59,24 @@ class InventoryFinancialConsistencyTest extends TestCase
         $this->actingAs($actor)->getJson('/admin/reports?view=sales')->assertOk()->assertJsonPath('props.summary.net_profit', 0);
     }
 
+    public function test_internal_transfers_are_not_offered_as_financial_categories(): void
+    {
+        $options = FinancialEntry::categoryOptions();
+
+        $this->assertNotContains(
+            FinancialEntry::CATEGORY_INTERNAL_TRANSFER,
+            collect($options['income'])->pluck('value')->all(),
+        );
+        $this->assertNotContains(
+            FinancialEntry::CATEGORY_INTERNAL_TRANSFER,
+            collect($options['expense'])->pluck('value')->all(),
+        );
+        $this->assertContains(
+            FinancialEntry::CATEGORY_STOCK_RECEIPT,
+            collect($options[FinancialEntry::TYPE_ASSET])->pluck('value')->all(),
+        );
+    }
+
     public function test_credit_revenue_and_cost_are_recognized_before_collection_and_do_not_move_on_payment(): void
     {
         $fixture = $this->fixture();
@@ -128,6 +146,12 @@ class InventoryFinancialConsistencyTest extends TestCase
         $service->post($receipt, $actor);
         $this->assertEquals(15, $product->fresh()->original_price);
         $this->assertEquals(200, $this->summary($actor)['stock_purchases']);
+        $this->assertDatabaseHas('financial_entries', [
+            'reference' => $receipt->receipt_number,
+            'type' => FinancialEntry::TYPE_ASSET,
+            'category' => FinancialEntry::CATEGORY_STOCK_RECEIPT,
+            'amount' => 200,
+        ]);
         $service->delete($receipt, $actor);
         $this->assertEquals(10, $product->fresh()->original_price);
         $this->assertEquals(10, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));

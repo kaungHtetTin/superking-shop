@@ -50,10 +50,16 @@ class InventoryController extends Controller
             $paginator->getCollection()->pluck('product_id')->map(fn ($id) => (int) $id)->unique()->all(),
             $aggregate
         );
-        $paginator->getCollection()->transform(function (object $row) use ($aggregate, $inTransit) {
+        $unitsByProduct = ProductUnit::query()
+            ->whereIn('product_id', $paginator->getCollection()->pluck('product_id')->unique())
+            ->where('is_active', true)
+            ->orderByDesc('conversion_factor')
+            ->get(['id', 'product_id', 'name', 'code', 'conversion_factor', 'is_base', 'is_default_selling', 'is_active'])
+            ->groupBy('product_id');
+        $paginator->getCollection()->transform(function (object $row) use ($aggregate, $inTransit, $unitsByProduct) {
             $key = $aggregate ? "all:{$row->product_id}" : "{$row->location_id}:{$row->product_id}";
 
-            return $this->stockOverviewRow($row, (float) ($inTransit[$key] ?? 0));
+            return $this->stockOverviewRow($row, (float) ($inTransit[$key] ?? 0), $unitsByProduct->get($row->product_id, collect())->values()->all());
         });
 
         return Spa::render('Admin/Inventory/Index', [
@@ -276,7 +282,7 @@ class InventoryController extends Controller
             ->selectRaw('(COALESCE(balances.on_hand_qty, 0) - COALESCE(balances.reserved_qty, 0)) as available_qty');
     }
 
-    private function stockOverviewRow(object $row, float $inTransit): array
+    private function stockOverviewRow(object $row, float $inTransit, array $units = []): array
     {
         $available = (float) $row->available_qty;
         $factor = max((float) ($row->selling_conversion_factor ?? 1), 0.000001);
@@ -295,7 +301,7 @@ class InventoryController extends Controller
             'in_transit_qty' => $inTransit,
             'stock_display' => ['quantity' => $useSelling ? floor(($available / $factor + 0.0000001) * 10000) / 10000 : $available, 'unit' => $useSelling ? $row->selling_unit_code : $row->base_unit_code],
             'location' => ['id' => (int) $row->location_id, 'code' => $row->location_code, 'name' => $row->location_name, 'type' => $row->location_type],
-            'product' => ['id' => (int) $row->product_id, 'product_code' => $row->product_code, 'barcode' => $row->barcode, 'name' => $row->product_name, 'image_path' => $row->product_image_path, 'base_unit' => ['id' => $row->base_unit_id, 'name' => $row->base_unit_name, 'code' => $row->base_unit_code], 'default_selling_unit' => ['id' => $row->selling_unit_id, 'name' => $row->selling_unit_name, 'code' => $row->selling_unit_code, 'conversion_factor' => $factor]],
+            'product' => ['id' => (int) $row->product_id, 'product_code' => $row->product_code, 'barcode' => $row->barcode, 'name' => $row->product_name, 'image_path' => $row->product_image_path, 'units' => $units, 'base_unit' => ['id' => $row->base_unit_id, 'name' => $row->base_unit_name, 'code' => $row->base_unit_code], 'default_selling_unit' => ['id' => $row->selling_unit_id, 'name' => $row->selling_unit_name, 'code' => $row->selling_unit_code, 'conversion_factor' => $factor]],
         ];
     }
 

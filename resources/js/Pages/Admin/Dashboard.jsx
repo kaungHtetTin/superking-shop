@@ -6,6 +6,7 @@ import { Head, Link, usePage } from '@/spa/router';
 import { routeWithBase } from '@/Utils/url';
 import { paymentLabels } from '@/constants/orderLabels';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { formatCompoundQuantity } from '@/Utils/unitLabel';
 import { formatMoney } from '@/Utils/pricing';
 
 const money = formatMoney;
@@ -237,7 +238,7 @@ function LowStockList({ items }) {
                     </div>
                     <StatusBadge
                         status={Number(item.available) <= 0 ? 'danger' : 'warning'}
-                        label={`${compactNumber(item.available)} / ${compactNumber(item.min_quantity)}`}
+                        label={`${formatCompoundQuantity(item.available, item.units)} / ${formatCompoundQuantity(item.min_quantity, item.units)}`}
                     />
                 </div>
             ))}

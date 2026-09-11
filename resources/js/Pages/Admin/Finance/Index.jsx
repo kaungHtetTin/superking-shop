@@ -259,7 +259,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
 
     const categoryOptions = useMemo(() => {
         if (filterState.type && options.categories?.[filterState.type]) return options.categories[filterState.type];
-        return [...(options.categories?.income || []), ...(options.categories?.expense || [])];
+        return [...(options.categories?.income || []), ...(options.categories?.expense || []), ...(options.categories?.asset || [])];
     }, [filterState.type, options.categories]);
 
     const formCategoryOptions = options.manual_categories?.[form.data.type] || [];
@@ -371,7 +371,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             <label className="form-field finance-report-filter__select">
                 <span>{t('Type')}</span>
                 <select value={filterState.type} onChange={(event) => setFilterState((current) => ({ ...current, type: event.target.value, category: '' }))}>
-                    <option value="">{t('All types')}</option><option value="income">{t('Income')}</option><option value="expense">{t('Expense')}</option>
+                    <option value="">{t('All types')}</option><option value="income">{t('Income')}</option><option value="expense">{t('Expense')}</option><option value="asset">{t('Asset acquisition')}</option>
                 </select>
             </label>
             <label className="form-field finance-report-filter__select">
@@ -410,7 +410,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             <div className="metrics-grid six compact-kpi-strip finance-kpi-strip">
                 <MetricCard label="Order revenue" value={money(summary.order_revenue)} icon="receipt" />
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} icon="box" tone="danger" />
-                <MetricCard label="Stock purchases" value={money(summary.stock_purchases)} icon="receipt" />
+                <MetricCard label="Inventory purchases" value={money(summary.stock_purchases)} icon="receipt" />
                 <MetricCard label="Other income & stock gains" value={money(summary.manual_income)} icon="wallet" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} icon="card" tone="danger" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} icon="chart" tone={summary.net_profit < 0 ? 'danger' : 'success'} />
@@ -468,7 +468,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             </div>
 
             <section className="panel glass finance-ledger-panel">
-                <PanelHeading eyebrow={t('Financial records')} title={t('Income and expense entries')} />
+                <PanelHeading eyebrow={t('Financial records')} title={t('Financial activity')} />
                 <div className="table-wrap">
                     <table className="finance-ledger-table">
                         <thead>
@@ -500,7 +500,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                             </small>
                                         </td>
                                         <td>{entry.location?.name || t('Unassigned')}</td>
-                                        <td><StatusBadge status={entry.type === 'income' ? 'success' : 'warning'} label={t(entry.type)} /></td>
+                                        <td><StatusBadge status={entry.type === 'income' ? 'success' : entry.type === 'asset' ? 'info' : 'warning'} label={t(entry.type === 'asset' ? 'Asset acquisition' : entry.type)} /></td>
                                         <td className="money-cell"><strong>{money(entry.amount)}</strong></td>
                                         <td><StatusBadge status={entry.status} label={t(entry.status)} /></td>
                                         <td>{entry.recorder?.name || t('System')}</td>

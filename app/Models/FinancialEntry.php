@@ -14,11 +14,14 @@ class FinancialEntry extends Model
 
     public const CATEGORY_POS_SALE = 'pos_sale';
 
+    /** Legacy category retained only to identify and protect historical rows. */
     public const CATEGORY_INTERNAL_TRANSFER = 'internal_transfer';
 
     public const CATEGORY_STOCK_ADJUSTMENT = 'stock_adjustment';
 
     public const CATEGORY_REFUND_PAYABLE = 'refund_payable';
+
+    public const TYPE_ASSET = 'asset';
 
     public const SYSTEM_CATEGORIES = [self::CATEGORY_POS_SALE, self::CATEGORY_STOCK_RECEIPT,
         self::CATEGORY_INTERNAL_TRANSFER, self::CATEGORY_STOCK_ADJUSTMENT, self::CATEGORY_REFUND_PAYABLE];
@@ -41,7 +44,6 @@ class FinancialEntry extends Model
 
     public const INCOME_CATEGORIES = [
         self::CATEGORY_POS_SALE => 'POS sales',
-        self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers received',
         self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory gains',
         'other_income' => 'Other income',
         'service_fee' => 'Service fee',
@@ -49,8 +51,6 @@ class FinancialEntry extends Model
     ];
 
     public const EXPENSE_CATEGORIES = [
-        self::CATEGORY_STOCK_RECEIPT => 'Stock receipts',
-        self::CATEGORY_INTERNAL_TRANSFER => 'Stock transfers paid',
         self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory losses',
         self::CATEGORY_REFUND_PAYABLE => 'Customer refund due (not yet paid)',
         'inventory' => 'Inventory',
@@ -63,6 +63,10 @@ class FinancialEntry extends Model
         'bank_fee' => 'Bank fee',
         'refund' => 'Refund',
         'other_expense' => 'Other expense',
+    ];
+
+    public const ASSET_CATEGORIES = [
+        self::CATEGORY_STOCK_RECEIPT => 'Inventory purchases',
     ];
 
     protected $fillable = [
@@ -102,7 +106,7 @@ class FinancialEntry extends Model
 
     public function isStockReceiptEntry(): bool
     {
-        return $this->type === 'expense' && $this->category === self::CATEGORY_STOCK_RECEIPT;
+        return $this->category === self::CATEGORY_STOCK_RECEIPT;
     }
 
     public function isSystemManaged(): bool
@@ -115,6 +119,7 @@ class FinancialEntry extends Model
         return [
             'income' => self::categoryOptionsFor('income'),
             'expense' => self::categoryOptionsFor('expense'),
+            self::TYPE_ASSET => self::categoryOptionsFor(self::TYPE_ASSET),
         ];
     }
 
@@ -125,7 +130,11 @@ class FinancialEntry extends Model
 
     private static function categoryOptionsFor(string $type): array
     {
-        $fallback = $type === 'income' ? self::INCOME_CATEGORIES : self::EXPENSE_CATEGORIES;
+        $fallback = match ($type) {
+            'income' => self::INCOME_CATEGORIES,
+            self::TYPE_ASSET => self::ASSET_CATEGORIES,
+            default => self::EXPENSE_CATEGORIES,
+        };
         $options = collect($fallback)
             ->map(fn ($label, $value) => ['value' => $value, 'label' => $label])
             ->values();

@@ -13,8 +13,8 @@ class FinancialCategorySeeder extends Seeder
         FinancialCategory::updateOrCreate(
             ['value' => FinancialEntry::CATEGORY_STOCK_RECEIPT],
             [
-                'type' => 'expense',
-                'label' => 'Stock receipts',
+                'type' => FinancialEntry::TYPE_ASSET,
+                'label' => 'Inventory purchases',
                 'is_system' => true,
                 'is_active' => true,
                 'sort_order' => 10,

@@ -75,6 +75,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/products/barcodes', [ProductController::class, 'barcodes'])->middleware('admin.permission:catalog.manage')->name('products.barcodes');
     Route::get('/products/import', [ProductImportController::class, 'create'])->middleware('admin.permission:catalog.manage')->name('products.import.create');
     Route::get('/products/import/template', [ProductImportController::class, 'template'])->middleware('admin.permission:catalog.manage')->name('products.import.template');
+    Route::get('/products/import/unit-prices/template', [ProductImportController::class, 'unitPriceTemplate'])->middleware('admin.permission:catalog.manage')->name('products.import.unit-prices.template');
+    Route::post('/products/import/unit-prices', [ProductImportController::class, 'storeUnitPrices'])->middleware('admin.permission:catalog.manage')->name('products.import.unit-prices.store');
     Route::get('/products/export', [ProductImportController::class, 'export'])->middleware('admin.permission:catalog.manage')->name('products.export');
     Route::post('/products/import', [ProductImportController::class, 'store'])->middleware('admin.permission:catalog.manage')->name('products.import.store');
     Route::get('/products', [ProductController::class, 'index'])->middleware('admin.permission:catalog.view')->name('products.index');
@@ -276,6 +278,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.index');
     Route::get('/inventory/receipts/create', [StockReceiptController::class, 'create'])
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.create');
+    Route::get('/inventory/receipts/import/template', [StockReceiptController::class, 'importTemplate'])
+        ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.import.template');
+    Route::post('/inventory/receipts/import/preview', [StockReceiptController::class, 'importPreview'])
+        ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.import.preview');
     Route::post('/inventory/receipts', [StockReceiptController::class, 'store'])
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.store');
     Route::get('/inventory/receipts/{receipt}', [StockReceiptController::class, 'show'])
