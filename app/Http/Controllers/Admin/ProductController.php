@@ -25,7 +25,12 @@ class ProductController extends Controller
             'q' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'status' => ['nullable', Rule::in(['active', 'inactive', 'draft'])],
+            'stock' => ['nullable', Rule::in(['in_stock', 'low_stock', 'out_of_stock'])],
         ]);
+
+        $stockTotal = DB::table('inventory_balances')
+            ->selectRaw('COALESCE(SUM(on_hand_qty), 0)')
+            ->whereColumn('product_id', 'products.id');
 
         $products = Product::query()
             ->with(['category', 'primaryImage', 'baseUnit', 'units', 'defaultSellingUnit.prices'])
@@ -40,6 +45,16 @@ class ProductController extends Controller
             })
             ->when($filters['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['stock'] ?? null, function ($query, $stock) use ($stockTotal) {
+                if ($stock === 'out_of_stock') {
+                    $query->where($stockTotal, '<=', 0);
+                } elseif ($stock === 'low_stock') {
+                    $query->where($stockTotal, '>', 0)
+                        ->where($stockTotal, '<=', DB::raw('products.min_quantity'));
+                } else {
+                    $query->where($stockTotal, '>', DB::raw('products.min_quantity'));
+                }
+            })
             ->latest()
             ->paginate(15)
             ->through(function (Product $product) {

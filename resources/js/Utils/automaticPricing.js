@@ -29,6 +29,16 @@ export function effectiveBuyingCost(paid, free, factor, cost) {
     } catch { return null; }
 }
 
+export function purchaseBuyingCost(factor, cost) {
+    try {
+        const divisor = decimal(factor);
+        if (divisor <= 0n || decimal(cost) < 0n) return null;
+        const value = decimal(cost) * SCALE / divisor;
+        const rounded = (value + 500000n) / 1000000n;
+        return `${rounded / 1000000n}.${String(rounded % 1000000n).padStart(6, '0')}`;
+    } catch { return null; }
+}
+
 export function isBelowBuyingCost(amount, cost, factor = '1') {
     try { return decimal(amount) > 0n && decimal(amount) < decimal(cost) * decimal(factor) / SCALE; }
     catch { return false; }

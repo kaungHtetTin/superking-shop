@@ -8,7 +8,7 @@ Ordinary saves recalculate existing Automatic rows only. To enroll all active pr
 
 Product editors choose Automatic or Manual separately for each unit/type. Automatic inputs are read-only previews; the server ignores submitted Automatic amounts and calculates again. Product versions prevent stale forms overwriting changes. Switching to Manual allows an exception; purchase and rule saves preserve it. Switching a shared rule to Manual preserves amounts and makes its rows Manual.
 
-Receipts include paid quantity, free quantity, purchase unit and effective base-unit cost. Positive Manual prices below cost trigger a warning before submission and are rechecked transactionally by the server. **Review items** or acknowledge **Save anyway**. Successful posting displays changed-row counts and a committed old/new-price detail table on the receipt. Deletion also reports updated-price and missing-cost counts; its details remain in `price_changes` using `receipt-delete:<id>`.
+Receipts include paid quantity, free quantity, purchase unit, latest-purchase pricing cost and FOC-adjusted accounting cost. Positive Manual prices below the latest purchase cost trigger a warning before submission and are rechecked transactionally by the server. **Review items** or acknowledge **Save anyway**. Successful posting displays changed-row counts and a committed old/new-price detail table on the receipt. Deletion also reports updated-price and missing-cost counts; its details remain in `price_changes` using `receipt-delete:<id>`.
 
 ## Cost and calculation contract
 
@@ -16,10 +16,10 @@ Receipts include paid quantity, free quantity, purchase unit and effective base-
 
 - Server arithmetic uses BCMath, not binary floats. Client previews use BigInt fixed-decimal arithmetic.
 - Buying cost uses the latest **posted** receipt, ordered by receipt creation timestamp, receipt ID, then line ID descending. Posting an older draft does not make it the latest-created purchase.
-- Effective base cost is `(paid quantity × unit cost) / ((paid + free quantity) × conversion factor)`, persisted to six decimal places, half up.
+- Automatic-pricing cost is the latest receipt's paid purchase cost per base unit: `unit cost / conversion factor`, persisted to six decimal places, half up. FOC quantity does not lower this pricing basis.
 - With no posted purchase, pricing uses the product's opening pricing cost (`pricing_base_cost`).
 - The rule computes a base-unit price. Other unit prices are the rounded base result × conversion factor, rounded upward to cents if needed. Selling amounts retain the app's two-decimal precision.
-- `original_price` remains the weighted-average accounting/valuation cost. Pricing does not replace it with latest buying cost. Free quantity affects physical stock, but purchase expense uses paid quantity only.
+- `original_price` remains the weighted-average accounting/valuation cost, including FOC in the received-quantity denominator. Pricing does not replace it with latest buying cost. Free quantity affects physical stock, while purchase expense uses paid quantity only.
 - Zero cost retains the saved selling amount and marks an Automatic row **Cost required**. A new zero-valued Automatic row cannot be sold through POS or online checkout until it has positive cost or an explicit Manual price.
 - Completed sales, payment history and sale-time cost snapshots are never repriced.
 - Existing products' accounting cost is read-only in the editor and direct API changes are rejected. Opening cost can be set on creation; inventory operations manage subsequent accounting cost.

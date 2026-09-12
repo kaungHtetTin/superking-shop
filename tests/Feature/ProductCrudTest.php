@@ -12,6 +12,20 @@ class ProductCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_product_index_can_search_and_filter_by_category_and_stock_level(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $battery = Category::create(['name' => 'Battery', 'slug' => 'battery', 'is_active' => true]);
+        $other = Category::create(['name' => 'Other', 'slug' => 'other', 'is_active' => true]);
+        $matching = Product::create(['category_id' => $battery->id, 'name' => 'Quantum Battery', 'slug' => 'quantum-battery', 'sku' => 'QB-01', 'original_price' => 10, 'min_quantity' => 2, 'status' => 'active', 'is_active' => true]);
+        Product::create(['category_id' => $other->id, 'name' => 'Unrelated Item', 'slug' => 'unrelated-item', 'original_price' => 10, 'min_quantity' => 2, 'status' => 'active', 'is_active' => true]);
+        $this->actingAs($admin)
+            ->get("/admin/products?q=QB-01&category_id={$battery->id}&stock=out_of_stock")
+            ->assertOk()
+            ->assertSee('Quantum Battery')
+            ->assertDontSee('Unrelated Item');
+    }
+
     public function test_optional_sku_can_be_saved_and_must_be_unique(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);

@@ -68,10 +68,25 @@ class AutomaticPricingService
         return $cost;
     }
 
+    /** Latest paid purchase cost per base unit; FOC does not lower the automatic-pricing basis. */
+    public function purchaseCost(string $factor, string $unitCost): string
+    {
+        if (bccomp($factor, '0', 6) <= 0 || bccomp($unitCost, '0', 2) < 0) {
+            throw ValidationException::withMessages(['items' => 'Conversion must be positive and purchase cost cannot be negative.']);
+        }
+
+        $cost = bcadd(bcdiv($unitCost, $factor, 12), '0.0000005', 6);
+        if (bccomp($cost, '999999999999.999999', 6) > 0) {
+            throw ValidationException::withMessages(['items' => 'Purchase cost exceeds the supported amount.']);
+        }
+
+        return $cost;
+    }
+
     public function resolveCost(Product $product): string
     {
         $line = $this->latestLine($product);
-        $cost = $line ? $this->effectiveCost((string) $line->received_quantity, (string) $line->free_quantity, (string) $line->conversion_factor, (string) $line->unit_cost)
+        $cost = $line ? $this->purchaseCost((string) $line->conversion_factor, (string) $line->unit_cost)
             : (string) ($product->pricing_base_cost ?? $product->original_price ?? '0');
         $product->forceFill(['pricing_base_cost' => $product->pricing_base_cost ?? $product->original_price, 'pricing_buying_cost' => $cost,
             'pricing_source_receipt_id' => $line?->stock_receipt_id])->save();
@@ -156,7 +171,7 @@ class AutomaticPricingService
     public function readCost(Product $product): string
     {
         $line = $this->latestLine($product);
-        return $line ? $this->effectiveCost((string) $line->received_quantity, (string) $line->free_quantity, (string) $line->conversion_factor, (string) $line->unit_cost)
+        return $line ? $this->purchaseCost((string) $line->conversion_factor, (string) $line->unit_cost)
             : (string) ($product->pricing_base_cost ?? $product->original_price ?? '0');
     }
 

@@ -198,6 +198,45 @@ function requestBody(data, method, options = {}) {
     };
 }
 
+function uploadRequest(url, method, body, headers, signal, onProgress) {
+    return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        const requestUrl = new URL(url, window.location.href).href;
+        request.open(method.toUpperCase(), url, true);
+        request.withCredentials = true;
+
+        Object.entries(headers).forEach(([name, value]) => request.setRequestHeader(name, value));
+        request.upload.addEventListener('progress', (event) => {
+            if (!event.lengthComputable) return;
+            onProgress?.({
+                loaded: event.loaded,
+                total: event.total,
+                percentage: Math.min(100, Math.round((event.loaded / event.total) * 100)),
+            });
+        });
+        request.addEventListener('load', () => {
+            const responseHeaders = new Headers();
+            request.getAllResponseHeaders().trim().split(/[\r\n]+/).filter(Boolean).forEach((line) => {
+                const separator = line.indexOf(':');
+                if (separator > 0) responseHeaders.append(line.slice(0, separator).trim(), line.slice(separator + 1).trim());
+            });
+            resolve({
+                status: request.status,
+                ok: request.status >= 200 && request.status < 300,
+                redirected: Boolean(request.responseURL) && request.responseURL !== requestUrl,
+                url: request.responseURL || url,
+                headers: responseHeaders,
+                json: async () => JSON.parse(request.responseText),
+                text: async () => request.responseText,
+            });
+        });
+        request.addEventListener('error', () => reject(new TypeError('Network request failed.')));
+        request.addEventListener('abort', () => reject(new DOMException('The request was aborted.', 'AbortError')));
+        signal?.addEventListener('abort', () => request.abort(), { once: true });
+        request.send(body);
+    });
+}
+
 async function applyPage(page, options = {}) {
     if (!page?.component || !spaState.setPage) return;
 
@@ -307,17 +346,23 @@ export const router = {
             const send = () => {
                 const { body, headers } = requestBody(options.data, method, options);
 
+                const requestHeaders = {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-SPA': 'true',
+                    'X-CSRF-TOKEN': csrfToken(),
+                    ...headers,
+                };
+
+                if (body instanceof FormData && typeof options.onProgress === 'function') {
+                    return uploadRequest(target, method, body, requestHeaders, controller?.signal, options.onProgress);
+                }
+
                 return fetch(target, {
                     method: method.toUpperCase(),
                     body,
                     credentials: 'same-origin',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-SPA': 'true',
-                        'X-CSRF-TOKEN': csrfToken(),
-                        ...headers,
-                    },
+                    headers: requestHeaders,
                     signal: controller?.signal,
                 });
             };
@@ -515,6 +560,7 @@ export function useForm(initialData = {}) {
     const [data, setFormData] = useState(initialData);
     const [errors, setErrors] = useState({});
     const [processing, setProcessing] = useState(false);
+    const [progress, setProgress] = useState(null);
     const [recentlySuccessful, setRecentlySuccessful] = useState(false);
 
     const setData = (key, value) => {
@@ -570,6 +616,7 @@ export function useForm(initialData = {}) {
 
     const submit = async (method, url, options = {}) => {
         setProcessing(true);
+        setProgress(null);
         setRecentlySuccessful(false);
         setErrors({});
 
@@ -580,6 +627,10 @@ export function useForm(initialData = {}) {
             ...visitOptions,
             method,
             data: payload,
+            onProgress: (nextProgress) => {
+                setProgress(nextProgress);
+                options.onProgress?.(nextProgress);
+            },
             onError: (nextErrors) => {
                 setErrors(nextErrors);
                 options.onError?.(nextErrors);
@@ -592,6 +643,7 @@ export function useForm(initialData = {}) {
             },
             onFinish: () => {
                 setProcessing(false);
+                setProgress(null);
                 options.onFinish?.();
             },
         });
@@ -602,6 +654,7 @@ export function useForm(initialData = {}) {
         setData,
         errors,
         processing,
+        progress,
         recentlySuccessful,
         transform,
         reset,
@@ -613,7 +666,7 @@ export function useForm(initialData = {}) {
         put: (url, options) => submit('put', url, options),
         patch: (url, options) => submit('patch', url, options),
         delete: (url, options) => submit('delete', url, options),
-    }), [data, errors, processing, recentlySuccessful]);
+    }), [data, errors, processing, progress, recentlySuccessful]);
 
     return form;
 }

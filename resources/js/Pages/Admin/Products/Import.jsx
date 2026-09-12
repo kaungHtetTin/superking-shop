@@ -6,9 +6,35 @@ import { PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 
+function ImportProgress({ processing, progress, t }) {
+    if (!processing) return null;
+
+    const percentage = progress?.percentage ?? 0;
+    const uploaded = percentage >= 100;
+
+    return (
+        <div className="csv-import-progress" aria-live="polite">
+            <div className="csv-import-progress__status">
+                <span>{uploaded ? t('Upload complete. Processing rows...') : t('Uploading CSV...')}</span>
+                <strong>{percentage}%</strong>
+            </div>
+            <div
+                className="csv-import-progress__track"
+                role="progressbar"
+                aria-label={t('CSV import progress')}
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={percentage}
+            >
+                <span className="csv-import-progress__bar" style={{ width: `${percentage}%` }} />
+            </div>
+        </div>
+    );
+}
+
 export default function Import({ categories, app_base }) {
     const t = usePhraseTranslation();
-    const { data, setData, post, processing, errors } = useForm({ file: null, create_missing_categories: true });
+    const { data, setData, post, processing, progress, errors } = useForm({ file: null, create_missing_categories: true });
     const unitPriceForm = useForm({ unit_price_file: null });
 
     const submit = (event) => {
@@ -37,8 +63,9 @@ export default function Import({ categories, app_base }) {
                 </div>
                 <p><strong>{t('Existing categories')}:</strong> {categories.map((category) => category.name).join(', ') || t('None')}</p>
                 <p className="muted">
-                    Parent category is optional; leave it blank for a top-level category. Category is required. SKU and barcode may be blank,
-                    and the system will generate a barcode. Status may be active, inactive, or draft. Existing products are never updated by this import.
+                    Parent category is optional; leave it blank for a top-level category. A blank category uses the system default
+                    “Non-categorized” category. SKU and barcode may be blank, and the system will generate a barcode. Status may be active,
+                    inactive, or draft. Existing products are never updated by this import.
                 </p>
 
                 <form onSubmit={submit} style={{ marginTop: 20 }}>
@@ -50,9 +77,9 @@ export default function Import({ categories, app_base }) {
                             style={{ marginTop: 3 }}
                         />
                         <span>
-                            <strong>{t('Create missing categories as inactive')}</strong>
+                            <strong>{t('Create missing categories as active')}</strong>
                             <small className="muted" style={{ display: 'block' }}>
-                                Review and activate them from Categories before customers can see them on the storefront.
+                                New parent and child categories from this import will be immediately available in the catalog.
                             </small>
                         </span>
                     </label>
@@ -80,6 +107,7 @@ export default function Import({ categories, app_base }) {
                                 : <div>{errors.file}</div>}
                         </div>
                     )}
+                    <ImportProgress processing={processing} progress={progress} t={t} />
                     <div className="inline-actions" style={{ marginTop: 20 }}>
                         <button className="btn primary" type="submit" disabled={processing || !data.file}>
                             <Icon name="upload" size={14} /> {processing ? t('Importing...') : t('Import products')}
@@ -110,6 +138,7 @@ export default function Import({ categories, app_base }) {
                         <input type="file" accept=".csv,text/csv" onChange={(event) => unitPriceForm.setData('unit_price_file', event.target.files?.[0] || null)} />
                     </label>
                     {unitPriceForm.errors.unit_price_file && <div className="flash error" role="alert" style={{ whiteSpace: 'pre-line', marginTop: 12 }}>{unitPriceForm.errors.unit_price_file}</div>}
+                    <ImportProgress processing={unitPriceForm.processing} progress={unitPriceForm.progress} t={t} />
                     <div className="inline-actions" style={{ marginTop: 20 }}>
                         <button className="btn primary" type="submit" disabled={unitPriceForm.processing || !unitPriceForm.data.unit_price_file}>
                             <Icon name="upload" size={14} /> {unitPriceForm.processing ? t('Importing...') : t('Import units and prices')}

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\Location;
 use App\Models\Product;
+use App\Models\StockReceipt;
 use App\Models\User;
 use App\Services\Inventory\StockReceiptCsvService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +60,42 @@ class StockReceiptCsvImportTest extends TestCase
 
         $this->assertDatabaseCount('stock_receipts', 0);
         $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_template_prefills_latest_buying_cost_instead_of_weighted_average_cost(): void
+    {
+        [$admin, $location, $product] = $this->fixture();
+        $receipt = StockReceipt::create([
+            'receipt_number' => 'REC-LATEST-COST',
+            'location_id' => $location->id,
+            'status' => 'posted',
+            'created_by' => $admin->id,
+            'received_by' => $admin->id,
+            'received_at' => now(),
+        ]);
+        $box = $product->units()->where('is_default_selling', true)->firstOrFail();
+        $receipt->items()->create([
+            'product_id' => $product->id,
+            'product_unit_id' => $box->id,
+            'received_quantity' => 10,
+            'free_quantity' => 2,
+            'base_quantity' => 120,
+            'conversion_factor' => 10,
+            'unit_cost' => 200,
+        ]);
+
+        $content = $this->actingAs($admin)
+            ->get('/admin/inventory/receipts/import/template')
+            ->assertOk()
+            ->streamedContent();
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, preg_replace('/^\xEF\xBB\xBF/', '', $content));
+        rewind($stream);
+        fgetcsv($stream);
+        $row = fgetcsv($stream);
+        fclose($stream);
+
+        $this->assertSame('200.00', $row[7]);
     }
 
     public function test_zero_quantity_rows_are_ignored_and_at_least_one_paid_quantity_is_required(): void

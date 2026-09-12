@@ -148,6 +148,7 @@ class InventoryController extends Controller
                 $baseAvailable = (float) ($balance?->available_qty ?? 0);
                 $baseOnHand = (float) ($balance?->on_hand_qty ?? 0);
                 $baseUnit = $product->units->firstWhere('is_base', true);
+                $buyingCost = app(\App\Services\AutomaticPricingService::class)->readCost($product);
 
                 $unitPayload = fn (ProductUnit $unit) => [
                     'id' => $unit->id,
@@ -166,6 +167,7 @@ class InventoryController extends Controller
                     'is_default_selling' => (bool) $unit->is_default_selling,
                     'image_path' => $product->primaryImage?->image_path,
                     'original_price' => (float) $product->original_price,
+                    'buying_cost' => (float) $buyingCost,
                     'prices' => $unit->prices->map(fn ($price) => ['price_type' => $price->price_type, 'price' => (string) $price->price, 'is_manual' => $price->is_manual, 'calculation_status' => $price->calculation_status])->values(),
                     'on_hand_qty' => $unit->fromBaseQuantity($baseOnHand),
                     'available_base_qty' => $baseAvailable,
@@ -184,7 +186,7 @@ class InventoryController extends Controller
 
         $query = ProductUnit::query()
             ->where('is_active', true)
-            ->with(['prices', 'product:id,name,product_code,sku,barcode,original_price,category_id', 'product.primaryImage:id,product_id,image_path', 'product.inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id)])
+            ->with(['prices', 'product:id,name,product_code,sku,barcode,original_price,pricing_base_cost,pricing_buying_cost,category_id', 'product.primaryImage:id,product_id,image_path', 'product.inventoryBalances' => fn ($scope) => $scope->where('location_id', $location->id)])
             ->when($term !== '', fn ($scope) => $scope->where(fn ($inner) => $inner
                 ->where('name', 'like', "%{$term}%")
                 ->orWhere('code', 'like', "%{$term}%")
@@ -197,6 +199,7 @@ class InventoryController extends Controller
         $map = function (ProductUnit $unit) {
             $balance = $unit->product->inventoryBalances->first();
             $baseAvailable = (float) ($balance?->available_qty ?? 0);
+            $buyingCost = app(\App\Services\AutomaticPricingService::class)->readCost($unit->product);
 
             return [
                 'id' => $unit->id,
@@ -213,6 +216,7 @@ class InventoryController extends Controller
                 'is_default_selling' => $unit->is_default_selling,
                 'image_path' => $unit->product->primaryImage?->image_path,
                 'original_price' => (float) $unit->product->original_price,
+                'buying_cost' => (float) $buyingCost,
                 'prices' => $unit->prices->map(fn ($price) => ['price_type' => $price->price_type, 'price' => (string) $price->price, 'is_manual' => $price->is_manual, 'calculation_status' => $price->calculation_status])->values(),
                 'on_hand_qty' => (float) ($balance?->on_hand_qty ?? 0),
                 'available_base_qty' => $baseAvailable,

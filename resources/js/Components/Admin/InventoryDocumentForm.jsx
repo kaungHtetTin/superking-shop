@@ -15,6 +15,7 @@ import {
 
 import {
     effectiveBuyingCost,
+    purchaseBuyingCost,
     isBelowBuyingCost,
 } from "@/Utils/automaticPricing";
 
@@ -99,7 +100,7 @@ export default function InventoryDocumentForm({
                 received_quantity: 1,
                 free_quantity: 0,
                 unit_cost:
-                    Number(selectedUnit.original_price || 0) *
+                    Number(selectedUnit.buying_cost ?? selectedUnit.original_price ?? 0) *
                     Number(selectedUnit.conversion_factor || 1),
             },
         ]);
@@ -130,7 +131,7 @@ export default function InventoryDocumentForm({
             product_unit_id: unit.id,
             unit: { ...unit, unit_options: item.unit.unit_options },
             unit_cost:
-                Number(unit.original_price || 0) *
+                Number(unit.buying_cost ?? unit.original_price ?? 0) *
                 Number(unit.conversion_factor || 1),
         });
     };
@@ -174,9 +175,7 @@ export default function InventoryDocumentForm({
         [form.data.items],
     );
     const manualWarnings = form.data.items.flatMap((item) => {
-        const cost = effectiveBuyingCost(
-            item.received_quantity,
-            item.free_quantity || 0,
+        const cost = purchaseBuyingCost(
             item.unit?.conversion_factor || 1,
             item.unit_cost || 0,
         );
@@ -193,7 +192,7 @@ export default function InventoryDocumentForm({
                 )
                 .map(
                     (price) =>
-                        `${item.unit?.product_name} / ${unit.unit_name || unit.name} / ${price.price_type}: Manual price ${price.price} is below effective buying cost.`,
+                        `${item.unit?.product_name} / ${unit.unit_name || unit.name} / ${price.price_type}: Manual price ${price.price} is below latest purchase cost.`,
                 ),
         );
     });
@@ -529,7 +528,7 @@ export default function InventoryDocumentForm({
                                     </p>
                                     <p>
                                         {t(
-                                            "The template uses each product’s default selling unit and its converted unit cost. Importing replaces the current product selection but does not post stock.",
+                                            "The template uses each product’s default selling unit and its latest posted purchase cost, converted to that unit. Importing replaces the current product selection but does not post stock.",
                                         )}
                                     </p>
                                 </div>
@@ -608,7 +607,7 @@ export default function InventoryDocumentForm({
                                         <th>{t("Unit")}</th>
                                         <th>{t("Paid quantity")}</th>
                                         <th>{t("Free quantity")}</th>
-                                        <th>{t("Unit cost")}</th>
+                                        <th>{t("Purchase unit cost")}</th>
                                         <th aria-label={t("Action")} />
                                     </tr>
                                 </thead>

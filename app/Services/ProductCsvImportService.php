@@ -15,9 +15,15 @@ class ProductCsvImportService
 {
     public const MAX_ROWS = 10000;
 
+    public const DEFAULT_CATEGORY = 'Non-categorized';
+
     public const HEADERS = [
         'name', 'parent_category', 'category', 'sku', 'barcode', 'base_unit_name', 'base_unit_code',
         'cost_price', 'retail_price', 'min_quantity', 'status', 'description',
+    ];
+
+    private const REQUIRED_HEADERS = [
+        'name', 'category', 'base_unit_name', 'base_unit_code', 'cost_price', 'retail_price',
     ];
 
     public function __construct(private InventoryService $inventoryService)
@@ -59,10 +65,10 @@ class ProductCsvImportService
                     $parentNameKey = $this->categoryNameKey($row['parent_category']);
                     if (! isset($parentIds[$parentNameKey])) {
                         $parent = Category::create([
-                            'parent_id' => null,
-                            'name' => $row['parent_category'],
-                            'slug' => $this->uniqueCategorySlug($row['parent_category']),
-                            'is_active' => false,
+                        'parent_id' => null,
+                        'name' => $row['parent_category'],
+                        'slug' => $this->uniqueCategorySlug($row['parent_category']),
+                        'is_active' => true,
                         ]);
                         $parentIds[$parentNameKey] = $parent->id;
                         $categoryIds[$this->categoryPathKey(null, $parent->name)] = $parent->id;
@@ -77,7 +83,7 @@ class ProductCsvImportService
                         'parent_id' => $parentId,
                         'name' => $row['category'],
                         'slug' => $this->uniqueCategorySlug($row['category']),
-                        'is_active' => false,
+                        'is_active' => true,
                     ]);
                     $categoryIds[$categoryKey] = $category->id;
                     $createdCategories++;
@@ -150,7 +156,9 @@ class ProductCsvImportService
         }
         $header = array_map(fn ($value) => Str::lower(trim((string) $value)), $header);
         $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
-        if ($header !== self::HEADERS) {
+        $unknownHeaders = array_diff($header, self::HEADERS);
+        $missingRequiredHeaders = array_diff(self::REQUIRED_HEADERS, $header);
+        if (count($header) !== count(array_unique($header)) || $unknownHeaders !== [] || $missingRequiredHeaders !== []) {
             fclose($handle);
             return [[], ['CSV columns must exactly match the downloaded template.'], $this->emptyStats()];
         }
@@ -185,13 +193,18 @@ class ProductCsvImportService
                 $invalidRows++;
                 break;
             }
-            if (count($values) !== count(self::HEADERS)) {
-                $errors[] = "Row {$line}: expected ".count(self::HEADERS).' columns.';
+            if (count($values) !== count($header)) {
+                $errors[] = "Row {$line}: expected ".count($header).' columns.';
                 $invalidRows++;
                 continue;
             }
 
-            $row = array_combine(self::HEADERS, array_map(fn ($value) => trim((string) $value), $values));
+            $providedRow = array_combine($header, array_map(fn ($value) => trim((string) $value), $values));
+            $row = array_merge(array_fill_keys(self::HEADERS, ''), $providedRow);
+            if ($row['category'] === '') {
+                $row['category'] = self::DEFAULT_CATEGORY;
+                $row['parent_category'] = '';
+            }
             $rowErrors = [];
             foreach (['name', 'category', 'base_unit_name', 'base_unit_code', 'cost_price', 'retail_price'] as $required) {
                 if ($row[$required] === '') {
@@ -207,7 +220,8 @@ class ProductCsvImportService
             if (mb_strlen($row['parent_category']) > 255) $rowErrors[] = 'parent category is too long';
             if (mb_strlen($row['category']) > 255) $rowErrors[] = 'category is too long';
             if ($row['parent_category'] !== '' && $this->categoryNameKey($row['parent_category']) === $this->categoryNameKey($row['category'])) {
-                $rowErrors[] = 'parent category and category must be different';
+                // Treat a repeated parent/category name as a top-level category.
+                $row['parent_category'] = '';
             }
 
             if (! $createMissingCategories) {
@@ -216,7 +230,9 @@ class ProductCsvImportService
                     $parentId = $parentIds->get($this->categoryNameKey($row['parent_category']));
                     if (! $parentId) $rowErrors[] = "parent category '{$row['parent_category']}' does not exist as a top-level category";
                 }
-                if (($row['parent_category'] === '' || $parentId)
+                $usesSystemDefault = $row['parent_category'] === ''
+                    && $this->categoryNameKey($row['category']) === $this->categoryNameKey(self::DEFAULT_CATEGORY);
+                if (! $usesSystemDefault && ($row['parent_category'] === '' || $parentId)
                     && ! $categoryIds->has($this->categoryPathKey($parentId, $row['category']))) {
                     $path = $row['parent_category'] === '' ? $row['category'] : $row['parent_category'].' > '.$row['category'];
                     $rowErrors[] = "category '{$path}' does not exist";

@@ -45,6 +45,7 @@ class StockReceiptController extends Controller
 
         return response()->streamDownload(function () {
             $output = fopen('php://output', 'wb');
+            $pricing = app(\App\Services\AutomaticPricingService::class);
             fwrite($output, "\xEF\xBB\xBF");
             fputcsv($output, StockReceiptCsvService::HEADERS);
 
@@ -53,9 +54,10 @@ class StockReceiptController extends Controller
                 ->whereHas('defaultSellingUnit', fn ($query) => $query->where('is_active', true))
                 ->with('defaultSellingUnit')
                 ->orderBy('name')
-                ->chunkById(500, function ($products) use ($output) {
+                ->chunkById(500, function ($products) use ($output, $pricing) {
                     foreach ($products as $product) {
                         $unit = $product->defaultSellingUnit;
+                        $buyingCost = $pricing->readCost($product);
                         fputcsv($output, [
                             $this->excelSafe($product->product_code),
                             $this->excelSafe($product->sku),
@@ -64,7 +66,7 @@ class StockReceiptController extends Controller
                             $this->excelSafe($unit->code),
                             '0',
                             '0',
-                            number_format((float) $product->original_price * (float) $unit->conversion_factor, 2, '.', ''),
+                            number_format((float) $buyingCost * (float) $unit->conversion_factor, 2, '.', ''),
                         ]);
                     }
                 });
@@ -106,7 +108,7 @@ class StockReceiptController extends Controller
             'creator:id,name',
             'receiver:id,name',
             'inventoryImport:id,batch_number,original_filename',
-            'items.product:id,name,product_code,sku,barcode,original_price',
+            'items.product:id,name,product_code,sku,barcode,original_price,pricing_base_cost,pricing_buying_cost',
             'items.product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active',
             'items.unit:id,product_id,name,code,conversion_factor',
         ]);
@@ -151,7 +153,7 @@ class StockReceiptController extends Controller
         $this->authorize('update', $receipt);
         abort_unless($receipt->status === 'draft', 404);
         $receipt->load([
-            'items.product:id,name,product_code,sku,barcode,original_price',
+            'items.product:id,name,product_code,sku,barcode,original_price,pricing_base_cost,pricing_buying_cost',
             'items.product.inventoryBalances' => fn ($query) => $query->where('location_id', $receipt->location_id),
             'items.product.units' => fn ($query) => $query->where('is_active', true)->with('prices')->orderByDesc('is_base')->orderBy('sort_order'),
             'items.unit.prices',
@@ -242,6 +244,7 @@ class StockReceiptController extends Controller
     private function receiptUnitPayload(ProductUnit $unit, \App\Models\Product $product): array
     {
         $balance = $product->inventoryBalances->first();
+        $buyingCost = app(\App\Services\AutomaticPricingService::class)->readCost($product);
 
         $mapUnit = fn (ProductUnit $option) => [
             'id' => $option->id,
@@ -259,6 +262,7 @@ class StockReceiptController extends Controller
             'is_base' => (bool) $option->is_base,
             'is_default_selling' => (bool) $option->is_default_selling,
             'original_price' => (float) $product->original_price,
+            'buying_cost' => (float) $buyingCost,
             'prices' => $option->prices,
             'on_hand_qty' => $option->fromBaseQuantity((float) ($balance?->on_hand_qty ?? 0)),
             'available_base_qty' => (float) ($balance?->available_qty ?? 0),

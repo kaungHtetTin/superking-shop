@@ -36,7 +36,7 @@ class ProductCsvImportTest extends TestCase
         $this->assertNotEmpty(Product::where('name', 'Tea')->value('barcode'));
     }
 
-    public function test_missing_category_can_be_created_as_inactive(): void
+    public function test_missing_category_can_be_created_as_active(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
         Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
@@ -46,13 +46,10 @@ class ProductCsvImportTest extends TestCase
             'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
             'create_missing_categories' => true,
         ])->assertRedirect('/admin/products')
-            ->assertSessionHas('success', 'CSV import completed — 2 of 2 new products created successfully. 1 new category was created as inactive.');
+            ->assertSessionHas('success', 'CSV import completed — 2 of 2 new products created successfully. 1 new category was created as active.');
 
-        $this->assertDatabaseHas('categories', ['name' => 'New Category', 'is_active' => false]);
+        $this->assertDatabaseHas('categories', ['name' => 'New Category', 'is_active' => true]);
         $this->assertDatabaseHas('products', ['name' => 'New Product']);
-        $this->assertSame(0, Product::query()->where('name', 'New Product')->inActiveCategory()->count());
-
-        Category::query()->where('name', 'New Category')->update(['is_active' => true]);
         $this->assertSame(1, Product::query()->where('name', 'New Product')->inActiveCategory()->count());
     }
 
@@ -76,6 +73,23 @@ class ProductCsvImportTest extends TestCase
 
         $content = $response->streamedContent();
         $this->assertStringStartsWith("\xEF\xBB\xBFname,parent_category,category,sku,barcode", $content);
+    }
+
+    public function test_legacy_template_without_new_optional_columns_can_be_imported(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        Category::create(['name' => 'Beverages', 'slug' => 'beverages', 'is_active' => true]);
+        $csv = "\xEF\xBB\xBFname,category,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nLegacy Tea,Beverages,,Piece,pc,100,150,0,active,Imported from the previous template\n";
+
+        $this->actingAs($admin)->post('/admin/products/import', [
+            'file' => UploadedFile::fake()->createWithContent('product-import-template.csv', $csv),
+            'create_missing_categories' => true,
+        ])->assertRedirect('/admin/products')->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('products', [
+            'name' => 'Legacy Tea',
+            'sku' => null,
+        ]);
     }
 
     public function test_export_uses_the_same_columns_as_the_new_product_import(): void
@@ -124,9 +138,49 @@ class ProductCsvImportTest extends TestCase
 
         $parent = Category::query()->where('name', 'Drinks')->whereNull('parent_id')->firstOrFail();
         $child = Category::query()->where('name', 'Hot Drinks')->where('parent_id', $parent->id)->firstOrFail();
-        $this->assertFalse($parent->is_active);
-        $this->assertFalse($child->is_active);
+        $this->assertTrue($parent->is_active);
+        $this->assertTrue($child->is_active);
         $this->assertDatabaseHas('products', ['name' => 'Coffee', 'category_id' => $child->id]);
+    }
+
+    public function test_matching_parent_and_category_are_imported_as_one_top_level_category(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nCoffee,Beverages, beverages ,MATCHING-CATEGORY,,Piece,pc,10,20,0,active,\n";
+
+        $this->actingAs($admin)->post('/admin/products/import', [
+            'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+            'create_missing_categories' => true,
+        ])->assertRedirect('/admin/products')->assertSessionHasNoErrors();
+
+        $category = Category::query()->where('name', 'beverages')->whereNull('parent_id')->firstOrFail();
+        $this->assertDatabaseCount('categories', 1);
+        $this->assertDatabaseHas('products', [
+            'name' => 'Coffee',
+            'category_id' => $category->id,
+        ]);
+    }
+
+    public function test_blank_category_uses_active_system_default_even_when_category_creation_is_disabled(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $csv = "name,parent_category,category,sku,barcode,base_unit_name,base_unit_code,cost_price,retail_price,min_quantity,status,description\nLoose Item,Ignored Parent,,NO-CATEGORY,,Piece,pc,10,20,0,active,\n";
+
+        $this->actingAs($admin)->post('/admin/products/import', [
+            'file' => UploadedFile::fake()->createWithContent('products.csv', $csv),
+            'create_missing_categories' => false,
+        ])->assertRedirect('/admin/products')->assertSessionHasNoErrors();
+
+        $category = Category::query()
+            ->where('name', \App\Services\ProductCsvImportService::DEFAULT_CATEGORY)
+            ->whereNull('parent_id')
+            ->firstOrFail();
+
+        $this->assertTrue($category->is_active);
+        $this->assertDatabaseHas('products', [
+            'name' => 'Loose Item',
+            'category_id' => $category->id,
+        ]);
     }
 
     public function test_unit_price_template_exports_existing_matrix_and_import_adds_a_unit(): void

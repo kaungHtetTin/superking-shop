@@ -168,7 +168,7 @@ Show loading placeholders while fetching settings; prevent submission until requ
 ### C. Purchase changes cost
 
 1. Purchasing staff select products and enter quantities, free units, costs, and units.
-2. App calculates effective base-unit costs and previews manual-price warnings.
+2. App calculates latest paid purchase cost for pricing, FOC-adjusted effective cost for accounting, and previews manual-price warnings.
 3. Staff resolve or acknowledge warnings and save.
 4. Server saves purchase/stock changes, determines each affected product's current cost, recalculates eligible prices, and commits atomically.
 5. App displays final committed changes and refreshes product/sales price caches.
@@ -199,14 +199,15 @@ flowchart TD
 ## 6. Buying-cost calculation and event contract
 
 ```text
-line_total = paid_quantity × purchase_unit_cost
-received_base_quantity = (paid_quantity + free_quantity) × conversion_factor
-effective_base_unit_cost = line_total / received_base_quantity
+automatic_pricing_base_cost = purchase_unit_cost / conversion_factor
+accounting_line_total = paid_quantity × purchase_unit_cost
+accounting_received_base_quantity = (paid_quantity + free_quantity) × conversion_factor
+accounting_effective_base_unit_cost = accounting_line_total / accounting_received_base_quantity
 ```
 
 Quantities must use the same purchase unit before conversion. Paid quantity and conversion factor must be positive; free quantity and cost must be nonnegative. MKPOS rounds line totals and persisted product costs to whole currency units and base quantities to three decimals. Match that precision when compatibility is required.
 
-Example: buy 10 boxes at 12,000 Ks per box, receive 2 free boxes, with 12 units per box. Total cost is 120,000 Ks and received quantity is 144 units. Effective cost is 833.333… Ks per unit; MKPOS stores 833 Ks. At 20% markup and rounding 50, the price becomes 1,000 Ks.
+Example: buy 10 boxes at 12,000 Ks per box, receive 2 free boxes, with 12 units per box. Automatic pricing uses 1,000 Ks per unit before markup (`12,000 / 12`), so 20% markup rounded to 50 produces 1,200 Ks. Accounting records a 120,000 Ks purchase over 144 received units, an effective acquisition cost of 833.333… Ks per unit. The FOC benefit therefore remains additional realized margin rather than reducing the catalog pricing basis.
 
 Recommended deterministic latest-cost policy: select the latest completed purchase by creation timestamp, then purchase ID. If a product appears multiple times in that purchase, use the largest line ID as the final line. Preserve creation order during edits. Recompute from this source after every purchase mutation; do not let an older edited purchase supersede a newer purchase accidentally.
 

@@ -129,7 +129,7 @@ class ProductImportController extends Controller
         $message = "CSV import completed — {$result['products']} of {$result['total_rows']} new products created successfully.";
         if ($result['categories'] > 0) {
             $categoryLabel = $result['categories'] === 1 ? 'category was' : 'categories were';
-            $message .= " {$result['categories']} new {$categoryLabel} created as inactive.";
+            $message .= " {$result['categories']} new {$categoryLabel} created as active.";
         }
         if ($result['skipped_rows'] > 0) {
             $message .= " {$result['skipped_rows']} blank rows were skipped.";

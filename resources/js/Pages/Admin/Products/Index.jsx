@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Head, Link, useForm, usePage } from '@/spa/router';
+import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
@@ -10,7 +10,7 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
 import { formatCompoundQuantity } from '@/Utils/unitLabel';
 
-export default function Index({ products, filters = {}, app_base }) {
+export default function Index({ products, categories = [], filters = {}, app_base }) {
     const { app_url, flash, errors: pageErrors } = usePage().props;
     const { delete: destroy, patch } = useForm({});
     const serverProductRows = products.data || products;
@@ -18,11 +18,48 @@ export default function Index({ products, filters = {}, app_base }) {
     const [deleteNotice, setDeleteNotice] = useState('');
     const t = usePhraseTranslation();
     const [visibleColumns, setVisibleColumns] = useState({ category: true, stock: true, status: true });
+    const [filterDraft, setFilterDraft] = useState({
+        q: filters.q || '',
+        category_id: String(filters.category_id || ''),
+        stock: filters.stock || '',
+        status: filters.status || '',
+    });
     const toggleColumn = (key) => setVisibleColumns((current) => ({ ...current, [key]: current[key] === false }));
 
     useEffect(() => {
         setProductRows(serverProductRows);
     }, [products]);
+
+    useEffect(() => {
+        setFilterDraft({
+            q: filters.q || '',
+            category_id: String(filters.category_id || ''),
+            stock: filters.stock || '',
+            status: filters.status || '',
+        });
+    }, [filters.q, filters.category_id, filters.stock, filters.status]);
+
+    const navigateWithFilters = (nextFilters) => {
+        const params = Object.fromEntries(Object.entries(nextFilters).filter(([, value]) => value !== '' && value != null));
+        router.get(routeWithBase('/admin/products', app_base), params, { preserveScroll: true });
+    };
+
+    const applyFilters = (event) => {
+        event.preventDefault();
+        navigateWithFilters(filterDraft);
+    };
+
+    const applySelectFilter = (key, value) => {
+        const next = { ...filterDraft, [key]: value };
+        setFilterDraft(next);
+        navigateWithFilters(next);
+    };
+
+    const resetFilters = () => {
+        const empty = { q: '', category_id: '', stock: '', status: '' };
+        setFilterDraft(empty);
+        navigateWithFilters(empty);
+    };
 
     const handleDelete = (id) => {
         if (confirm(t('Are you sure you want to delete this product?'))) {
@@ -45,15 +82,6 @@ export default function Index({ products, filters = {}, app_base }) {
         if (confirm(t(`Are you sure you want to ${action} this product?`))) {
             patch(routeWithBase(`/admin/products/${product.id}/toggle-status`, app_base), { preserveScroll: true });
         }
-    };
-
-    const statusUrl = (status) => {
-        const params = new URLSearchParams();
-        if (status) params.set('status', status);
-        if (filters.q) params.set('q', filters.q);
-        if (filters.category_id) params.set('category_id', filters.category_id);
-        const query = params.toString();
-        return `${routeWithBase('/admin/products', app_base)}${query ? `?${query}` : ''}`;
     };
 
     const defaultRetailPrice = (product) => product.default_selling_unit?.prices?.find((price) => price.price_type === 'retail')?.price;
@@ -107,22 +135,35 @@ export default function Index({ products, filters = {}, app_base }) {
                         />
                     }
                 />
-                <div className="inline-actions" style={{ marginBottom: 14 }}>
-                    {[
-                        ['', 'All'],
-                        ['active', 'Active'],
-                        ['inactive', 'Inactive'],
-                        ['draft', 'Draft'],
-                    ].map(([value, label]) => (
-                        <Link
-                            key={value || 'all'}
-                            href={statusUrl(value)}
-                            className={`btn ${String(filters.status || '') === value ? 'primary' : 'secondary'}`}
-                        >
-                            {t(label)}
-                        </Link>
-                    ))}
-                </div>
+                <form className="inventory-filterbar" onSubmit={applyFilters} aria-label={t('Filter products')}>
+                    <div className="search-box">
+                        <Icon name="search" size={15} />
+                        <input
+                            value={filterDraft.q}
+                            onChange={(event) => setFilterDraft((current) => ({ ...current, q: event.target.value }))}
+                            placeholder={t('Name, code, SKU, or barcode')}
+                            aria-label={t('Search products')}
+                        />
+                    </div>
+                    <select value={filterDraft.category_id} onChange={(event) => applySelectFilter('category_id', event.target.value)} aria-label={t('Category')}>
+                        <option value="">{t('All categories')}</option>
+                        {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                    </select>
+                    <select value={filterDraft.stock} onChange={(event) => applySelectFilter('stock', event.target.value)} aria-label={t('Stock')}>
+                        <option value="">{t('All stock levels')}</option>
+                        <option value="in_stock">{t('In stock')}</option>
+                        <option value="low_stock">{t('Low stock')}</option>
+                        <option value="out_of_stock">{t('Out of stock')}</option>
+                    </select>
+                    <select value={filterDraft.status} onChange={(event) => applySelectFilter('status', event.target.value)} aria-label={t('Status')}>
+                        <option value="">{t('All statuses')}</option>
+                        <option value="active">{t('Active')}</option>
+                        <option value="inactive">{t('Inactive')}</option>
+                        <option value="draft">{t('Draft')}</option>
+                    </select>
+                    <button type="submit" className="icon-btn" aria-label={t('Search')} title={t('Search')}><Icon name="search" size={15} /></button>
+                    <button type="button" className="icon-btn" onClick={resetFilters} aria-label={t('Reset filters')} title={t('Reset filters')}><Icon name="close" size={15} /></button>
+                </form>
                 <div className="table-wrap">
                     <table className="products-table">
                         <thead>

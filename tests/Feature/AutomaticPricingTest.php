@@ -40,6 +40,7 @@ class AutomaticPricingTest extends TestCase
             $this->assertSame($expected, $service->calculate($cost, ['markup_percent'=>$markup,'minimum_profit'=>$profit,'rounding'=>$round]));
         }
         $this->assertSame('8.333333', $service->effectiveCost('10','2','10','100'));
+        $this->assertSame('10.000000', $service->purchaseCost('10', '100'));
         $this->assertNull($service->calculate('0', ['markup_percent'=>20,'minimum_profit'=>0,'rounding'=>1]));
     }
 
@@ -138,8 +139,8 @@ class AutomaticPricingTest extends TestCase
         $service=app(StockReceiptService::class);
         $receipt=$service->createDraft($location,[['product_unit_id'=>$unit->id,'received_quantity'=>10,'free_quantity'=>2,'unit_cost'=>1200]],$actor);
         $posted=$service->post($receipt,$actor);
-        $this->assertSame('1000.000000',$product->fresh()->pricing_buying_cost);
-        $this->assertSame('1200.00',$price->fresh()->price);
+        $this->assertSame('1200.000000',$product->fresh()->pricing_buying_cost);
+        $this->assertSame('1450.00',$price->fresh()->price);
         $this->assertDatabaseHas('inventory_balances',['product_id'=>$product->id,'on_hand_qty'=>12]);
         $this->assertDatabaseHas('financial_entries',['reference'=>$receipt->receipt_number,'amount'=>12000]);
         $this->assertSame(1,$posted->pricing_summary['changed_row_count']);
