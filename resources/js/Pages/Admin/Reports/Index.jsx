@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
+import AdminPagination from '@/Components/Admin/AdminPagination';
 import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
@@ -163,7 +164,7 @@ function InsightCard({ label, value, caption }) {
 function ReportTabs({ view, canViewSales, canViewInventory, appBase }) {
     const t = usePhraseTranslation();
     const tabs = [
-        ...(canViewSales ? [{ key: 'sales', label: 'Sales' }, { key: 'pos', label: 'POS' }] : []),
+        ...(canViewSales ? [{ key: 'sales', label: 'Sales' }, { key: 'product-sales', label: 'Product sales' }, { key: 'pos', label: 'POS' }] : []),
         ...(canViewInventory ? [{ key: 'inventory', label: 'Inventory' }, { key: 'health', label: 'Health' }] : []),
     ];
 
@@ -182,7 +183,7 @@ function ReportTabs({ view, canViewSales, canViewInventory, appBase }) {
     );
 }
 
-function ReportFilters({ view, filters, locations, appBase, showDates = false, showStock = false }) {
+function ReportFilters({ view, filters, locations, appBase, showDates = false, showStock = false, showSearch = false }) {
     const t = usePhraseTranslation();
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [filterState, setFilterState] = useState({
@@ -196,7 +197,8 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
     const activeFilterCount = [
         filterState.location_id,
         ...(showDates ? [filterState.from, filterState.to] : []),
-        ...(showStock ? [filterState.q, filterState.stock_status] : []),
+        ...((showStock || showSearch) ? [filterState.q] : []),
+        ...(showStock ? [filterState.stock_status] : []),
     ].filter(Boolean).length;
 
     useEffect(() => {
@@ -215,7 +217,8 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
         view,
         location_id: filterState.location_id || undefined,
         ...(showDates ? { from: filterState.from || undefined, to: filterState.to || undefined } : {}),
-        ...(showStock ? { q: filterState.q.trim() || undefined, stock_status: filterState.stock_status || undefined } : {}),
+        ...((showStock || showSearch) ? { q: filterState.q.trim() || undefined } : {}),
+        ...(showStock ? { stock_status: filterState.stock_status || undefined } : {}),
     };
     const query = new URLSearchParams();
     Object.entries(requestFilters).forEach(([key, value]) => value !== undefined && query.set(key, value));
@@ -235,7 +238,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
 
     const renderFilterFields = (autoFocus = false) => (
         <>
-            {showStock && (
+            {(showStock || showSearch) && (
                 <label className="form-field reports-filter__search">
                     <span>{t('Search products')}</span>
                     <span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Product name, code, or barcode')} /></span>
@@ -293,6 +296,64 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
                 </div>
             )}
         </>
+    );
+}
+
+function ProductSalesReport({ report, filters, locations, appBase }) {
+    const t = usePhraseTranslation();
+    const [table, setTable] = useState('summary');
+    const summary = report.summary || {};
+    const exportQuery = (breakdown) => {
+        const query = new URLSearchParams({ view: 'product-sales', breakdown });
+        ['location_id', 'from', 'to', 'q'].forEach((key) => filters?.[key] && query.set(key, filters[key]));
+        return `${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`;
+    };
+    const rows = table === 'summary' ? report.summary_rows : report.daily_rows;
+
+    return (
+        <div className="reports-view-stack">
+            <ReportFilters view="product-sales" filters={filters} locations={locations} appBase={appBase} showDates showSearch />
+            <div className="metrics-grid compact-kpi-strip">
+                <MetricCard label="Orders" value={Number(summary.orders || 0).toLocaleString()} hint="Recognized sales" icon="receipt" />
+                <MetricCard label="Units sold" value={Number(summary.units || 0).toLocaleString()} hint={`${Number(summary.products || 0).toLocaleString()} unique products`} icon="box" />
+                <MetricCard label="Gross sales" value={money(summary.gross_sales)} hint={`Discount ${money(summary.discounts)}`} icon="chart" />
+                <MetricCard label="Net sales" value={money(summary.net_sales)} hint="Product sales after discount" icon="wallet" tone="success" />
+            </div>
+            <section className="panel glass">
+                <PanelHeading
+                    eyebrow={t('Item performance')}
+                    title={t(table === 'summary' ? 'Product sales summary' : 'Daily product sales')}
+                    action={(
+                        <div className="inline-actions">
+                            <button type="button" className={`btn ${table === 'summary' ? 'primary' : 'secondary'}`} onClick={() => setTable('summary')}>{t('Summary')}</button>
+                            <button type="button" className={`btn ${table === 'daily' ? 'primary' : 'secondary'}`} onClick={() => setTable('daily')}>{t('Daily breakdown')}</button>
+                            <a className="btn secondary" href={exportQuery(table)}><Icon name="download" size={14} /> CSV</a>
+                        </div>
+                    )}
+                />
+                <div className="table-wrap report-products-table">
+                    <table>
+                        <thead><tr>{table === 'daily' && <th>{t('Date')}</th>}<th>{t('Product')}</th><th>{t('Store')}</th><th>{t('Orders')}</th><th>{t('Units sold')}</th><th>{t('FOC')}</th><th>{t('Gross sales')}</th><th>{t('Discount')}</th><th>{t('Net sales')}</th></tr></thead>
+                        <tbody>
+                            {(rows?.data || []).length === 0 ? <tr><td colSpan={table === 'daily' ? 9 : 8}><span className="muted">{t('No product sales in this period.')}</span></td></tr> : rows.data.map((row, index) => (
+                                <tr key={`${table}-${row.sale_date || ''}-${row.location_id}-${row.product_id}-${index}`}>
+                                    {table === 'daily' && <td><strong>{row.sale_date}</strong></td>}
+                                    <td><strong>{row.product_name}</strong><small>{row.product_code}</small></td>
+                                    <td>{row.location_name}</td>
+                                    <td>{Number(row.orders || 0).toLocaleString()}</td>
+                                    <td><strong>{Number(row.units_sold || 0).toLocaleString()}</strong></td>
+                                    <td>{Number(row.foc_units || 0).toLocaleString()}</td>
+                                    <td>{money(row.gross_sales)}</td>
+                                    <td>{money(row.discount_amount)}</td>
+                                    <td><strong>{money(row.net_sales)}</strong></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <AdminPagination paginator={rows} label={t('items')} />
+            </section>
+        </div>
     );
 }
 
@@ -409,7 +470,7 @@ function HealthReport({ report }) {
     );
 }
 
-export default function ReportsIndex({ view = 'sales', filters = {}, locations = [], canViewSales = false, canViewInventory = false, inventoryReport = null, posReport = null, healthReport = null, summary = {}, topProducts = [], salesByDay = [], categoryPerformance = [], purchaseSegments = [], productPairs = [], couponPerformance = [], flashSalePerformance = [] }) {
+export default function ReportsIndex({ view = 'sales', filters = {}, locations = [], canViewSales = false, canViewInventory = false, inventoryReport = null, posReport = null, healthReport = null, productSalesReport = null, summary = {}, topProducts = [], salesByDay = [], categoryPerformance = [], purchaseSegments = [], productPairs = [], couponPerformance = [], flashSalePerformance = [] }) {
     const t = usePhraseTranslation();
     const { app_base } = usePage().props;
     const topRevenue = Math.max(...topProducts.map((product) => Number(product.revenue || 0)), 1);
@@ -659,6 +720,7 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
             )}
 
             {view === 'inventory' && inventoryReport && <InventoryReport report={inventoryReport} filters={filters} locations={locations} appBase={app_base} />}
+            {view === 'product-sales' && productSalesReport && <ProductSalesReport report={productSalesReport} filters={filters} locations={locations} appBase={app_base} />}
             {view === 'pos' && posReport && <PosReport report={posReport} filters={filters} locations={locations} appBase={app_base} />}
             {view === 'health' && healthReport && <HealthReport report={healthReport} />}
         </AdminLayout>

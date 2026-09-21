@@ -966,6 +966,40 @@
   grid-template-columns: minmax(200px, 1fr) 155px;
 }
 
+.app-root .audit-log-filters {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 210px) auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.app-root .audit-log-filters .inline-actions {
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.app-root .audit-log-filters .btn {
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1;
+}
+
+@media (max-width: 760px) {
+  .app-root .audit-log-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .app-root .audit-log-filters .inline-actions,
+  .app-root .audit-log-filters .btn {
+    width: 100%;
+  }
+}
+
 .app-root .filter-toolbar.transfer-filter-toolbar {
   grid-template-columns: repeat(4, minmax(160px, 1fr));
   align-items: end;
@@ -8205,15 +8239,43 @@
   max-width: 220px;
 }
 
-.register-form-panel {
+.app-root .register-form-panel {
   margin-bottom: 14px;
 }
 
-.register-form {
+.app-root .register-form {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(150px, .7fr) minmax(180px, 1fr) auto auto;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
+}
+
+.app-root .register-form > * {
+  min-width: 0;
+}
+
+.app-root .register-active-field .switch-row {
+  width: 100%;
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.app-root .register-form-actions {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.app-root .register-form-actions .btn {
+  width: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--admin-control-height);
+  padding-inline: 8px;
 }
 
 .register-action-cell {
@@ -8572,7 +8634,7 @@
 }
 
 @media (max-width: 760px) {
-  .register-form,
+  .app-root .register-form,
   .pos-topbar,
   .pos-cart-line {
     grid-template-columns: 1fr;
@@ -10216,33 +10278,78 @@
   border-top: 1px solid var(--color-border);
 }
 
-.shift-history__dialog .MuiDialog-paper {
-  max-width: 760px;
+.app-root .shift-history__details-backdrop {
+  padding: 16px;
+}
+
+.app-root .operation-modal.shift-history__details-modal {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-root .shift-history__details-header {
+  flex: 0 0 auto;
+}
+
+.app-root .shift-history__details-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-root .shift-history__details-body {
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.app-root .shift-history__details-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+.app-root .shift-history__details-meta > div,
+.app-root .shift-history__details-money-grid > div {
+  min-width: 0;
+}
+
+.app-root .shift-history__details-meta p,
+.app-root .shift-history__details-money-grid p {
+  overflow-wrap: anywhere;
+}
+
+.app-root .shift-history__details-money-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-root .shift-history__details-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: var(--shadow-lg);
 }
 
-.shift-history__dialog .MuiDialogTitle-root {
-  min-height: 46px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 15px;
-  line-height: 20px;
-}
-
-.shift-history__dialog .MuiDialogContent-root {
-  padding: 14px;
-  border-color: var(--color-border);
-}
-
-.shift-history__dialog .MuiDialogActions-root {
-  min-height: 48px;
-  padding: 8px 14px;
-  border-color: var(--color-border);
+.app-root .shift-history__details-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 10px 16px;
   background: var(--color-surface);
+}
+
+.app-root .shift-history__details-actions .btn {
+  min-width: 104px;
 }
 
 @media (max-width: 760px) {
@@ -10289,13 +10396,43 @@
     height: 40px;
   }
 
-  .shift-history__dialog .MuiDialog-paper {
-    margin: 10px;
+  .app-root .shift-history__details-backdrop {
+    padding: 10px;
+  }
+
+  .app-root .operation-modal.shift-history__details-modal {
+    width: 100%;
     max-height: calc(100dvh - 20px);
   }
 
-  .shift-history__dialog .MuiDialogActions-root .btn {
+  .app-root .shift-history__details-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-root .shift-history__details-money-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-root .shift-history__details-actions .btn {
     min-height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-root .shift-history__details-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-root .shift-history__details-body {
+    padding: 14px;
+  }
+
+  .app-root .shift-history__details-total {
+    align-items: flex-end;
+  }
+
+  .app-root .shift-history__details-actions .btn {
+    width: 100%;
   }
 }
 

@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
     Box,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
     Divider,
-    Paper,
     Stack,
     Typography,
 } from '@mui/material';
@@ -78,6 +73,18 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
             document.removeEventListener('keydown', closeOnEscape);
         };
     }, [filterDrawerOpen]);
+
+    useEffect(() => {
+        if (!selectedShift) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setSelectedShift(null);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [selectedShift]);
 
     const navigate = (next = filterState) => {
         router.get(routeWithBase('/admin/pos/shifts', app_base), next, { preserveState: true, preserveScroll: true });
@@ -248,14 +255,30 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                 </div>
             )}
 
-            <Dialog className="shift-history__dialog" open={Boolean(selectedShift)} onClose={() => setSelectedShift(null)} maxWidth="md" fullWidth>
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center', fontWeight: 850 }}>
-                    <span>{t('Shift details')} #{selectedShift?.id}</span>
-                    <StatusBadge status={selectedShift?.status === 'open' ? 'warning' : 'success'} label={selectedShift?.status === 'open' ? 'Open' : 'Closed'} />
-                </DialogTitle>
-                <DialogContent dividers>
+            {selectedShift && (
+                <div className="modal-backdrop shift-history__details-backdrop" onMouseDown={() => setSelectedShift(null)}>
+                    <section
+                        className="operation-modal glass shift-history__details-modal"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="shift-history-details-title"
+                    >
+                        <header className="drawer-header shift-history__details-header">
+                            <div>
+                                <small className="eyebrow">{t('Cash session')} #{selectedShift.id}</small>
+                                <h2 id="shift-history-details-title">{t('Shift details')}</h2>
+                            </div>
+                            <div className="shift-history__details-header-actions">
+                                <StatusBadge status={selectedShift.status === 'open' ? 'warning' : 'success'} label={selectedShift.status === 'open' ? 'Open' : 'Closed'} />
+                                <button type="button" className="icon-btn" onClick={() => setSelectedShift(null)} aria-label={t('Close shift details')}>
+                                    <Icon name="close" size={16} />
+                                </button>
+                            </div>
+                        </header>
+                        <div className="shift-history__details-body">
                     <Stack spacing={2}>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.25 }}>
+                        <Box className="shift-history__details-meta">
                             <Box><Typography variant="caption" color="text.secondary">{t('Cashier')}</Typography><Typography fontWeight={750}>{selectedShift?.cashier?.name || '—'}</Typography></Box>
                             <Box><Typography variant="caption" color="text.secondary">{t('Warehouse')}</Typography><Typography fontWeight={750}>{selectedShift?.location?.name || '—'}</Typography></Box>
                             <Box><Typography variant="caption" color="text.secondary">{t('Register')}</Typography><Typography fontWeight={750}>{selectedShift?.register?.name || '—'} · {selectedShift?.register?.code || '—'}</Typography></Box>
@@ -264,7 +287,7 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                             <Box><Typography variant="caption" color="text.secondary">{t('Closed by')}</Typography><Typography>{selectedShift?.closed_by?.name || '—'}</Typography></Box>
                         </Box>
                         <Divider />
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1 }}>
+                        <Box className="shift-history__details-money-grid">
                             <MoneyItem label={t('Opening cash')} value={selectedShift?.opening_cash} />
                             <MoneyItem label={t('Cash received')} value={selectedSummary.cash_received_total} />
                             <MoneyItem label={t('Change given')} value={selectedSummary.change_given_total} />
@@ -274,27 +297,28 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                             <MoneyItem label={t('Expected cash')} value={selectedSummary.expected_cash} emphasize />
                             <MoneyItem label={t('Counted cash')} value={selectedShift?.counted_cash} emphasize />
                         </Box>
-                        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                        <div className="shift-history__details-total">
                             <Box><Typography variant="caption" color="text.secondary">{t('Sale count')}</Typography><Typography variant="h6" fontWeight={850}>{selectedSummary.sale_count || 0}</Typography></Box>
                             <Box sx={{ textAlign: 'right' }}><Typography variant="caption" color="text.secondary">{t('Difference')}</Typography><Typography variant="h6" fontWeight={850} color={selectedShift?.variance === null ? 'text.secondary' : Number(selectedShift?.variance) < 0 ? 'error.main' : Number(selectedShift?.variance) > 0 ? 'warning.dark' : 'success.main'}>{selectedShift?.variance === null ? '—' : money(selectedShift?.variance)}</Typography></Box>
-                        </Paper>
+                        </div>
                         {(selectedShift?.opening_notes || selectedShift?.closing_notes) && <Divider />}
                         {selectedShift?.opening_notes && <Box><Typography variant="caption" color="text.secondary">{t('Opening note')}</Typography><Typography sx={{ whiteSpace: 'pre-wrap' }}>{selectedShift.opening_notes}</Typography></Box>}
                         {selectedShift?.closing_notes && <Box><Typography variant="caption" color="text.secondary">{t('Closing note')}</Typography><Typography sx={{ whiteSpace: 'pre-wrap' }}>{selectedShift.closing_notes}</Typography></Box>}
                     </Stack>
-                </DialogContent>
-                <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                        </div>
+                        <footer className="modal-actions shift-history__details-actions">
                     <button
                         type="button"
                         className="btn primary"
-                        style={{ minWidth: 104 }}
                         onClick={() => setSelectedShift(null)}
                         aria-label={t('Close shift details')}
                     >
                         <Icon name="close" size={14} /> {t('Close')}
                     </button>
-                </DialogActions>
-            </Dialog>
+                        </footer>
+                    </section>
+                </div>
+            )}
         </AdminLayout>
     );
 }

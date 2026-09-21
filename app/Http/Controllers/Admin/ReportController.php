@@ -27,7 +27,7 @@ class ReportController extends Controller
         }
         $this->authorizeView($user, $view);
         $filters = $request->validate([
-            'view' => ['nullable', 'string', 'in:sales,inventory,pos,health'],
+            'view' => ['nullable', 'string', 'in:sales,product-sales,inventory,pos,health'],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -38,6 +38,10 @@ class ReportController extends Controller
         $requestedLocationId = (int) ($filters['location_id'] ?? 0);
         abort_if($requestedLocationId && ! in_array($requestedLocationId, $accessibleLocationIds, true), 403);
         $locationIds = $requestedLocationId ? [$requestedLocationId] : $accessibleLocationIds;
+        if ($view === 'product-sales') {
+            $filters['from'] = $filters['from'] ?? now()->startOfMonth()->toDateString();
+            $filters['to'] = $filters['to'] ?? now()->toDateString();
+        }
         $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
         $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
         $paidOrders = Order::query()
@@ -250,6 +254,52 @@ class ReportController extends Controller
                 "),
             ]);
 
+        $productSalesReport = null;
+        if ($view === 'product-sales') {
+            $baseProductSales = OrderItem::query()
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->join('products', 'products.id', '=', 'order_items.product_id')
+                ->join('locations', 'locations.id', '=', 'orders.location_id')
+                ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
+                ->whereIn('orders.location_id', $locationIds)
+                ->when($from, fn ($query) => $query->where('orders.created_at', '>=', $from))
+                ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
+                ->when($filters['q'] ?? null, function ($query, $search) {
+                    $term = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($search)).'%';
+                    $query->where(fn ($products) => $products->where('products.name', 'like', $term)->orWhere('products.product_code', 'like', $term));
+                });
+
+            $discountExpression = 'order_items.total_price * CASE WHEN orders.total_amount > 0 THEN LEAST(1, orders.discount_amount / orders.total_amount) ELSE 0 END';
+            $totals = (clone $baseProductSales)->selectRaw("COUNT(DISTINCT orders.id) as orders, COUNT(DISTINCT products.id) as products, COALESCE(SUM(order_items.base_quantity), 0) as units, COALESCE(SUM(order_items.foc_base_quantity), 0) as foc_units, COALESCE(SUM(order_items.total_price), 0) as gross_sales, COALESCE(SUM($discountExpression), 0) as discounts")->first();
+
+            $summaryRows = (clone $baseProductSales)
+                ->groupBy('products.id', 'products.name', 'products.product_code', 'locations.id', 'locations.name')
+                ->orderByDesc(DB::raw('SUM(order_items.total_price)'))
+                ->selectRaw("products.id as product_id, products.name as product_name, products.product_code, locations.id as location_id, locations.name as location_name, COUNT(DISTINCT orders.id) as orders, SUM(order_items.base_quantity) as units_sold, SUM(order_items.foc_base_quantity) as foc_units, SUM(order_items.total_price) as gross_sales, SUM($discountExpression) as discount_amount, SUM(order_items.total_price - ($discountExpression)) as net_sales")
+                ->paginate(25, ['*'], 'summary_page')->withQueryString();
+
+            $dailyRows = (clone $baseProductSales)
+                ->groupBy(DB::raw('DATE(orders.created_at)'), 'products.id', 'products.name', 'products.product_code', 'locations.id', 'locations.name')
+                ->orderByDesc(DB::raw('DATE(orders.created_at)'))
+                ->orderBy('products.name')
+                ->selectRaw("DATE(orders.created_at) as sale_date, products.id as product_id, products.name as product_name, products.product_code, locations.id as location_id, locations.name as location_name, COUNT(DISTINCT orders.id) as orders, SUM(order_items.base_quantity) as units_sold, SUM(order_items.foc_base_quantity) as foc_units, SUM(order_items.total_price) as gross_sales, SUM($discountExpression) as discount_amount, SUM(order_items.total_price - ($discountExpression)) as net_sales")
+                ->paginate(25, ['*'], 'daily_page')->withQueryString();
+
+            $productSalesReport = [
+                'summary' => [
+                    'orders' => (int) ($totals->orders ?? 0),
+                    'products' => (int) ($totals->products ?? 0),
+                    'units' => (float) ($totals->units ?? 0),
+                    'foc_units' => (float) ($totals->foc_units ?? 0),
+                    'gross_sales' => round((float) ($totals->gross_sales ?? 0), 2),
+                    'discounts' => round((float) ($totals->discounts ?? 0), 2),
+                    'net_sales' => round((float) ($totals->gross_sales ?? 0) - (float) ($totals->discounts ?? 0), 2),
+                ],
+                'summary_rows' => $summaryRows,
+                'daily_rows' => $dailyRows,
+            ];
+        }
+
         return Spa::render('Admin/Reports/Index', [
             'view' => $view,
             'filters' => $filters,
@@ -263,6 +313,7 @@ class ReportController extends Controller
             'inventoryReport' => $view === 'inventory' ? $operations->inventory($user, $filters) : null,
             'posReport' => $view === 'pos' ? $operations->pos($user, $filters) : null,
             'healthReport' => $view === 'health' ? $operations->health($user) : null,
+            'productSalesReport' => $productSalesReport,
             'summary' => [
                 'paid_orders' => (clone $paidOrders)->where('payment_status', 'paid')->count(),
                 'recognized_orders' => $paidOrderCount,
@@ -296,18 +347,19 @@ class ReportController extends Controller
     public function export(Request $request, OperationsReportService $operations)
     {
         $view = $request->string('view')->toString();
-        if (! in_array($view, ['sales', 'inventory', 'pos'], true)) {
-            throw ValidationException::withMessages(['view' => 'Choose sales, inventory, or POS for CSV export.']);
+        if (! in_array($view, ['sales', 'product-sales', 'inventory', 'pos'], true)) {
+            throw ValidationException::withMessages(['view' => 'Choose sales, product sales, inventory, or POS for CSV export.']);
         }
 
         $this->authorizeView($request->user(), $view);
         $filters = $request->validate([
-            'view' => ['required', 'string', 'in:sales,inventory,pos'],
+            'view' => ['required', 'string', 'in:sales,product-sales,inventory,pos'],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'q' => ['nullable', 'string', 'max:120'],
             'stock_status' => ['nullable', 'string', 'in:low,out'],
+            'breakdown' => ['nullable', 'string', 'in:summary,daily'],
         ]);
 
         $accessibleIds = array_map('intval', $request->user()->accessibleLocationIds());
@@ -316,6 +368,31 @@ class ReportController extends Controller
         $locationIds = $locationId ? [$locationId] : $accessibleIds;
 
         $filename = $view.'-report-'.now()->format('Ymd-His').'.csv';
+        if ($view === 'product-sales') {
+            $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : now()->startOfMonth();
+            $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
+            $daily = ($filters['breakdown'] ?? 'summary') === 'daily';
+            $query = OrderItem::query()->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->join('products', 'products.id', '=', 'order_items.product_id')->join('locations', 'locations.id', '=', 'orders.location_id')
+                ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))->whereIn('orders.location_id', $locationIds)
+                ->whereBetween('orders.created_at', [$from, $to])
+                ->when($filters['q'] ?? null, function ($query, $search) {
+                    $term = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], trim($search)).'%';
+                    $query->where(fn ($products) => $products->where('products.name', 'like', $term)->orWhere('products.product_code', 'like', $term));
+                });
+            $discount = 'order_items.total_price * CASE WHEN orders.total_amount > 0 THEN LEAST(1, orders.discount_amount / orders.total_amount) ELSE 0 END';
+            $groups = ['products.id', 'products.name', 'products.product_code', 'locations.id', 'locations.name'];
+            if ($daily) $groups[] = DB::raw('DATE(orders.created_at)');
+            $rows = $query->groupBy($groups)->orderBy($daily ? DB::raw('DATE(orders.created_at)') : 'products.name')
+                ->selectRaw(($daily ? 'DATE(orders.created_at) as sale_date, ' : '')."products.name as product_name, products.product_code, locations.name as location_name, COUNT(DISTINCT orders.id) as orders, SUM(order_items.base_quantity) as units_sold, SUM(order_items.foc_base_quantity) as foc_units, SUM(order_items.total_price) as gross_sales, SUM($discount) as discount_amount, SUM(order_items.total_price - ($discount)) as net_sales")->get();
+
+            return response()->streamDownload(function () use ($rows, $daily) {
+                $output = fopen('php://output', 'w'); fwrite($output, "\xEF\xBB\xBF");
+                fputcsv($output, array_values(array_filter(['Date' => $daily ? 'Date' : null, 'Product' => 'Product', 'Code' => 'Code', 'Store' => 'Store', 'Orders' => 'Orders', 'Units' => 'Units sold', 'FOC' => 'FOC units', 'Gross' => 'Gross sales', 'Discount' => 'Discount', 'Net' => 'Net sales'])));
+                foreach ($rows as $row) fputcsv($output, array_values(array_filter([$daily ? $row->sale_date : null, $row->product_name, $row->product_code, $row->location_name, $row->orders, $row->units_sold, $row->foc_units, $row->gross_sales, $row->discount_amount, $row->net_sales], fn ($value) => $value !== null)));
+                fclose($output);
+            }, ($daily ? 'daily-' : 'summary-').$filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
         if ($view === 'sales') {
             $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
             $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
@@ -371,7 +448,7 @@ class ReportController extends Controller
     private function authorizeView(User $user, string $view): void
     {
         $allowed = match ($view) {
-            'sales', 'pos' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.sales'),
+            'sales', 'product-sales', 'pos' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.sales'),
             'inventory', 'health' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.inventory'),
             default => false,
         };

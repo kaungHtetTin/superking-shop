@@ -43,7 +43,7 @@ export default function RegistersIndex({ registers, locations }) {
     };
 
     return (
-        <AdminLayout title={t('Registers')} eyebrow={t('POS')} action={<button className="btn primary" type="button" onClick={() => open()}><Icon name="plus" size={14} /> {t('Add register')}</button>}>
+        <AdminLayout title={t('Registers')} eyebrow={t('POS')}>
             <Head title={t('POS Registers')} />
             <AdminFlash flash={flash} errors={form.errors} />
 
@@ -64,8 +64,11 @@ export default function RegistersIndex({ registers, locations }) {
                         <span>{t('Name')}</span>
                         <input value={form.data.name} onChange={(event) => form.setData('name', event.target.value)} required />
                     </label>
-                    <label className="switch-row"><input type="checkbox" checked={form.data.is_active} onChange={(event) => form.setData('is_active', event.target.checked)} /> {t('Active')}</label>
-                    <div className="inline-actions">
+                    <div className="form-field register-active-field">
+                        <span>{t('Status')}</span>
+                        <label className="switch-row"><input type="checkbox" checked={form.data.is_active} onChange={(event) => form.setData('is_active', event.target.checked)} /> {t('Active')}</label>
+                    </div>
+                    <div className="inline-actions register-form-actions">
                         {editing && <button className="btn secondary" type="button" onClick={() => open()}>{t('New')}</button>}
                         <button className="btn primary" type="submit" disabled={form.processing}><Icon name="check" size={14} /> {t('Save')}</button>
                     </div>
