@@ -23,7 +23,7 @@ const withQueryParams = (url, queryParams) => {
     return `${path}?${mergedQuery}${hash ? `#${hash}` : ''}`;
 };
 
-export default function AdminPagination({ paginator, label = 'records', queryParams = {} }) {
+export default function AdminPagination({ paginator, label = 'records', queryParams = {}, preserveState = false }) {
     if (!paginator || paginator.last_page <= 1) {
         return null;
     }
@@ -54,6 +54,7 @@ export default function AdminPagination({ paginator, label = 'records', queryPar
                             href={withQueryParams(link.url, queryParams)}
                             className={`pagination-link ${link.active ? 'active' : ''}`}
                             preserveScroll
+                            preserveState={preserveState}
                         >
                             {labelText}
                         </Link>

@@ -352,7 +352,7 @@ function ProductSalesReport({ report, filters, locations, appBase }) {
                         </tbody>
                     </table>
                 </div>
-                <AdminPagination paginator={rows} label={t('items')} queryParams={{ breakdown: table }} />
+                <AdminPagination paginator={rows} label={t('items')} queryParams={{ breakdown: table }} preserveState />
             </section>
         </div>
     );
