@@ -157,16 +157,15 @@
         .footer {
             clear: both;
             margin-top: 12px;
-            display: table;
             width: 100%;
             table-layout: fixed;
+            border-collapse: collapse;
             border-top: 1px solid #dfe6e3;
-            padding-top: 9px;
         }
         .totals + .box { clear: both; }
-        .footer > div { display: table-cell; vertical-align: bottom; }
-        .footer > div:first-child { width: 85%; }
-        .footer > .qr { width: 15%; }
+        .footer td { padding-top: 9px; vertical-align: bottom; }
+        .footer .footer-copy { width: auto; }
+        .footer .qr { width: 82px; }
         .qr {
             text-align: center;
             font-size: 8px;
@@ -208,9 +207,9 @@
             .items td { padding: 5px 3px; }
             .totals { width: 100%; float: none; }
             .footer,
-            .footer > div,
-            .footer > div:first-child,
-            .footer > .qr { display: block; width: 100%; }
+            .footer tbody,
+            .footer tr,
+            .footer td { display: block; width: 100%; }
             .qr { text-align: left; }
             .qr img { margin-left: 0; }
         }
@@ -249,10 +248,10 @@
         .grid { display: table; width: 100%; }
         .grid > .box { display: table-cell; width: 50%; }
         .totals { width: 58%; float: right; }
-        .footer { display: table; width: 100%; }
-        .footer > div { display: table-cell; }
-        .footer > div:first-child { width: 85%; }
-        .footer > .qr { width: 15%; }
+        .footer { display: table; width: 100%; table-layout: fixed; }
+        .footer td { display: table-cell; }
+        .footer .footer-copy { width: auto; }
+        .footer .qr { width: 82px; }
         @endif
     </style>
 </head>
@@ -395,17 +394,21 @@
             </section>
         @endif
 
-        <footer class="footer">
-            <div>
-                <h3>Thank you</h3>
-                <p class="muted">Scan the QR code to open the public invoice link.</p>
-                <p style="word-break: break-all; font-size: 8.5px;">{{ $publicUrl }}</p>
-            </div>
-            <div class="qr">
-                <img src="{{ $qrUrl }}" alt="Invoice QR code">
-                Invoice link
-            </div>
-        </footer>
+        <table class="footer" role="presentation">
+            <tbody>
+                <tr>
+                    <td class="footer-copy">
+                        <h3>Thank you</h3>
+                        <p class="muted">Scan the QR code to open the public invoice link.</p>
+                        <p style="word-break: break-all; font-size: 8.5px;">{{ $publicUrl }}</p>
+                    </td>
+                    <td class="qr">
+                        <img src="{{ $qrUrl }}" alt="Invoice QR code">
+                        Invoice link
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </main>
 </body>
 </html>
