@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\Order;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-use Symfony\Component\Process\Process;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class OrderVoucherService
 {
@@ -62,36 +62,17 @@ class OrderVoucherService
 
     public function generatePdf(Order $order): string
     {
-        $dir = storage_path('app/vouchers');
-        File::ensureDirectoryExists($dir);
+        $options = new Options;
+        $options->set('isRemoteEnabled', true);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
 
-        $htmlPath = $dir.DIRECTORY_SEPARATOR.'voucher-'.$order->id.'-'.Str::random(8).'.html';
-        $pdfPath = $dir.DIRECTORY_SEPARATOR.'voucher-'.$order->order_number.'-'.Str::random(8).'.pdf';
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($this->renderHtml($order, pdf: true), 'UTF-8');
+        $dompdf->setPaper('A5', 'portrait');
+        $dompdf->render();
 
-        File::put($htmlPath, $this->renderHtml($order, pdf: true));
-
-        $process = new Process([
-            config('voucher.node_binary', 'node'),
-            base_path('scripts/generate-voucher-pdf.cjs'),
-            $htmlPath,
-            $pdfPath,
-        ], base_path(), [
-            'PUPPETEER_CACHE_DIR' => storage_path('app/puppeteer'),
-        ]);
-        $process->setTimeout(60);
-        try {
-            $process->run();
-            if (! $process->isSuccessful() || ! File::exists($pdfPath) || File::size($pdfPath) === 0) {
-                throw new \RuntimeException('Could not generate voucher PDF. '.$process->getErrorOutput());
-            }
-        } catch (\Throwable $exception) {
-            File::delete($pdfPath);
-            throw $exception;
-        } finally {
-            File::delete($htmlPath);
-        }
-
-        return $pdfPath;
+        return $dompdf->output();
     }
 
     private function absoluteUrl(?string $url): ?string

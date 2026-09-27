@@ -15,9 +15,16 @@ class OrderVoucherController extends Controller
 
     public function pdf(Order $order, OrderVoucherService $voucherService)
     {
-        $path = $voucherService->generatePdf($order);
+        $pdf = $voucherService->generatePdf($order);
+        $orderNumber = preg_replace('/[^A-Za-z0-9._-]+/', '-', $order->order_number) ?: (string) $order->id;
 
-        return response()->download($path, 'voucher-'.$order->order_number.'.pdf')->deleteFileAfterSend(true);
+        return response()->streamDownload(
+            static function () use ($pdf): void {
+                echo $pdf;
+            },
+            'voucher-'.$orderNumber.'.pdf',
+            ['Content-Type' => 'application/pdf']
+        );
     }
 
     public function link(Order $order, OrderVoucherService $voucherService)
