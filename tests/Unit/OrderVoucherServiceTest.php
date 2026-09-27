@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Order;
 use App\Services\OrderVoucherService;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class OrderVoucherServiceTest extends TestCase
 {

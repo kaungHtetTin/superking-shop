@@ -219,10 +219,22 @@
             .sheet { margin: 0; border: 0; width: auto; min-height: auto; }
             .no-print { display: none !important; }
         }
-        @if(!empty($pdf))
+    @if(!empty($pdf))
+        @font-face {
+            font-family: 'Padauk';
+            font-style: normal;
+            font-weight: 400;
+            src: url('file://{{ str_replace('\\', '/', public_path('fonts/Padauk-Regular.ttf')) }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Padauk';
+            font-style: normal;
+            font-weight: 700;
+            src: url('file://{{ str_replace('\\', '/', public_path('fonts/Padauk-Bold.ttf')) }}') format('truetype');
+        }
         /* Dompdf does not fully support grid/flex. These table-based equivalents
            preserve the browser invoice layout in the downloaded A5 document. */
-        body { background: #fff; }
+        body { background: #fff; font-family: 'Padauk', 'DejaVu Sans', sans-serif; }
         .no-print { display: none !important; }
         .sheet {
             width: auto;

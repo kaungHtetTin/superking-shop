@@ -65,7 +65,8 @@ class OrderVoucherService
         $options = new Options;
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('chroot', public_path());
+        $options->set('defaultFont', 'Padauk');
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($this->renderHtml($order, pdf: true), 'UTF-8');
