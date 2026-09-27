@@ -15,16 +15,10 @@ class OrderVoucherController extends Controller
 
     public function pdf(Order $order, OrderVoucherService $voucherService)
     {
-        $pdf = $voucherService->generatePdf($order);
-        $orderNumber = preg_replace('/[^A-Za-z0-9._-]+/', '-', $order->order_number) ?: (string) $order->id;
-
-        return response()->streamDownload(
-            static function () use ($pdf): void {
-                echo $pdf;
-            },
-            'voucher-'.$orderNumber.'.pdf',
-            ['Content-Type' => 'application/pdf']
-        );
+        // Use the browser's print engine for both actions. Server-side PDF
+        // renderers use different font and CSS metrics, so their output cannot
+        // exactly match the voucher shown in the browser.
+        return response($voucherService->renderHtml($order));
     }
 
     public function link(Order $order, OrderVoucherService $voucherService)

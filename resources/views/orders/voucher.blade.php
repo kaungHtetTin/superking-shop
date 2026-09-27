@@ -416,5 +416,14 @@
             </div>
         </footer>
     </main>
+    @if(request()->routeIs('admin.orders.voucher.pdf'))
+        <script>
+            window.addEventListener('load', function () {
+                window.setTimeout(function () {
+                    window.print();
+                }, 150);
+            });
+        </script>
+    @endif
 </body>
 </html>
