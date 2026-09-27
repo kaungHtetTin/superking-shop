@@ -191,6 +191,8 @@ class ProductUnitArchitectureTest extends TestCase
 
         $this->assertSame(96.0, (float) $order->total_amount);
         $this->assertSame(96.0, (float) $order->final_amount);
+        $this->assertMatchesRegularExpression('/^POS-\d{6}-\d{6}$/', $order->order_number);
+        $this->assertMatchesRegularExpression('/^RCT-\d{6}-\d{6}$/', $order->receipt_number);
         $this->assertSame($shift->id, $order->shift_id);
         $this->assertSame($shift->pos_register_id, $order->register_id);
         $this->assertSame(4.0, (float) $order->payments->sole()->change_due);

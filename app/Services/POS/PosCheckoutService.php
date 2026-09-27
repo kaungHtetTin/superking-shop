@@ -296,7 +296,7 @@ class PosCheckoutService
     private function number(string $prefix): string
     {
         do {
-            $number = $prefix.'-'.now()->format('ymd').'-'.strtoupper(Str::random(6));
+            $number = $prefix.'-'.now()->format('ymd').'-'.str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         } while (Order::query()->where('order_number', $number)->orWhere('receipt_number', $number)->exists());
 
         return $number;
