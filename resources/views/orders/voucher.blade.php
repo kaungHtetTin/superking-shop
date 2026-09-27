@@ -230,7 +230,12 @@
         }
         /* Dompdf does not fully support grid/flex. These table-based equivalents
            preserve the browser invoice layout in the downloaded A5 document. */
-        body { background: #fff; font-family: 'Padauk', 'DejaVu Sans', sans-serif; }
+        body {
+            background: #fff;
+            font-family: 'Padauk', 'DejaVu Sans', sans-serif;
+            font-size: 9px;
+            line-height: 1.25;
+        }
         .no-print { display: none !important; }
         .sheet {
             width: auto;
@@ -239,11 +244,20 @@
             padding: 0;
             border: 0;
         }
-        .header { display: table; width: 100%; padding-top: 8mm; }
-        .header > .brand { display: table-cell; width: 58%; }
-        .header > .invoice-meta { display: table-cell; width: 42%; }
+        .header { display: table; width: 100%; padding-top: 0; padding-bottom: 8px; }
+        .header > .brand { display: table-cell; width: 62%; }
+        .header > .invoice-meta { display: table-cell; width: 38%; }
+        .brand img { width: 38px; height: auto; max-height: 30px; border-radius: 0; }
+        .brand-mark { width: 30px; height: 30px; line-height: 30px; font-size: 13px; }
+        h1 { font-size: 14px; line-height: 1.3; }
+        h2 { font-size: 14px; }
+        h3 { font-size: 9.5px; }
+        .status { padding: 1px 6px; }
         .grid { display: table; width: 100%; }
         .grid > .box { display: table-cell; width: 50%; }
+        .box { min-height: 48px; padding: 7px; }
+        .items { margin-top: 10px; }
+        .items th, .items td { padding: 5px; }
         .totals { width: 58%; float: right; }
         .footer { width: 100%; }
         .footer .footer-copy { margin-right: 92px; padding-top: 34px; }
