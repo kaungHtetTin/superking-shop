@@ -183,7 +183,7 @@ function ReportTabs({ view, canViewSales, canViewInventory, appBase }) {
     );
 }
 
-function ReportFilters({ view, filters, locations, appBase, showDates = false, showStock = false, showSearch = false }) {
+function ReportFilters({ view, filters, locations, appBase, showDates = false, showStock = false, showSearch = false, extraFilters = {} }) {
     const t = usePhraseTranslation();
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [filterState, setFilterState] = useState({
@@ -215,6 +215,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
 
     const requestFilters = {
         view,
+        ...extraFilters,
         location_id: filterState.location_id || undefined,
         ...(showDates ? { from: filterState.from || undefined, to: filterState.to || undefined } : {}),
         ...((showStock || showSearch) ? { q: filterState.q.trim() || undefined } : {}),
@@ -233,7 +234,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
         const empty = { location_id: '', from: '', to: '', q: '', stock_status: '' };
         setFilterState(empty);
         setFilterDrawerOpen(false);
-        router.get(routeWithBase('/admin/reports', appBase), { view }, { preserveState: true, preserveScroll: true, replace: true });
+        router.get(routeWithBase('/admin/reports', appBase), { view, ...extraFilters }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     const renderFilterFields = (autoFocus = false) => (
@@ -301,7 +302,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
 
 function ProductSalesReport({ report, filters, locations, appBase }) {
     const t = usePhraseTranslation();
-    const [table, setTable] = useState('summary');
+    const [table, setTable] = useState(filters?.breakdown === 'daily' ? 'daily' : 'summary');
     const summary = report.summary || {};
     const exportQuery = (breakdown) => {
         const query = new URLSearchParams({ view: 'product-sales', breakdown });
@@ -312,7 +313,7 @@ function ProductSalesReport({ report, filters, locations, appBase }) {
 
     return (
         <div className="reports-view-stack">
-            <ReportFilters view="product-sales" filters={filters} locations={locations} appBase={appBase} showDates showSearch />
+            <ReportFilters view="product-sales" filters={filters} locations={locations} appBase={appBase} showDates showSearch extraFilters={{ breakdown: table }} />
             <div className="metrics-grid compact-kpi-strip">
                 <MetricCard label="Orders" value={Number(summary.orders || 0).toLocaleString()} hint="Recognized sales" icon="receipt" />
                 <MetricCard label="Units sold" value={Number(summary.units || 0).toLocaleString()} hint={`${Number(summary.products || 0).toLocaleString()} unique products`} icon="box" />
@@ -351,7 +352,7 @@ function ProductSalesReport({ report, filters, locations, appBase }) {
                         </tbody>
                     </table>
                 </div>
-                <AdminPagination paginator={rows} label={t('items')} />
+                <AdminPagination paginator={rows} label={t('items')} queryParams={{ breakdown: table }} />
             </section>
         </div>
     );

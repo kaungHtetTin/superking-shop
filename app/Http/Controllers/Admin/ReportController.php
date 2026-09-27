@@ -33,6 +33,7 @@ class ReportController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'q' => ['nullable', 'string', 'max:120'],
             'stock_status' => ['nullable', 'string', 'in:low,out'],
+            'breakdown' => ['nullable', 'string', 'in:summary,daily'],
         ]);
         $accessibleLocationIds = array_map('intval', $user->accessibleLocationIds());
         $requestedLocationId = (int) ($filters['location_id'] ?? 0);

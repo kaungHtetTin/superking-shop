@@ -7,7 +7,23 @@ const cleanLabel = (label = '') =>
             ? 'Next'
             : label.replace(/&amp;/g, '&');
 
-export default function AdminPagination({ paginator, label = 'records' }) {
+const withQueryParams = (url, queryParams) => {
+    if (!url || !queryParams || Object.keys(queryParams).length === 0) return url;
+
+    const [urlWithoutHash, hash] = url.split('#', 2);
+    const [path, existingQuery = ''] = urlWithoutHash.split('?', 2);
+    const query = new URLSearchParams(existingQuery);
+    Object.entries(queryParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') query.set(key, value);
+    });
+
+    const mergedQuery = query.toString();
+    if (!mergedQuery) return url;
+
+    return `${path}?${mergedQuery}${hash ? `#${hash}` : ''}`;
+};
+
+export default function AdminPagination({ paginator, label = 'records', queryParams = {} }) {
     if (!paginator || paginator.last_page <= 1) {
         return null;
     }
@@ -35,7 +51,7 @@ export default function AdminPagination({ paginator, label = 'records' }) {
                     return (
                         <Link
                             key={`${labelText}-${index}`}
-                            href={link.url}
+                            href={withQueryParams(link.url, queryParams)}
                             className={`pagination-link ${link.active ? 'active' : ''}`}
                             preserveScroll
                         >
