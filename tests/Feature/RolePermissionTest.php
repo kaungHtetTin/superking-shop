@@ -66,6 +66,67 @@ class RolePermissionTest extends TestCase
         );
     }
 
+    public function test_json_role_update_returns_updated_role_without_a_patch_redirect(): void
+    {
+        $admin = $this->staffWithRole('super_admin');
+        $role = Role::create([
+            'name' => 'inventory_helper',
+            'display_name' => 'Inventory Helper',
+            'is_admin' => true,
+            'is_system' => false,
+            'sort_order' => 60,
+        ]);
+
+        $this->actingAs($admin)->patchJson("/admin/roles/{$role->id}", [
+            'display_name' => 'Inventory Assistant',
+            'description' => 'Updated access',
+            'permissions' => ['dashboard.view', 'inventory.view'],
+        ])->assertOk()
+            ->assertJsonPath('role.id', $role->id)
+            ->assertJsonPath('role.display_name', 'Inventory Assistant')
+            ->assertJsonPath('role.permissions.0', 'dashboard.view')
+            ->assertJsonPath('role.permissions.1', 'inventory.view');
+    }
+
+    public function test_custom_role_can_be_deleted_and_is_absent_from_refreshed_list(): void
+    {
+        $admin = $this->staffWithRole('super_admin');
+        $role = Role::create([
+            'name' => 'temporary_role',
+            'display_name' => 'Temporary Role',
+            'is_admin' => true,
+            'is_system' => false,
+            'sort_order' => 60,
+        ]);
+
+        $this->actingAs($admin)->deleteJson("/admin/roles/{$role->id}")
+            ->assertOk()
+            ->assertJsonPath('deleted_role_id', $role->id);
+
+        $this->assertDatabaseMissing('roles', ['id' => $role->id]);
+        $this->getJson('/admin/roles')->assertOk()
+            ->assertJsonMissing(['name' => 'temporary_role']);
+    }
+
+    public function test_assigned_role_delete_returns_a_modal_validation_error(): void
+    {
+        $admin = $this->staffWithRole('super_admin');
+        $role = Role::create([
+            'name' => 'assigned_role',
+            'display_name' => 'Assigned Role',
+            'is_admin' => true,
+            'is_system' => false,
+            'sort_order' => 60,
+        ]);
+        $this->staffWithRole('assigned_role');
+
+        $this->actingAs($admin)->deleteJson("/admin/roles/{$role->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('role');
+
+        $this->assertDatabaseHas('roles', ['id' => $role->id]);
+    }
+
     public function test_custom_admin_role_can_be_assigned_without_code_changes(): void
     {
         $role = Role::create([

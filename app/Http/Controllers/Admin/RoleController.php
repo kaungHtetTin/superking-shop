@@ -9,6 +9,7 @@ use App\Services\AuditLogService;
 use App\Support\Spa;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RoleController extends Controller
 {
@@ -82,7 +83,7 @@ class RoleController extends Controller
         abort_unless($role->is_admin, 404);
 
         if ($role->is_system) {
-            return back()->with('error', 'System roles are fixed. Create a custom role when you need different permissions.');
+            throw ValidationException::withMessages(['role' => 'System roles are fixed. Create a custom role when you need different permissions.']);
         }
 
         $validated = $this->validateRole($request, false);
@@ -97,6 +98,18 @@ class RoleController extends Controller
             'permissions' => $validated['permissions'] ?? [],
         ], $request);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Role permissions updated.',
+                'role' => [
+                    'id' => $role->id,
+                    'display_name' => $role->display_name,
+                    'description' => $role->description,
+                    'permissions' => $role->permissions()->pluck('name')->sort()->values()->all(),
+                ],
+            ]);
+        }
+
         return back()->with('success', 'Role permissions updated.');
     }
 
@@ -105,17 +118,21 @@ class RoleController extends Controller
         abort_unless($role->is_admin, 404);
 
         if ($role->is_system) {
-            return back()->with('error', 'System roles cannot be deleted.');
+            throw ValidationException::withMessages(['role' => 'System roles cannot be deleted.']);
         }
 
         if ($role->users()->exists()) {
-            return back()->with('error', 'Move staff to another role before deleting this role.');
+            throw ValidationException::withMessages(['role' => 'Move assigned staff before deleting this role.']);
         }
 
         $auditLogService->record('role.deleted', $role, [
             'name' => $role->name,
         ], $request);
         $role->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Role deleted.', 'deleted_role_id' => $role->id]);
+        }
 
         return back()->with('success', 'Role deleted.');
     }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Head, router, useForm, usePage } from '@/spa/router';
+import { Head, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { AdminFlash } from '@/Components/Admin/AdminFlash';
@@ -118,11 +118,21 @@ function PermissionGroups({ groups, selected, disabled, onChange }) {
 export default function RolesIndex({ roles, permissionGroups }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
+    const [removedRoleIds, setRemovedRoleIds] = useState(() => new Set());
+    const [updatedRoles, setUpdatedRoles] = useState({});
     const [selectedName, setSelectedName] = useState(roles[0]?.name || null);
     const [createOpen, setCreateOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteErrors, setDeleteErrors] = useState([]);
+    const [deleteNotice, setDeleteNotice] = useState('');
+    const [updateNotice, setUpdateNotice] = useState('');
+    const roleRows = useMemo(() => roles
+        .filter((role) => !removedRoleIds.has(role.id))
+        .map((role) => ({ ...role, ...(updatedRoles[role.id] || {}) })), [roles, removedRoleIds, updatedRoles]);
     const selectedRole = useMemo(
-        () => roles.find((role) => role.name === selectedName) || roles[0] || null,
-        [roles, selectedName],
+        () => roleRows.find((role) => role.name === selectedName) || roleRows[0] || null,
+        [roleRows, selectedName],
     );
     const form = useForm({ display_name: '', description: '', permissions: [] });
     const createForm = useForm({ ...createDefaults });
@@ -148,8 +158,16 @@ export default function RolesIndex({ roles, permissionGroups }) {
         event.preventDefault();
         if (!selectedRole || selectedRole.is_locked) return;
 
+        setDeleteNotice('');
+        setUpdateNotice('');
         form.patch(routeWithBase(`/admin/roles/${selectedRole.id}`, app_base), {
             preserveScroll: true,
+            onSuccess: (response) => {
+                if (response?.role?.id === selectedRole.id) {
+                    setUpdatedRoles((current) => ({ ...current, [selectedRole.id]: response.role }));
+                    setUpdateNotice(response.message || t('Role permissions updated.'));
+                }
+            },
         });
     };
 
@@ -161,14 +179,34 @@ export default function RolesIndex({ roles, permissionGroups }) {
         });
     };
 
-    const deleteRole = () => {
-        if (!selectedRole || selectedRole.is_system || selectedRole.users_count > 0) return;
-        if (!confirm(`${t('Delete')} ${selectedRole.display_name}?`)) return;
+    const openDelete = () => {
+        if (!selectedRole || selectedRole.is_system) return;
+        setDeleteErrors([]);
+        setDeleteNotice('');
+        setUpdateNotice('');
+        setDeleteTarget(selectedRole);
+    };
 
-        router.delete(routeWithBase(`/admin/roles/${selectedRole.id}`, app_base), {
-            preserveScroll: true,
-            onSuccess: () => setSelectedName(roles.find((role) => role.name !== selectedRole.name)?.name || null),
-        });
+    const deleteRole = async () => {
+        if (!deleteTarget || deleting || deleteTarget.users_count > 0) return;
+        const { id, name } = deleteTarget;
+        setDeleting(true);
+        setDeleteErrors([]);
+        try {
+            const response = await window.axios.delete(routeWithBase(`/admin/roles/${id}`, app_base));
+            if (Number(response.data?.deleted_role_id) !== Number(id)) {
+                throw new Error('Role deletion was not confirmed.');
+            }
+            setRemovedRoleIds((current) => new Set(current).add(id));
+            setSelectedName((current) => current === name ? null : current);
+            setDeleteTarget(null);
+            setDeleteNotice(t('Role deleted.'));
+        } catch (error) {
+            const messages = Object.values(error.response?.data?.errors || {}).flat().filter(Boolean);
+            setDeleteErrors(messages.length ? messages : [error.response?.data?.message || t('Unable to delete role. Please try again.')]);
+        } finally {
+            setDeleting(false);
+        }
     };
 
     return (
@@ -183,14 +221,16 @@ export default function RolesIndex({ roles, permissionGroups }) {
             }
         >
             <Head title={t('Roles & Permissions')} />
-            <AdminFlash flash={flash} errors={{ ...form.errors, ...createForm.errors }} />
+            <AdminFlash flash={flash} errors={form.errors} />
+            {deleteNotice && <div className="flash success" role="status">{deleteNotice}</div>}
+            {updateNotice && <div className="flash success" role="status">{updateNotice}</div>}
 
             <section className="panel glass">
                 <PanelHeading eyebrow={t('Team access')} title={t('Roles & permissions')} />
 
                 <div className="role-permission-layout">
                     <aside className="role-list" aria-label={t('Admin roles')}>
-                        {roles.map((role) => (
+                        {roleRows.map((role) => (
                             <button
                                 key={role.name}
                                 type="button"
@@ -257,9 +297,7 @@ export default function RolesIndex({ roles, permissionGroups }) {
                                     <button
                                         type="button"
                                         className="btn danger"
-                                        onClick={deleteRole}
-                                        disabled={selectedRole.users_count > 0}
-                                        title={selectedRole.users_count > 0 ? t('Move assigned staff before deleting') : undefined}
+                                        onClick={openDelete}
                                     >
                                         <Icon name="trash" size={14} />
                                         {t('Delete')}
@@ -277,12 +315,12 @@ export default function RolesIndex({ roles, permissionGroups }) {
 
             {createOpen && (
                 <div className="modal-backdrop" onClick={() => setCreateOpen(false)}>
-                    <form className="operation-modal glass role-create-modal admin-form-modal admin-form-modal-wide" onSubmit={submitCreate} onClick={(event) => event.stopPropagation()}>
+                    <form className="operation-modal glass role-create-modal admin-form-modal admin-form-modal-wide" role="dialog" aria-modal="true" aria-labelledby="role-create-title" onSubmit={submitCreate} onClick={(event) => event.stopPropagation()}>
                         <div className="drawer-header admin-form-modal-header">
                             <div className="admin-form-modal-title">
                                 <span className="admin-form-title-icon"><Icon name="lock" size={16} /></span>
                                 <div>
-                                    <h2>{t('New role')}</h2>
+                                    <h2 id="role-create-title">{t('New role')}</h2>
                                 </div>
                             </div>
                             <button type="button" className="icon-btn small" onClick={() => setCreateOpen(false)} aria-label={t('Close')}>
@@ -290,6 +328,11 @@ export default function RolesIndex({ roles, permissionGroups }) {
                             </button>
                         </div>
                         <div className="admin-form-modal-body">
+                            {Object.keys(createForm.errors).length > 0 && (
+                                <div className="flash error" role="alert">
+                                    {Object.values(createForm.errors).map((message, index) => <div key={index}>{message}</div>)}
+                                </div>
+                            )}
                             <section className="admin-form-section">
                                 <div className="admin-form-section-heading">
                                     <span className="payment-section-icon"><Icon name="user" size={14} /></span>
@@ -350,6 +393,39 @@ export default function RolesIndex({ roles, permissionGroups }) {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {deleteTarget && (
+                <div className="modal-backdrop" onClick={() => { if (!deleting) setDeleteTarget(null); }}>
+                    <div className="operation-modal glass role-delete-modal admin-form-modal" role="dialog" aria-modal="true" aria-labelledby="role-delete-title" onClick={(event) => event.stopPropagation()}>
+                        <div className="drawer-header admin-form-modal-header">
+                            <div className="admin-form-modal-title">
+                                <span className="admin-form-title-icon"><Icon name="trash" size={16} /></span>
+                                <h2 id="role-delete-title">{t('Delete role')}</h2>
+                            </div>
+                            <button type="button" className="icon-btn small" onClick={() => setDeleteTarget(null)} disabled={deleting} aria-label={t('Close')}>
+                                <Icon name="close" size={14} />
+                            </button>
+                        </div>
+                        <div className="admin-form-modal-body">
+                            <p>{t('Delete')} <strong>{deleteTarget.display_name}</strong>?</p>
+                            {deleteTarget.users_count > 0 && (
+                                <div className="flash error" role="alert">{t('Move assigned staff before deleting this role.')}</div>
+                            )}
+                            {deleteErrors.length > 0 && (
+                                <div className="flash error" role="alert">
+                                    {deleteErrors.map((message, index) => <div key={index}>{message}</div>)}
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-actions">
+                            <button type="button" className="btn secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t('Cancel')}</button>
+                            <button type="button" className="btn danger" onClick={deleteRole} disabled={deleting || deleteTarget.users_count > 0}>
+                                {deleting ? t('Deleting...') : t('Delete')}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </AdminLayout>
