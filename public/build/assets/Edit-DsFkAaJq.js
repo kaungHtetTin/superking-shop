@@ -1,1 +1,0 @@
-import{j as r}from"./app-C-V_ZVxc.js";import m from"./Form-JxAADFXF.js";import"./AdminFlash-a2-eIjIV.js";import"./formatErrorMessage-BapYbJEK.js";import"./unitLabel-t07TvaF6.js";function l({productOptions:t,flashSale:o}){return r.jsx(m,{productOptions:t,flashSale:o,mode:"edit"})}export{l as default};

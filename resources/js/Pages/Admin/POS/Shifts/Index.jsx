@@ -292,8 +292,9 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                             <MoneyItem label={t('Cash received')} value={selectedSummary.cash_received_total} />
                             <MoneyItem label={t('Change given')} value={selectedSummary.change_given_total} />
                             <MoneyItem label={t('Net cash sales')} value={selectedSummary.net_cash_sales} />
-                            <MoneyItem label={t('Card sales')} value={selectedSummary.card_sales_total} />
-                            <MoneyItem label={t('Mobile sales')} value={selectedSummary.mobile_sales_total} />
+                            <MoneyItem label="MMQR (Pay)" value={selectedSummary.mmqr_sales_total} />
+                            {Number(selectedSummary.card_sales_total) > 0 && <MoneyItem label={t('Card sales')} value={selectedSummary.card_sales_total} />}
+                            {Number(selectedSummary.mobile_sales_total) > 0 && <MoneyItem label={t('Mobile sales')} value={selectedSummary.mobile_sales_total} />}
                             <MoneyItem label={t('Expected cash')} value={selectedSummary.expected_cash} emphasize />
                             <MoneyItem label={t('Counted cash')} value={selectedShift?.counted_cash} emphasize />
                         </Box>

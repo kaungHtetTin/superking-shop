@@ -142,7 +142,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
     const locationRegisters = registers.filter((item) => Number(item.location_id) === Number(locationId));
     const [registerId, setRegisterId] = useState('');
-    const paymentMethods = ['cash', 'card', 'mobile', ...(can.credit ? ['credit'] : [])];
+    const paymentMethods = ['cash', 'mmqr', ...(can.credit ? ['credit'] : [])];
     const api = async (url, options = {}) => {
         setErrors({});
         try {
@@ -836,7 +836,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     }}
                 >
                     {paymentMethods.map((method) => (
-                        <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{tp(method)}</ToggleButton>
+                        <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{method === 'mmqr' ? 'MMQR (Pay)' : tp(method)}</ToggleButton>
                     ))}
                 </ToggleButtonGroup>
             </Box>
@@ -880,8 +880,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     {creditDeposit > 0 && (
                         <TextField select size="small" label={tp('Deposit method')} value={creditDepositMethod} onChange={(event) => setCreditDepositMethod(event.target.value)} fullWidth>
                             <MenuItem value="cash">{tp('cash')}</MenuItem>
-                            <MenuItem value="card">{tp('card')}</MenuItem>
-                            <MenuItem value="mobile">{tp('mobile')}</MenuItem>
+                            <MenuItem value="mmqr">MMQR (Pay)</MenuItem>
                         </TextField>
                     )}
                 </Stack>

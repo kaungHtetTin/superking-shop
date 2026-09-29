@@ -135,6 +135,9 @@ class PosCheckoutService
                 throw ValidationException::withMessages(['items' => 'Sale total after discounts is below accounting cost, including free items. Reduce the discount or free quantity, or review selling prices.']);
             }
             $tenderType = $payload['tender_type'] ?? 'cash';
+            if (! in_array($tenderType, ['cash', 'mmqr', 'credit'], true)) {
+                throw ValidationException::withMessages(['tender_type' => 'Choose Cash, MMQR (Pay), or Credit.']);
+            }
             $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
             $isCredit = $tenderType === 'credit';
             $creditAmount = 0.0;
@@ -150,7 +153,7 @@ class PosCheckoutService
                 if ($amountTendered < 0 || $amountTendered >= $final) {
                     throw ValidationException::withMessages(['amount_tendered' => 'Credit deposit must be zero or less than the sale total.']);
                 }
-                if (! in_array($depositMethod, ['cash', 'card', 'mobile'], true)) {
+                if (! in_array($depositMethod, ['cash', 'mmqr'], true)) {
                     throw ValidationException::withMessages(['credit_deposit_method' => 'Choose a valid deposit payment method.']);
                 }
                 $creditAmount = round($final - $amountTendered, 2);
@@ -159,7 +162,7 @@ class PosCheckoutService
                 throw ValidationException::withMessages(['amount_tendered' => 'Amount tendered must cover the sale total.']);
             }
             if (! $isCredit && $tenderType !== 'cash' && abs($amountTendered - $final) > 0.009) {
-                throw ValidationException::withMessages(['amount_tendered' => 'Card and mobile payments must equal the sale total.']);
+                throw ValidationException::withMessages(['amount_tendered' => 'MMQR payments must equal the sale total.']);
             }
             $changeDue = ! $isCredit && $tenderType === 'cash' ? round($amountTendered - $final, 2) : 0.0;
             $paymentStatus = $isCredit ? ($amountTendered > 0 ? 'partially_paid' : 'unpaid') : 'paid';

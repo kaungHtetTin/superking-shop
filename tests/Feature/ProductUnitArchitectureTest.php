@@ -259,6 +259,55 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame('cash', $order->payment_method);
     }
 
+    public function test_pos_mmqr_sale_is_recorded_in_payment_and_shift_totals(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'mmqr-opening');
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'mmqr',
+            'amount_tendered' => 10,
+        ], $cashier);
+
+        $this->assertSame('mmqr', $order->payment_method);
+        $this->assertSame('mmqr', $order->payments->sole()->tender_type);
+        $this->assertEquals(10, app(PosShiftService::class)->summary($shift)['mmqr_sales_total']);
+        $this->assertEquals(0, app(PosShiftService::class)->summary($shift)['net_cash_sales']);
+        $closedShift = app(PosShiftService::class)->close($shift, $cashier, 1000);
+        $this->assertEquals(10, $closedShift->mmqr_sales_total);
+        $this->assertEquals(1000, $closedShift->expected_cash);
+    }
+
+    public function test_pos_rejects_card_and_mobile_tenders(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'old-tender-opening');
+
+        foreach (['card', 'mobile'] as $tenderType) {
+            try {
+                app(PosCheckoutService::class)->checkout([
+                    'location_id' => $location->id,
+                    'shift_id' => $shift->id,
+                    'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+                    'tender_type' => $tenderType,
+                    'amount_tendered' => 10,
+                ], $cashier);
+                $this->fail("{$tenderType} tender should be rejected.");
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('tender_type', $exception->errors());
+            }
+        }
+    }
+
     public function test_pos_walk_in_customer_cannot_use_credit(): void
     {
         [$product, $piece] = $this->productWithUnits();

@@ -116,6 +116,7 @@ class PosShiftService
             'net_cash_sales' => round((float) $cash->sum(fn ($payment) => (float) ($payment->amount_tendered ?? $payment->amount) - (float) $payment->change_due), 2),
             'card_sales_total' => round((float) $payments->where('tender_type', 'card')->sum('amount'), 2),
             'mobile_sales_total' => round((float) $payments->where('tender_type', 'mobile')->sum('amount'), 2),
+            'mmqr_sales_total' => round((float) $payments->where('tender_type', 'mmqr')->sum('amount'), 2),
             'sale_count' => $payments->pluck('order_id')->unique()->count(),
         ];
     }
