@@ -86,7 +86,7 @@ const resolveSellingPrice = (prices, priceType) => {
     const selectedPrice = Number((prices || []).find((price) => price.price_type === priceType)?.price || 0);
     if (selectedPrice > 0) return { price_type: priceType, price: selectedPrice };
 
-    if (priceType === 'wholesale') {
+    if (priceType === 'wholesale' || priceType === 'whole_sale') {
         const retailPrice = Number((prices || []).find((price) => price.price_type === 'retail')?.price || 0);
         if (retailPrice > 0) return { price_type: 'retail', price: retailPrice };
     }

@@ -261,6 +261,59 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(10.0, (float) $order->items->sole()->unit_price);
     }
 
+    public function test_pos_uses_retail_price_when_whole_sale_price_is_missing(): void
+    {
+        [$product, , $box] = $this->productWithUnits();
+        $product->priceTypes()->create(['name' => 'whole_sale', 'is_default' => false, 'sort_order' => 2]);
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 12);
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'items' => [[
+                'product_unit_id' => $box->id,
+                'quantity' => 1,
+                'price_type' => 'whole_sale',
+                'expected_unit_price' => 110,
+            ]],
+            'tender_type' => 'cash',
+            'amount_tendered' => 110,
+        ], $cashier);
+
+        $this->assertSame(110.0, (float) $order->final_amount);
+        $this->assertSame('retail', $order->items->sole()->price_type);
+    }
+
+    public function test_pos_uses_retail_price_when_whole_sale_price_is_zero(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $wholeSale = $product->priceTypes()->create(['name' => 'whole_sale', 'is_default' => false, 'sort_order' => 2]);
+        $piece->prices()->create(['product_price_type_id' => $wholeSale->id, 'price' => 0]);
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 1);
+
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'items' => [[
+                'product_unit_id' => $piece->id,
+                'quantity' => 1,
+                'price_type' => 'whole_sale',
+                'expected_unit_price' => 10,
+            ]],
+            'tender_type' => 'cash',
+            'amount_tendered' => 10,
+        ], $cashier);
+
+        $this->assertSame(10.0, (float) $order->final_amount);
+        $this->assertSame('retail', $order->items->sole()->price_type);
+    }
+
     public function test_pos_rejects_loss_after_discount_and_free_stock_without_posting(): void
     {
         [$product, $piece] = $this->productWithUnits();

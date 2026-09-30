@@ -99,7 +99,7 @@ class PosCheckoutService
                         : ($basePrice > 0 ? $basePrice * (float) $unit->conversion_factor : 0), 2);
                 };
                 $unitPrice = $resolveUnitPrice($priceType);
-                if ($priceType === 'wholesale' && (! $unitPrice || $unitPrice <= 0)) {
+                if (in_array($priceType, ['wholesale', 'whole_sale'], true) && (! $unitPrice || $unitPrice <= 0)) {
                     $priceType = 'retail';
                     $unitPrice = $resolveUnitPrice($priceType);
                 }
