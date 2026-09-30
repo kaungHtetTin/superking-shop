@@ -1,1 +1,0 @@
-import{G as o,j as s}from"./app-5hqFz0At.js";const e=o(s.jsx("path",{d:"M19 13H5v-2h14z"}));export{e as R};

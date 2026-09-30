@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use App\Support\Spa;
 
 class AdminUserController extends Controller
@@ -116,10 +117,10 @@ class AdminUserController extends Controller
 
         if ($user->id === $actor->id) {
             if ($validated['role'] !== $user->adminRoleName()) {
-                return redirect()->back()->withErrors(['role' => 'You cannot change your own role.']);
+                throw ValidationException::withMessages(['role' => 'You cannot change your own role.']);
             }
             if ($validated['status'] !== 'active') {
-                return redirect()->back()->withErrors(['status' => 'You cannot suspend your own account.']);
+                throw ValidationException::withMessages(['status' => 'You cannot suspend your own account.']);
             }
         }
 
@@ -129,7 +130,7 @@ class AdminUserController extends Controller
                 ->count();
 
             if ($otherSuperAdmins === 0) {
-                return redirect()->back()->withErrors(['role' => 'At least one Super Admin must remain.']);
+                throw ValidationException::withMessages(['role' => 'At least one Super Admin must remain.']);
             }
         }
 
@@ -152,6 +153,17 @@ class AdminUserController extends Controller
             'role' => $user->role,
             'status' => $user->status,
         ], $request);
+
+        if ($request->expectsJson()) {
+            $updatedUser = $user->fresh()->load('roles:id,name,display_name,is_admin');
+            $updatedUser->setAttribute('role', $updatedUser->adminRoleName());
+            $updatedUser->setAttribute('role_label', $updatedUser->adminRoleLabel());
+
+            return response()->json([
+                'message' => 'Staff account updated successfully.',
+                'user' => $updatedUser->only(['id', 'name', 'email', 'phone', 'role', 'role_label', 'status', 'created_at', 'updated_at']),
+            ]);
+        }
 
         return redirect()->back()->with('success', 'Staff account updated successfully.');
     }

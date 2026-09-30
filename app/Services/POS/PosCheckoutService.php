@@ -71,10 +71,6 @@ class PosCheckoutService
                     throw ValidationException::withMessages(['items' => 'Every POS quantity must be greater than zero.']);
                 }
                 $priceType = strtolower((string) ($line['price_type'] ?? 'retail'));
-                $price = $unit->priceFor($priceType);
-                if (! $price) {
-                    throw ValidationException::withMessages(['items' => "{$unit->product->name} has no {$priceType} price for {$unit->name}."]);
-                }
                 $focQuantity = round((float) ($line['foc_quantity'] ?? 0), 4);
                 if ($focQuantity < 0) {
                     throw ValidationException::withMessages(['items' => 'FOC quantity cannot be negative.']);
@@ -91,14 +87,25 @@ class PosCheckoutService
                     }
                     $focBaseQuantity = $focUnit->toBaseQuantity($focQuantity);
                 }
-                $configuredPrice = (float) $price->price;
-                $basePrice = (float) ($unit->product->baseUnit?->priceFor($priceType)?->price ?? 0);
-                $unitPrice = round(
-                    $configuredPrice > 0
+                $resolveUnitPrice = function (string $type) use ($unit): ?float {
+                    $price = $unit->priceFor($type);
+                    if (! $price) return null;
+
+                    $configuredPrice = (float) $price->price;
+                    $basePrice = (float) ($unit->product->baseUnit?->priceFor($type)?->price ?? 0);
+
+                    return round($configuredPrice > 0
                         ? $configuredPrice
-                        : ($basePrice > 0 ? $basePrice * (float) $unit->conversion_factor : 0),
-                    2
-                );
+                        : ($basePrice > 0 ? $basePrice * (float) $unit->conversion_factor : 0), 2);
+                };
+                $unitPrice = $resolveUnitPrice($priceType);
+                if ($priceType === 'wholesale' && (! $unitPrice || $unitPrice <= 0)) {
+                    $priceType = 'retail';
+                    $unitPrice = $resolveUnitPrice($priceType);
+                }
+                if ($unitPrice === null) {
+                    throw ValidationException::withMessages(['items' => "{$unit->product->name} has no {$priceType} price for {$unit->name}."]);
+                }
                 if ($unitPrice <= 0) {
                     throw ValidationException::withMessages([
                         'items' => "{$unit->product->name} has no positive {$priceType} selling price for {$unit->name} or its base unit.",

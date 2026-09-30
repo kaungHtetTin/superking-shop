@@ -65,7 +65,7 @@ const AdminShellContext = createContext(null);
 
 function AdminChrome({ children, mainClassName = '' }) {
     const { url, props } = usePage();
-    const { app_base, app_url, app_settings, orders_pending_payment_count, chat_unread_count, is_super_admin } = props;
+    const { app_base, app_url, app_settings, admin_landing_path, pos_enabled, orders_pending_payment_count, chat_unread_count, is_super_admin } = props;
     const t = useTranslation();
     const authUser = props.auth?.user;
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -87,7 +87,7 @@ function AdminChrome({ children, mainClassName = '' }) {
             return;
         }
 
-        router.visit(routeWithBase('/admin/dashboard', app_base), { replace: true });
+        router.visit(routeWithBase(admin_landing_path || '/admin/profile', app_base), { replace: true });
     };
     const storefrontHref = app_url || routeWithBase('/', app_base);
     const roleLabel = authUser?.role_label || (authUser?.role || 'staff').replace(/_/g, ' ');
@@ -156,18 +156,18 @@ function AdminChrome({ children, mainClassName = '' }) {
         () => [
             {
                 title: t('admin.sections.overview', 'Overview'),
-                items: [
+                items: can('dashboard.view') ? [
                     {
                         label: t('admin.items.dashboard', 'Dashboard'),
                         href: routeWithBase('/admin/dashboard', app_base),
                         icon: 'grid',
                     },
-                ],
+                ] : [],
             },
             {
                 title: t('admin.sections.sales', 'Sales'),
                 items: [
-                    ...(can('pos.access')
+                    ...(pos_enabled && can('pos.access')
                         ? [
                               {
                                   label: t('admin.items.pos', 'POS'),
@@ -445,8 +445,18 @@ function AdminChrome({ children, mainClassName = '' }) {
                     },
                 ],
             },
-        ],
-        [app_base, storefrontHref, orders_pending_payment_count, chat_unread_count, is_super_admin, authUser?.role, authUser?.permissions, t],
+            {
+                title: t('Account'),
+                items: [
+                    {
+                        label: t('admin.profile_settings', 'Profile settings'),
+                        href: routeWithBase('/admin/profile', app_base),
+                        icon: 'user',
+                    },
+                ],
+            },
+        ].filter((section) => section.items.length > 0),
+        [app_base, storefrontHref, pos_enabled, orders_pending_payment_count, chat_unread_count, is_super_admin, authUser?.role, authUser?.permissions, t],
     );
 
     return (
@@ -534,7 +544,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                 onDensityChange={setDensity}
                             />
                             <LanguageSwitcher compact className="admin-language-switcher" />
-                            <Link
+                            {can('orders.view') && <Link
                                 href={routeWithBase('/admin/orders?tab=payments', app_base)}
                                 className={`icon-btn notification-bell ${orders_pending_payment_count > 0 ? 'has-count' : ''}`}
                                 aria-label={t('admin.orders_waiting', `${orders_pending_payment_count || 0} orders awaiting payment review`, { count: orders_pending_payment_count || 0 })}
@@ -550,7 +560,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                         {orders_pending_payment_count > 99 ? '99+' : orders_pending_payment_count}
                                     </span>
                                 )}
-                            </Link>
+                            </Link>}
                             <div className="admin-profile-menu">
                                 <button
                                     type="button"
@@ -578,7 +588,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                                 <small>{authUser?.email || roleLabel}</small>
                                             </div>
                                         </div>
-                                        <Link href={routeWithBase(can('settings.manage') ? '/admin/settings?section=profile' : '/admin/profile', app_base)} role="menuitem" onClick={closeProfile}>
+                                        <Link href={routeWithBase('/admin/profile', app_base)} role="menuitem" onClick={closeProfile}>
                                             <Icon name="user" size={14} />
                                             {t('admin.profile_settings', 'Profile settings')}
                                         </Link>
@@ -613,6 +623,8 @@ function AdminChrome({ children, mainClassName = '' }) {
                             </button>
                         </div>
                     )}
+
+                    {props.flash?.error && <div className="flash error" role="alert">{t(props.flash.error)}</div>}
 
                     {children}
                 </main>

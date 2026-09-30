@@ -180,7 +180,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                     <Stack spacing={2}>
                         {order.items.map((item) => (
                             <Stack key={item.id} direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                                <Box component="img" src={item.product?.primary_image?.image_url || (item.product?.primary_image?.image_path ? storageUrl(item.product.primary_image.image_path, app_url) : routeWithBase('/images/product-placeholder.svg', app_base))} alt="" sx={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 1.5, bgcolor: 'grey.100', flexShrink: 0 }} />
+                                <Box component="img" src={item.product?.primary_image?.image_url || (item.product?.primary_image?.image_path ? storageUrl(item.product.primary_image.image_path, app_url) : routeWithBase('/images/product-default.png', app_base))} alt="" sx={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 1.5, bgcolor: 'grey.100', flexShrink: 0 }} />
                                 <Box sx={{ minWidth: 0 }}>
                                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                         {item.product?.name}

@@ -2,8 +2,13 @@
 
 namespace App\Exceptions;
 
+use App\Support\AdminLandingPage;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Exceptions\PostTooLargeException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -35,6 +40,11 @@ class Handler extends ExceptionHandler
      */
     public function register()
     {
+        $this->renderable(fn (AuthorizationException $exception, Request $request) => $this->redirectDeniedAdminPage($request));
+        $this->renderable(fn (HttpExceptionInterface $exception, Request $request) => $exception->getStatusCode() === 403
+            ? $this->redirectDeniedAdminPage($request)
+            : null);
+
         $this->renderable(function (PostTooLargeException $exception, $request) {
             $isCheckout = $request->is('checkout');
             $field = $isCheckout ? 'payment_proof' : 'file';
@@ -55,5 +65,31 @@ class Handler extends ExceptionHandler
         $this->reportable(function (Throwable $e) {
             //
         });
+    }
+
+    private function redirectDeniedAdminPage(Request $request): ?RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $request->isMethod('GET')
+            || ! $request->is('admin', 'admin/*')
+            || ! $user?->isAdminStaff()
+            || $user->status !== 'active'
+            || ($request->expectsJson() && $request->header('X-SPA') !== 'true')) {
+            return null;
+        }
+
+        $fallback = AdminLandingPage::path($user);
+        $currentPath = '/'.trim($request->path(), '/');
+        if ($currentPath === parse_url($fallback, PHP_URL_PATH)
+            && $request->getQueryString() === (parse_url($fallback, PHP_URL_QUERY) ?: null)) {
+            $fallback = '/admin/profile';
+        }
+
+        if ($currentPath === '/admin/profile') {
+            return null;
+        }
+
+        return redirect($fallback)->with('error', 'You do not have permission to view that page.');
     }
 }

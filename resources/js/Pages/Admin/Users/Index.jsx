@@ -25,6 +25,10 @@ export default function UsersIndex({ users, filters, roles }) {
     const [open, setOpen] = useState(false);
     const [editUser, setEditUser] = useState(null);
     const [deleteUser, setDeleteUser] = useState(null);
+    const [updatedUsers, setUpdatedUsers] = useState({});
+    const [successMessage, setSuccessMessage] = useState('');
+
+    const visibleUsers = users.map((user) => updatedUsers[user.id] || user);
 
     const form = useForm({ ...emptyForm });
 
@@ -42,6 +46,7 @@ export default function UsersIndex({ users, filters, roles }) {
     };
 
     const openCreate = () => {
+        setSuccessMessage('');
         setEditUser(null);
         form.clearErrors();
         form.setData({ ...emptyForm });
@@ -49,6 +54,7 @@ export default function UsersIndex({ users, filters, roles }) {
     };
 
     const openEdit = (user) => {
+        setSuccessMessage('');
         setEditUser(user);
         form.clearErrors();
         form.setData({
@@ -75,7 +81,11 @@ export default function UsersIndex({ users, filters, roles }) {
         if (editUser) {
             form.patch(routeWithBase(`/admin/users/${editUser.id}`, app_base), {
                 preserveScroll: true,
-                onSuccess: () => closeModal(),
+                onSuccess: (response) => {
+                    setUpdatedUsers((current) => ({ ...current, [response.user.id]: response.user }));
+                    setSuccessMessage(response.message);
+                    closeModal();
+                },
             });
         } else {
             form.post(routeWithBase('/admin/users', app_base), {
@@ -112,6 +122,7 @@ export default function UsersIndex({ users, filters, roles }) {
             <Head title={t('Admin Users')} />
 
             <AdminFlash flash={flash} errors={form.errors} />
+            {successMessage && <div className="flash success" role="status">{t(successMessage)}</div>}
 
             <section className="panel glass">
                 <PanelHeading eyebrow={t('Access control')} title={t('Admin staff')} />
@@ -175,14 +186,14 @@ export default function UsersIndex({ users, filters, roles }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {users.length === 0 ? (
+                            {visibleUsers.length === 0 ? (
                                 <tr>
                                     <td colSpan={5}>
                                         <span className="muted">{t('No staff accounts match your filters.')}</span>
                                     </td>
                                 </tr>
                             ) : (
-                                users.map((user) => {
+                                visibleUsers.map((user) => {
                                     const isSelf = user.id === currentUserId;
 
                                     return (

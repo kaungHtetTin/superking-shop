@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Head, Link, usePage } from '@/spa/router';
+import { Head, Link, useForm, usePage } from '@/spa/router';
 import LanguageSwitcher from '@/Components/LanguageSwitcher';
 import { usePhraseTranslation, useTranslation } from '@/Utils/i18n';
 import { routeWithBase, storageUrl } from '@/Utils/url';
@@ -82,9 +82,21 @@ const calculateLineBaseUsage = (line) => {
 const lineExceedsStock = (line) => calculateLineBaseUsage(line) > Number(
     line.available_base_qty || (Number(line.available_qty || 0) * Number(line.conversion_factor || 1)),
 ) + 0.00005;
+const resolveSellingPrice = (prices, priceType) => {
+    const selectedPrice = Number((prices || []).find((price) => price.price_type === priceType)?.price || 0);
+    if (selectedPrice > 0) return { price_type: priceType, price: selectedPrice };
+
+    if (priceType === 'wholesale') {
+        const retailPrice = Number((prices || []).find((price) => price.price_type === 'retail')?.price || 0);
+        if (retailPrice > 0) return { price_type: 'retail', price: retailPrice };
+    }
+
+    return { price_type: priceType, price: 0 };
+};
 
 export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
-    const { app_base, app_url, app_settings = {}, flash = {}, errors: pageErrors = {} } = usePage().props;
+    const { app_base, app_url, app_settings = {}, admin_landing_path, auth, flash = {}, errors: pageErrors = {} } = usePage().props;
+    const logoutForm = useForm({});
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const t = useTranslation();
@@ -445,15 +457,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
 
     const resolveProductPrice = (product, priceType = salePriceType) => {
-        const prices = product?.prices || [];
-        const selected = prices.find((price) => price.price_type === priceType);
-        return Number(selected?.price || 0);
+        return resolveSellingPrice(product?.prices, priceType).price;
     };
-
-    const resolvePriceFromList = (prices, priceType) => Number(
-        (prices || []).find((price) => price.price_type === priceType)?.price
-        ?? 0,
-    );
 
     const addProductToCart = (product) => {
         if (Number(product?.available_qty || 0) <= 0) {
@@ -462,7 +467,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         }
 
         setCart((prev) => {
-            const appliedPriceType = salePriceType;
+            const sellingPrice = resolveSellingPrice(product.prices, salePriceType);
+            const appliedPriceType = sellingPrice.price_type;
             const existingIndex = prev.findIndex((line) => line.product_unit_id === product.id && line.price_type === appliedPriceType);
             if (existingIndex >= 0) {
                 const updated = [...prev];
@@ -493,7 +499,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     prices: product.prices || [],
                     unit_options: product.unit_options || [],
                     price_type: appliedPriceType,
-                    unit_price: resolveProductPrice(product, appliedPriceType),
+                    unit_price: sellingPrice.price,
                     quantity: 1,
                     foc_quantity: 0,
                     foc_product_unit_id: product.id,
@@ -517,7 +523,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             if (line.id !== id) return line;
             const unit = (line.unit_options || []).find((option) => Number(option.id) === Number(productUnitId));
             if (!unit || Number(unit.available_qty || 0) <= 0) return line;
-            const nextPriceType = salePriceType;
+            const sellingPrice = resolveSellingPrice(unit.prices, salePriceType);
 
             return {
                 ...line,
@@ -528,8 +534,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 available_qty: Number(unit.available_qty || 0),
                 conversion_factor: Number(unit.conversion_factor || 1),
                 prices: unit.prices || [],
-                price_type: nextPriceType,
-                unit_price: resolvePriceFromList(unit.prices, nextPriceType, line.unit_price),
+                price_type: sellingPrice.price_type,
+                unit_price: sellingPrice.price,
                 quantity: Math.max(1, Math.min(Number(line.quantity || 1), Number(unit.available_qty || 1))),
             };
         }));
@@ -561,11 +567,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const changeSalePriceType = (next) => {
         if (!next || next === salePriceType) return;
         setSalePriceType(next);
-        setCart((prev) => prev.map((line) => ({
-            ...line,
-            price_type: next,
-            unit_price: resolvePriceFromList(line.prices, next),
-        })));
+        setCart((prev) => prev.map((line) => {
+            const sellingPrice = resolveSellingPrice(line.prices, next);
+            return { ...line, price_type: sellingPrice.price_type, unit_price: sellingPrice.price };
+        }));
     };
 
     const totals = useMemo(() => {
@@ -644,8 +649,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 const latest = await api('/admin/pos/products/prices', { method: 'get', params: { unit_ids: cart.map(line => line.product_unit_id) } });
                 updated = cart.map(line => {
                     const unit = latest.find(unit => Number(unit.id) === Number(line.product_unit_id));
-                    const price = unit?.prices.find(price => price.price_type === line.price_type);
-                    return { ...line, prices: unit?.prices || [], unit_price: Number(price?.price || 0) };
+                    const sellingPrice = resolveSellingPrice(unit?.prices, salePriceType);
+                    return { ...line, prices: unit?.prices || [], price_type: sellingPrice.price_type, unit_price: sellingPrice.price };
                 });
                 setCart(updated);
                 if (updated.some(line => line.unit_price <= 0)) { setScanError('A cart item is unavailable or needs a selling price. Review the cart.'); return; }
@@ -1035,9 +1040,24 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 )}
                 <Chip className="pos-console__online-status" size="small" color={isOnline ? 'success' : 'error'} label={isOnline ? tp('Online') : tp('Offline')} variant="outlined" />
                 <LanguageSwitcher compact className="admin-language-switcher" />
-                <Button className="pos-console__dashboard-link" size="small" variant="text" component={Link} href={routeWithBase('/admin/dashboard', app_base)}>
-                    {t('admin.items.dashboard', 'Dashboard')}
-                </Button>
+                {(auth?.user?.permissions || []).includes('dashboard.view') && (
+                    <Button className="pos-console__dashboard-link" size="small" variant="text" component={Link} href={routeWithBase('/admin/dashboard', app_base)}>
+                        {t('admin.items.dashboard', 'Dashboard')}
+                    </Button>
+                )}
+                {!(auth?.user?.permissions || []).includes('dashboard.view') && admin_landing_path && admin_landing_path !== '/admin/pos' && (
+                    <Button className="pos-console__dashboard-link" size="small" variant="text" component={Link} href={routeWithBase(admin_landing_path, app_base)}>
+                        {t('Admin home')}
+                    </Button>
+                )}
+                <Box className="pos-console__account-actions" sx={{ display: 'flex', gap: 0.5 }}>
+                    <Button size="small" variant="text" component={Link} href={routeWithBase('/admin/profile', app_base)}>
+                        {t('Profile settings')}
+                    </Button>
+                    <Button size="small" variant="text" disabled={logoutForm.processing} onClick={() => logoutForm.post(routeWithBase('/admin/logout', app_base))}>
+                        {t('Log out')}
+                    </Button>
+                </Box>
                 <IconButton
                     className="pos-console__appbar-toggle"
                     size="small"

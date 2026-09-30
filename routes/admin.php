@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\StorefrontController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\ProfileController;
+use App\Support\AdminLandingPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
@@ -59,7 +60,7 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->middleware('admin.permission:dashboard.view')->name('home');
+    Route::get('/', fn (Request $request) => redirect(AdminLandingPage::path($request->user())))->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('admin.permission:dashboard.view')->name('dashboard');
     Route::get('/ui-showcase', [DashboardController::class, 'uiShowcase'])->middleware('admin.permission:dashboard.view')->name('ui-showcase');
 

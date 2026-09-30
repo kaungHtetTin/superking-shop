@@ -57,10 +57,10 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
                             </button>
                         ))}
                         <div className="settings-nav-divider" />
-                        <Link href={routeWithBase('/admin/settings', app_base)}>
+                        {(auth?.user?.permissions || []).includes('settings.manage') && <Link href={routeWithBase('/admin/settings', app_base)}>
                             <span className="settings-nav-icon"><Icon name="settings" size={15} /></span>
                             <span><strong>{t('Application settings')}</strong><small>{t('General, branding and contacts')}</small></span>
-                        </Link>
+                        </Link>}
                     </aside>
                     <section className="settings-work-surface">
                         {adminSection === 'general' && <div className="settings-section-content profile-settings-content">

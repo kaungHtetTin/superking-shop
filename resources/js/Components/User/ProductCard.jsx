@@ -46,11 +46,13 @@ const ProductCard = ({ product, returnTo = null }) => {
     const reviewText = reviewCount > 0
         ? `${reviewCount.toLocaleString()} ${t(reviewCount === 1 ? 'review' : 'reviews')}`
         : t('No reviews yet');
+    const hasProductImage = Boolean(product.primary_image?.image_url || product.primary_image?.image_path);
 
     const imageUrl = useMemo(() => {
-        return product.primary_image
-            ? storageUrl(product.primary_image.image_url || product.primary_image.image_path, app_url)
-            : routeWithBase('/images/product-placeholder.svg', app_base);
+        const imagePath = product.primary_image?.image_url || product.primary_image?.image_path;
+        return imagePath
+            ? storageUrl(imagePath, app_url)
+            : routeWithBase('/images/product-default.png', app_base);
     }, [product.primary_image, app_url, app_base]);
 
     const detailHref = useMemo(() => {
@@ -216,6 +218,7 @@ const ProductCard = ({ product, returnTo = null }) => {
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
+                        objectPosition: hasProductImage ? 'center center' : 'left center',
                         bgcolor: '#eee6d8',
                     }}
                 />

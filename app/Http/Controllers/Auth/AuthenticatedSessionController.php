@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use App\Support\Spa;
+use App\Support\AdminLandingPage;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticatedSessionController extends Controller
@@ -101,7 +102,7 @@ class AuthenticatedSessionController extends Controller
 
     private function redirectAfterLogin(Request $request, bool $isAdminLogin): RedirectResponse
     {
-        $fallback = $isAdminLogin ? '/admin/dashboard' : '/';
+        $fallback = $isAdminLogin ? AdminLandingPage::path($request->user()) : '/';
         $intended = (string) $request->session()->pull('url.intended', $fallback);
         $target = $this->safeIntendedUrl($request, $intended, $fallback, $isAdminLogin);
 

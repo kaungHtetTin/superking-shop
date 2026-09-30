@@ -140,7 +140,7 @@ export default function CartIndex() {
                             >
                                 <Box
                                     component="img"
-                                    src={line.imagePath ? storageUrl(line.imagePath, app_url) : routeWithBase('/images/product-placeholder.svg', app_base)}
+                                    src={line.imagePath ? storageUrl(line.imagePath, app_url) : routeWithBase('/images/product-default.png', app_base)}
                                     alt=""
                                     sx={{
                                         gridArea: 'image',

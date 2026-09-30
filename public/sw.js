@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'musical-store-pwa';
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const STATIC_CACHE = `${CACHE_PREFIX}-${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_PREFIX}-${CACHE_VERSION}-pages`;
 const MAX_PAGE_ENTRIES = 24;

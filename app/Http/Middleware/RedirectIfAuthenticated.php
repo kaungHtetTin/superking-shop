@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Providers\RouteServiceProvider;
+use App\Support\AdminLandingPage;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,7 +29,7 @@ class RedirectIfAuthenticated
 
                 if ($isAdminRoute) {
                     if ($user && $user->isAdminStaff() && $user->status === 'active') {
-                        return redirect('/admin/dashboard');
+                        return redirect(AdminLandingPage::path($user));
                     }
 
                     Auth::guard($guard)->logout();

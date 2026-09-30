@@ -65,6 +65,8 @@ class Spa
                 'user' => $authUser,
             ],
             'is_super_admin' => $user?->isSuperAdmin() ?? false,
+            'admin_landing_path' => $isAdminUser ? AdminLandingPage::path($user) : null,
+            'pos_enabled' => config('inventory.pos_enabled', true),
             'orders_pending_payment_count' => self::pendingPaymentCount($user, $isAdminUser),
             'chat_unread_count' => self::chatUnreadCount($user, $isAdminUser),
         ];

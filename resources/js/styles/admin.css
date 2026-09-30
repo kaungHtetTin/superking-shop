@@ -14756,7 +14756,8 @@
 
   .pos-console .pos-console__titlebar.is-mobile-collapsed .pos-console__location,
   .pos-console .pos-console__titlebar.is-mobile-collapsed .admin-language-switcher,
-  .pos-console .pos-console__titlebar.is-mobile-collapsed .pos-console__dashboard-link {
+  .pos-console .pos-console__titlebar.is-mobile-collapsed .pos-console__dashboard-link,
+  .pos-console .pos-console__titlebar.is-mobile-collapsed .pos-console__account-actions {
     display: none;
   }
 
@@ -14765,7 +14766,8 @@
     grid-template-areas:
       "brand status toggle"
       "warehouse warehouse warehouse"
-      "locale dashboard dashboard";
+      "locale dashboard dashboard"
+      "account account account";
   }
 
   .pos-console .pos-console__titlebar.is-mobile-expanded .pos-console__mobile-location-summary {
@@ -14797,6 +14799,11 @@
 
   .pos-console .pos-console__dashboard-link {
     grid-area: dashboard;
+    justify-self: end;
+  }
+
+  .pos-console .pos-console__account-actions {
+    grid-area: account;
     justify-self: end;
   }
 

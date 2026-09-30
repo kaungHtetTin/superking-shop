@@ -19,6 +19,6 @@ class EnsureSuperAdmin
             return response()->json(['message' => 'Super Admin access required.'], 403);
         }
 
-        return redirect()->route('admin.dashboard')->with('error', 'Super Admin access required.');
+        abort(403, 'Super Admin access required.');
     }
 }

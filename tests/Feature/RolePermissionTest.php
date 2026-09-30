@@ -36,7 +36,7 @@ class RolePermissionTest extends TestCase
         $manager = $this->staffWithRole('manager');
 
         $this->actingAs($admin)->get('/admin/roles')->assertOk();
-        $this->actingAs($manager)->get('/admin/roles')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/roles')->assertRedirect('/admin/dashboard');
     }
 
     public function test_admin_can_update_a_role_permission_set(): void
@@ -216,6 +216,7 @@ class RolePermissionTest extends TestCase
     {
         $user = $this->staffWithPermissions(['pricing.manage']);
         $this->actingAs($user)->get('/admin/settings')->assertRedirect('/admin/settings?section=prices');
+        $this->get('/admin/settings?section=general')->assertRedirect('/admin/settings?section=prices');
         $this->getJson('/admin/settings?section=prices')->assertOk()
             ->assertJsonPath('props.canManageSettings', false)
             ->assertJsonPath('props.initialSection', 'prices');
@@ -229,7 +230,7 @@ class RolePermissionTest extends TestCase
             'markup_percent' => 0, 'rounding' => 1, 'minimum_profit' => 0,
         ])->assertStatus(303);
         $this->assertDatabaseHas('pricing_rules', ['name' => 'Permission test price']);
-        $this->get('/admin/roles')->assertForbidden();
+        $this->get('/admin/roles')->assertRedirect('/admin/settings?section=prices');
         $this->getJson('/admin/profile')->assertOk()->assertJsonPath('component', 'Profile/Edit');
     }
 
@@ -247,7 +248,7 @@ class RolePermissionTest extends TestCase
         $this->actingAs($this->staffWithRole('staff'));
         $rule = \App\Models\PricingRule::firstOrFail();
         $this->getJson('/admin/settings?section=prices')->assertForbidden();
-        $this->get('/admin/settings/prices')->assertForbidden();
+        $this->get('/admin/settings/prices')->assertRedirect('/admin/dashboard');
         $this->postJson('/admin/settings/prices', [])->assertForbidden();
         $this->postJson('/admin/settings/prices/preview', [])->assertForbidden();
         $this->patchJson('/admin/settings/prices/'.$rule->id, [])->assertForbidden();

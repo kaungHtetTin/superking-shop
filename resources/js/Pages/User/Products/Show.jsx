@@ -45,7 +45,7 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 
 const productImageUrl = (image, appUrl, appBase) => {
     const path = image?.image_url || image?.image_path;
-    return path ? storageUrl(path, appUrl) : routeWithBase('/images/product-placeholder.svg', appBase);
+    return path ? storageUrl(path, appUrl) : routeWithBase('/images/product-default.png', appBase);
 };
 
 const safeProductListHref = (currentUrl, appBase) => {
