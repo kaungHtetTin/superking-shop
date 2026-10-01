@@ -53,7 +53,8 @@ export default function CartIndex() {
         axios.post(routeWithBase('/cart/selling-units', app_base), { product_ids: productIds })
             .then(({ data }) => {
                 if (cancelled) return;
-                Object.entries(data.products || {}).forEach(([productId, units]) => {
+                productIds.forEach((productId) => {
+                    const units = data.products?.[productId] || [];
                     syncUnitOptions(productId, (units || []).map((unit) => ({
                         id: unit.id,
                         name: unit.name || unit.code,
@@ -75,9 +76,11 @@ export default function CartIndex() {
     }, [app_base]);
 
     const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+    const hasUnavailableItems = items.some((item) => item.unavailable);
 
     return (
         <Box
+            className="user-storefront storefront-purchase"
             sx={{
                 minHeight: '100dvh',
                 display: 'flex',
@@ -93,9 +96,6 @@ export default function CartIndex() {
                     {t('Continue shopping')}
                 </BackLink>
 
-                <Typography sx={{ ...eyebrowSxForTheme(theme), mb: 0.5 }}>
-                    {t('Your setlist')}
-                </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 700, mb: 2, color: musicColors.ink }}>
                     {t('Shopping cart')}
                 </Typography>
@@ -112,22 +112,26 @@ export default function CartIndex() {
                         </Button>
                     </Paper>
                 ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' }, gap: { xs: '12px', md: '16px' }, alignItems: 'start' }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' }, gap: { xs: '16px', md: '20px' }, alignItems: 'start' }}>
+                        <Stack spacing="12px" sx={{ minWidth: 0 }}>
+                            <Stack direction="row" sx={{ px: '2px', justifyContent: 'space-between', alignItems: 'center', minHeight: 32 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t('Cart items')}</Typography>
+                                <Typography variant="caption" color="text.secondary">{items.length} {t(items.length === 1 ? 'item' : 'items')}</Typography>
+                            </Stack>
                         {items.map((line) => (
                             <Paper
                                 key={line.unitId}
                                 elevation={0}
                                 sx={{
                                     p: { xs: '12px', sm: '16px' },
-                                    borderRadius: 1.5,
+                                    borderRadius: '10px',
                                     border: '1px solid',
-                                    borderColor: 'rgba(36,27,24,0.09)',
+                                    borderColor: 'rgba(15,23,42,0.1)',
                                     bgcolor: musicColors.sheet,
-                                    gridColumn: { md: 1 },
                                     display: 'grid',
                                     gridTemplateColumns: {
-                                        xs: '76px minmax(0, 1fr)',
-                                        sm: '90px minmax(0, 1fr) auto',
+                                        xs: '72px minmax(0, 1fr)',
+                                        sm: '88px minmax(0, 1fr) 170px',
                                     },
                                     gridTemplateAreas: {
                                         xs: '"image details" "actions actions"',
@@ -144,11 +148,11 @@ export default function CartIndex() {
                                     alt=""
                                     sx={{
                                         gridArea: 'image',
-                                        width: { xs: 76, sm: 90 },
-                                        aspectRatio: '3 / 4',
-                                        height: 'auto',
-                                        objectFit: 'cover',
-                                        borderRadius: 1,
+                                        width: { xs: 72, sm: 88 },
+                                        height: { xs: 72, sm: 88 },
+                                        objectFit: 'contain',
+                                        bgcolor: 'action.hover',
+                                        borderRadius: 1.5,
                                         alignSelf: 'flex-start',
                                     }}
                                 />
@@ -156,7 +160,7 @@ export default function CartIndex() {
                                     <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.3, mb: '2px' }}>
                                         {line.name}
                                     </Typography>
-                                    <Stack spacing="2px" sx={{ mb: '4px', minWidth: 0 }}>
+                                    <Stack spacing="2px" sx={{ mb: '4px', minWidth: 0, pt: (line.unitOptions || []).length > 1 ? '14px' : '4px' }}>
                                         {(line.unitOptions || []).length > 1 ? (
                                             <TextField
                                                 select
@@ -164,7 +168,7 @@ export default function CartIndex() {
                                                 label={t('Selling unit')}
                                                 value={line.unitId}
                                                 onChange={(event) => changeUnit(line.unitId, event.target.value)}
-                                                sx={{ mt: '4px', minWidth: 150, maxWidth: '100%' }}
+                                                sx={{ width: '100%', maxWidth: 320 }}
                                             >
                                                 {line.unitOptions.map((unit) => (
                                                     <MenuItem key={unit.id} value={unit.id} disabled={Number(unit.maxQty || 0) <= 0}>
@@ -182,13 +186,14 @@ export default function CartIndex() {
                                                 {t('Product code')}: {line.productCode}
                                             </Typography>
                                         )}
+                                        {line.unavailable && <Typography variant="caption" color="error">{t('This selling unit is no longer available. Remove it or choose another unit.')}</Typography>}
                                         {line.isPreorder && (
                                             <Typography component="div" variant="caption" color="warning.main" sx={{ fontWeight: 700 }}>
                                                 {t('Pre-order')}
                                             </Typography>
                                         )}
                                         {line.flashSale && (
-                                            <Typography component="div" variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+                                            <Typography component="div" variant="caption" color="primary.main" sx={{ fontWeight: 700 }}>
                                                 {t('Flash Sale')}
                                             </Typography>
                                         )}
@@ -219,10 +224,9 @@ export default function CartIndex() {
                                     </Typography>
                                     <Stack
                                         direction="row"
-                                        alignItems="center"
+
                                         spacing="4px"
-                                        justifyContent="flex-end"
-                                        sx={{ width: 'auto', flexShrink: 0 }}
+                                        sx={{ alignItems: "center", ...({ width: 'auto', flexShrink: 0, justifyContent: 'flex-end', alignItems: 'center' }) }}
                                     >
                                         <Box
                                             sx={{
@@ -255,22 +259,33 @@ export default function CartIndex() {
                                 </Box>
                             </Paper>
                         ))}
+                        </Stack>
 
-                        <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '14px', sm: '20px' }, gridColumn: { md: 2 }, gridRow: { md: '1 / span 99' }, position: 'sticky', top: { md: 112 }, bottom: { xs: 72, md: 'auto' }, zIndex: 10, backdropFilter: { xs: 'blur(14px)', md: 'none' }, boxShadow: { xs: '0 -8px 24px rgba(36,27,24,.10)', md: sectionShellSx.boxShadow } }}>
+                        <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '20px', sm: '24px' }, mt: { md: '44px' }, position: { md: 'sticky' }, top: { md: 88 }, borderRadius: '10px' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>{t('Order summary')}</Typography>
+                            <Stack direction="row" sx={{ mb: '12px', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary">{t('Items')}</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>{items.reduce((sum, item) => sum + Number(item.qty || 0), 0)}</Typography>
+                            </Stack>
                             <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '12px', alignItems: 'center' }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                                     {t('Subtotal')}
                                 </Typography>
-                                <Typography variant="h6" sx={{ fontWeight: 700, textAlign: 'right', overflowWrap: 'normal' }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right', overflowWrap: 'normal' }}>
                                     {formatMoney(subtotal)}
                                 </Typography>
                             </Box>
                             <Divider sx={{ my: 2 }} />
+                            <Stack direction="row" sx={{ mb: '20px', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t('Total')}</Typography>
+                                <Typography variant="h6" color="primary.main" sx={{ fontWeight: 800 }}>{formatMoney(subtotal)}</Typography>
+                            </Stack>
                             <Button
                                 fullWidth
                                 variant="contained"
                                 size="large"
-                                sx={{ py: 1.5, fontWeight: 700, borderRadius: 2 }}
+                                disabled={hasUnavailableItems}
+                                sx={{ minHeight: 46, fontWeight: 700, borderRadius: '8px' }}
                                 onClick={() => {
                                     if (!auth?.user) {
                                         router.visit(routeWithBase('/login', app_base));

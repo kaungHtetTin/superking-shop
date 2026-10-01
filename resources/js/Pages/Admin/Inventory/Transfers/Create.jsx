@@ -5,7 +5,7 @@ import TransferDocumentForm from '@/Components/Admin/TransferDocumentForm';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 
-export default function TransferCreate({ locations, categories = [] }) {
+export default function TransferCreate({ locations, destinationLocations = [], categories = [] }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
 
@@ -21,7 +21,7 @@ export default function TransferCreate({ locations, categories = [] }) {
             }
         >
             <Head title={t('New Transfer')} />
-            <TransferDocumentForm locations={locations} categories={categories} />
+            <TransferDocumentForm locations={locations} destinationLocations={destinationLocations} categories={categories} />
         </AdminLayout>
     );
 }

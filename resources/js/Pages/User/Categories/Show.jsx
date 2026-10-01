@@ -74,7 +74,7 @@ export default function CategoriesShow({ category, products = { data: [] } }) {
                         boxShadow: `0 18px 55px ${alpha(theme.palette.primary.main, 0.08)}`,
                     }}
                 >
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}  sx={{ alignItems: { sm: 'center' }, ...({}) }}>
                         <Avatar
                             src={v.imageUrl || undefined}
                             sx={{
@@ -102,7 +102,7 @@ export default function CategoriesShow({ category, products = { data: [] } }) {
                                     {category.description}
                                 </Typography>
                             ) : null}
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}  sx={{ alignItems: { sm: 'center' }, ...({}) }}>
                                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                                     {category.products_count ?? 0}{' '}
                                     {(category.products_count ?? 0) === 1 ? 'product' : 'products'}
@@ -117,7 +117,7 @@ export default function CategoriesShow({ category, products = { data: [] } }) {
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.25 }}>
                             Subcategories
                         </Typography>
-                        <Stack direction="row" flexWrap="wrap" gap={1}>
+                        <Stack direction="row"   sx={{ flexWrap: "wrap", gap: 1, ...({}) }}>
                             {subs.map((sub) => (
                                 <Chip
                                     key={sub.id}
@@ -143,7 +143,7 @@ export default function CategoriesShow({ category, products = { data: [] } }) {
                             ))}
                         </Box>
                         {products.last_page > 1 && (
-                            <Stack alignItems="center" sx={{ mt: 3, mb: 2 }}>
+                            <Stack  sx={{ alignItems: "center", ...({ mt: 3, mb: 2 }) }}>
                                 <Pagination
                                     count={products.last_page}
                                     page={products.current_page}

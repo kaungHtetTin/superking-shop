@@ -1,6 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Myanmar:wght@400;500;600;700&display=swap');
 
 /* ── Design tokens ─────────────────────────────────────────────── */
+.app-root .finance-book-description { margin: 0 0 14px; font-size: var(--admin-font-meta); }
+.app-root .finance-book-page > .panel,
+.app-root .finance-book-page > .ledger-pagination { margin-block: 16px; }
+.app-root .finance-book-page > .panel:first-of-type { margin-top: 0; }
+.app-root .finance-book-filters { display: grid; grid-template-columns: minmax(180px, 260px) minmax(160px, 200px) auto; align-items: end; gap: var(--admin-section-gap); }
+.app-root .finance-book-filter-actions,
+.app-root .finance-book-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-root .finance-book-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--admin-section-gap); }
+.app-root .finance-book-card { min-width: 0; margin-bottom: 0; }
+.app-root .finance-book-card > div:not(.panel-heading):not(.finance-book-card-actions) { padding-block: 9px !important; font-size: var(--admin-font-body); }
+.app-root .finance-book-card strong { font-variant-numeric: tabular-nums; text-align: right; }
+.app-root .finance-book-card-actions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.app-root .finance-book-money { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.app-root .finance-book-page table th.finance-book-money,
+.app-root .finance-book-page table td.finance-book-money { text-align: left; }
+.app-root .finance-book-page table th,
+.app-root .finance-book-page table td { vertical-align: middle; }
+@media (max-width: 1200px) { .app-root .finance-book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .app-root .finance-book-grid, .app-root .finance-book-filters { grid-template-columns: 1fr; } }
+
 .app-root {
   --admin-sidebar-width: 204px;
   --admin-sidebar-rail-width: 56px;
@@ -31,8 +51,8 @@
   --shadow: 0 4px 14px rgb(15 23 42 / 5%), 0 1px 3px rgb(15 23 42 / 4%);
   --shadow-lg: 0 14px 38px rgb(15 23 42 / 11%), 0 3px 10px rgb(15 23 42 / 6%);
   --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
   font-family: Inter, 'Noto Sans Myanmar', system-ui, sans-serif;
   color: var(--color-text);
   min-height: 100vh;
@@ -16477,6 +16497,39 @@ html[data-theme='dark'] .app-root .receipt-spreadsheet thead th,
 html[data-theme='dark'] .app-root .receipt-spreadsheet tbody th {
   background: color-mix(in srgb, var(--color-soft) 82%, #334155);
   color: var(--color-text);
+}
+
+/* Flash-sale pricing uses the same editable worksheet as receiving. */
+.app-root .flash-sale-sheet {
+  min-width: 980px;
+}
+
+.app-root .flash-sale-sheet thead th:first-child { width: 44px; }
+.app-root .flash-sale-sheet thead th:nth-child(2) { width: 25%; }
+.app-root .flash-sale-sheet thead th:nth-child(3) { width: 12%; }
+.app-root .flash-sale-sheet thead th:nth-child(4) { width: 15%; }
+.app-root .flash-sale-sheet thead th:nth-child(5) { width: 11%; }
+.app-root .flash-sale-sheet thead th:nth-child(6) { width: 11%; }
+.app-root .flash-sale-sheet thead th:nth-child(7) { width: 12%; }
+.app-root .flash-sale-sheet thead th:last-child { width: 42px; }
+
+.app-root .flash-sale-sheet .flash-sale-sheet-value {
+  padding: 0 9px;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-root .flash-sale-sheet .flash-sale-sheet-price {
+  color: var(--color-primary);
+}
+
+.app-root .flash-sale-sheet .sheet-input[aria-invalid='true'] {
+  outline: 2px solid var(--color-danger);
+  outline-offset: -2px;
 }
 
 .app-root .receipt-entry-tabs {

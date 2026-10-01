@@ -32,11 +32,11 @@ const mix = (hex, target, weight) => {
 export const createUserTheme = (settings = {}) => {
     const primary = /^#[0-9a-fA-F]{6}$/.test(settings?.theme_color || '')
         ? settings.theme_color
-        : '#E91E63';
-    const secondary = '#FF5C8A';
-    const background = '#FFFDF8';
+        : '#087f74';
+    const background = '#f4f7f7';
     const primaryLight = mix(primary, '#ffffff', 0.72);
     const primaryDark = mix(primary, '#000000', 0.22);
+    const secondary = primaryDark;
 
     return createTheme({
     storefront: {
@@ -67,18 +67,18 @@ export const createUserTheme = (settings = {}) => {
             paper: '#FFFFFF',
         },
         text: {
-            primary: '#2D3436',
-            secondary: '#636E72',
+            primary: '#172033',
+            secondary: '#69768a',
         },
     },
     shape: {
-        borderRadius: 6,
+        borderRadius: 8,
     },
     // Keep the granular unit for legacy screens. New storefront layout spacing
     // uses the explicit `storefront` tokens above so intent stays obvious.
     spacing: 4,
     typography: {
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Myanmar", Arial, sans-serif',
+        fontFamily: 'Inter, "Noto Sans Myanmar", system-ui, sans-serif',
         h1: { fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.12 },
         h2: { fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.14 },
         h3: { fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.015em', lineHeight: 1.18 },
@@ -106,8 +106,9 @@ export const createUserTheme = (settings = {}) => {
                     padding: '10px 16px',
                     minHeight: 44,
                     boxShadow: 'none',
+                    transition: 'background-color 160ms ease, border-color 160ms ease, transform 160ms ease',
                     '&:hover': {
-                        boxShadow: `0px 2px 8px ${mix(primary, '#ffffff', 0.55)}66`,
+                        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.09)',
                     },
                 },
                 containedPrimary: {
@@ -129,9 +130,9 @@ export const createUserTheme = (settings = {}) => {
         MuiCard: {
             styleOverrides: {
                 root: {
-                    borderRadius: 12,
-                    boxShadow: '0 12px 34px rgba(36, 27, 24, 0.07)',
-                    border: '1px solid rgba(0, 0, 0, 0.08)',
+                    borderRadius: 10,
+                    boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+                    border: '1px solid rgba(15, 23, 42, 0.1)',
                     overflow: 'hidden',
                 },
             },
@@ -140,6 +141,9 @@ export const createUserTheme = (settings = {}) => {
             styleOverrides: {
                 root: {
                     minWidth: 0,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    '@media (min-width: 600px)': { paddingLeft: 24, paddingRight: 24 },
                 },
             },
         },
@@ -154,6 +158,9 @@ export const createUserTheme = (settings = {}) => {
                     minHeight: 46,
                     borderRadius: 8,
                     backgroundColor: '#FFFFFF',
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: primary,
+                    },
                 },
                 input: {
                     padding: '11px 14px',
@@ -177,6 +184,7 @@ export const createUserTheme = (settings = {}) => {
             styleOverrides: {
                 root: {
                     backgroundImage: 'none',
+                    borderRadius: 10,
                 },
             },
         },
@@ -219,6 +227,9 @@ export const createUserTheme = (settings = {}) => {
                     fontWeight: 600,
                 },
             },
+        },
+        MuiAlert: {
+            styleOverrides: { root: { borderRadius: 8, alignItems: 'center' } },
         },
         MuiPaginationItem: {
             styleOverrides: {

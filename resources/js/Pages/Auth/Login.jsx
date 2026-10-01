@@ -135,7 +135,7 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                     }}
                 >
                     <Box sx={{ display: { xs: 'none', md: 'block' }, maxWidth: 540 }}>
-                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 4 }}>
+                        <Stack direction="row" spacing={1.25}  sx={{ alignItems: "center", ...({ mb: 4 }) }}>
                             <Box
                                 sx={{
                                     width: 42,
@@ -200,15 +200,15 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                     key={label}
                                     direction="row"
                                     spacing={0.75}
-                                    alignItems="center"
-                                    sx={{
+
+                                    sx={{ alignItems: "center", ...({
                                         px: 1.5,
                                         py: 1.1,
                                         borderRadius: 1.5,
                                         border: `1px solid ${alpha('#fff', 0.16)}`,
                                         bgcolor: alpha('#fff', 0.07),
                                         color: alpha('#fff', 0.9),
-                                    }}
+                                    }) }}
                                 >
                                     <Icon sx={{ fontSize: 18, color: musicColors.amber }} />
                                     <Typography variant="caption" sx={{ fontWeight: 700 }}>
@@ -237,7 +237,7 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                             backdropFilter: 'blur(20px)',
                         }}
                     >
-                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ textAlign: 'left', mb: 2.5 }}>
+                        <Stack direction="row"  spacing={1.5} sx={{ alignItems: "center", ...({ textAlign: 'left', mb: 2.5 }) }}>
                             <Box
                                 sx={{
                                     width: 52,
@@ -289,15 +289,15 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                     onChange={(e) => setData('email', e.target.value)}
                                     error={!!errors.email}
                                     helperText={errors.email}
-                                    InputProps={{
+
+                                    sx={adminFieldSx}
+                                 slotProps={{ input: {
                                         startAdornment: (
                                             <InputAdornment position="start">
                                                 <EmailIcon sx={{ color: musicColors.rosin, opacity: 0.78 }} />
                                             </InputAdornment>
                                         ),
-                                    }}
-                                    sx={adminFieldSx}
-                                />
+                                    } }}/>
 
                                 <TextField
                                     fullWidth
@@ -311,7 +311,9 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                     onChange={(e) => setData('password', e.target.value)}
                                     error={!!errors.password}
                                     helperText={errors.password}
-                                    InputProps={{
+
+                                    sx={adminFieldSx}
+                                 slotProps={{ input: {
                                         startAdornment: (
                                             <InputAdornment position="start">
                                                 <LockIcon sx={{ color: musicColors.rosin, opacity: 0.78 }} />
@@ -329,9 +331,7 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                                 </IconButton>
                                             </InputAdornment>
                                         ),
-                                    }}
-                                    sx={adminFieldSx}
-                                />
+                                    } }}/>
 
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, minHeight: 36 }}>
                                     <FormControlLabel
@@ -406,10 +406,9 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                 <Paper elevation={0} sx={{
                     p: { xs: '24px', sm: '28px' },
                     borderRadius: 2,
-                    bgcolor: 'rgba(255, 253, 248, 0.92)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(244, 194, 103, 0.26)',
-                    boxShadow: '0 24px 70px rgba(23,19,18,0.24)',
+                    bgcolor: 'background.paper',
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                    boxShadow: '0 12px 32px rgba(15,23,42,0.12)',
                     textAlign: 'center',
                 }}>
                     {app_settings?.logo_url && <Box component="img" src={app_settings.logo_url} alt={appName} sx={{ width: 56, height: 56, objectFit: 'contain', mx: 'auto', mb: '16px', borderRadius: 2, bgcolor: 'white' }} />}
@@ -441,15 +440,15 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                 onChange={(e) => setData('email', e.target.value)}
                                 error={!!errors.email}
                                 helperText={errors.email}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <EmailIcon color="primary" sx={{ opacity: 0.7 }} />
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <TextField
                                 fullWidth
@@ -459,7 +458,9 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                 onChange={(e) => setData('password', e.target.value)}
                                 error={!!errors.password}
                                 helperText={errors.password}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <LockIcon color="primary" sx={{ opacity: 0.7 }} />
@@ -472,9 +473,7 @@ export default function Login({ status, error, isAdminLogin = false, googleAuthA
                                             </IconButton>
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <FormControlLabel

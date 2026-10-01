@@ -320,33 +320,31 @@ export default function UserChatShow() {
 
     return (
         <Box
+            className="user-storefront"
             sx={{
                 height: '100dvh',
                 maxHeight: '100dvh',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                background: 'background.default',
+                bgcolor: 'background.default',
                 /* Reserve space for fixed MobileBottomNav + safe area + small gap so composer is never hidden */
                 pb: {
                     xs: `calc(${MOBILE_BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px) + 10px)`,
-                    md: 1.5,
+                    md: '24px',
                 },
             }}
         >
             <UserBrandHead title={t('Support Chat')} />
             <Navbar />
 
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', maxWidth: 840, mx: 'auto' }}>
-                <Box sx={{ px: { xs: 1, sm: 1.5 }, pt: { xs: 1, md: 1.25 }, pb: 0.75, flexShrink: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', maxWidth: 1000, mx: 'auto', px: { xs: '16px', sm: '24px' } }}>
+                <Box sx={{ pt: { xs: '16px', md: '24px' }, pb: '16px', flexShrink: 0 }}>
                     <BackLink
                         href={routeWithBase('/profile', app_base)}
                         sx={{
-                            mb: 0.75,
-                            py: 0.3,
-                            px: 0.4,
-                            pr: 0.9,
-                            fontSize: '0.68rem',
+                            mb: '16px',
+                            fontSize: '0.8125rem',
                             '& .MuiButton-startIcon span': {
                                 width: 20,
                                 height: 20,
@@ -362,20 +360,19 @@ export default function UserChatShow() {
                     <Paper
                         elevation={0}
                         sx={{
-                            px: { xs: 1, sm: 1.1 },
-                            py: { xs: 0.75, sm: 0.85 },
-                            borderRadius: 1.5,
+                            p: { xs: '16px', sm: '20px' },
+                            borderRadius: '10px',
                             border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
                             background: '#fff',
-                            boxShadow: `0 8px 22px ${alpha(theme.palette.primary.main, 0.06)}`,
+                            boxShadow: 'none',
                         }}
                     >
-                        <Stack direction="row" spacing={0.85} alignItems="center">
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: '12px' }}>
                             <Avatar
                                 sx={{
-                                    width: { xs: 30, sm: 32 },
-                                    height: { xs: 30, sm: 32 },
-                                    background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+                                    width: 44,
+                                    height: 44,
+                                    bgcolor: 'primary.main',
                                     fontWeight: 700,
                                     fontSize: '0.82rem',
                                 }}
@@ -387,12 +384,12 @@ export default function UserChatShow() {
                                     {appName} Support
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.75rem', lineHeight: 1.3 }}>
-                                    {counterpart?.name ? `${counterpart.name} • ${counterpart.role || 'support'}` : 'Connecting you with our team…'}
+                                    {overviewQuery.isError ? t('Connection unavailable') : counterpart?.name ? `${counterpart.name} • ${counterpart.role || 'support'}` : t('Chat with our support team')}
                                 </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'right' }}>
                                 <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.75rem' }}>
-                                    {pollQuery.isFetching ? t('Updating...') : t('Live')}
+                                    {overviewQuery.isError || pollQuery.isError ? t('Offline') : overviewQuery.isLoading ? t('Connecting...') : pollQuery.isFetching ? t('Updating...') : t('Live')}
                                 </Typography>
                             </Box>
                         </Stack>
@@ -404,9 +401,7 @@ export default function UserChatShow() {
                     sx={{
                         flex: 1,
                         minHeight: 0,
-                        mx: { xs: 1, sm: 1.5 },
-                        mb: { xs: 0, md: 1.25 },
-                        borderRadius: 1.75,
+                        borderRadius: '10px',
                         overflow: 'hidden',
                         border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
                         background: '#fff',
@@ -423,9 +418,12 @@ export default function UserChatShow() {
                                 <Skeleton variant="rounded" height={36} sx={{ borderRadius: 1.25, alignSelf: 'flex-end', width: '70%' }} />
                             </Stack>
                         ) : overviewQuery.isError ? (
-                            <Alert severity="error" sx={{ m: 2 }}>
-                                {t('Could not load chat. Please refresh the page.')}
-                            </Alert>
+                            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: '24px', gap: '16px', textAlign: 'center' }}>
+                                <ErrorOutlineOutlined sx={{ fontSize: 44, color: 'text.secondary' }} />
+                                <Typography sx={{ fontWeight: 700 }}>{t('Could not load chat.')}</Typography>
+                                <Typography variant="body2" color="text.secondary">{t('Please try again to reconnect with our support team.')}</Typography>
+                                <Button variant="contained" onClick={() => overviewQuery.refetch()} disabled={overviewQuery.isFetching}>{t(overviewQuery.isFetching ? 'Connecting...' : 'Retry')}</Button>
+                            </Box>
                         ) : (
                             <>
                                 <Box
@@ -436,9 +434,8 @@ export default function UserChatShow() {
                                         minHeight: 0,
                                         overflowY: 'auto',
                                         WebkitOverflowScrolling: 'touch',
-                                        px: { xs: 0.85, sm: 1.1 },
-                                        py: { xs: 0.9, sm: 1 },
-                                        background: 'background.default',
+                                        p: { xs: '16px', sm: '24px' },
+                                        bgcolor: 'background.default',
                                     }}
                                 >
                                     {hasMoreOlder && (
@@ -455,7 +452,8 @@ export default function UserChatShow() {
                                         </Box>
                                     )}
 
-                                    <Stack spacing={0.55}>
+                                    {messages.length === 0 && <Box sx={{ py: '40px', textAlign: 'center' }}><Typography sx={{ fontWeight: 700 }}>{t('How can we help?')}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: '8px' }}>{t('Send a message about products, orders or payments.')}</Typography></Box>}
+                                    <Stack spacing="12px">
                                         {messages.map((m) => {
                                             const mine = m.sender?.id === auth.user.id;
                                             const time = new Date(m.created_at).toLocaleTimeString([], {
@@ -530,7 +528,7 @@ export default function UserChatShow() {
                                                             </Typography>
                                                         ) : null}
 
-                                                        <Stack direction="row" spacing={0.45} alignItems="center" justifyContent="flex-end" sx={{ mt: 0.3 }}>
+                                                        <Stack direction="row" spacing={0.45}   sx={{ alignItems: "center", justifyContent: "flex-end", ...({ mt: 0.3 }) }}>
                                                             <Typography
                                                                 variant="caption"
                                                                 sx={{
@@ -569,7 +567,7 @@ export default function UserChatShow() {
                                     </Stack>
 
                                     {typingOn && (
-                                        <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mt: 0.85, opacity: 0.85 }}>
+                                        <Stack direction="row" spacing={0.6}  sx={{ alignItems: "center", ...({ mt: 0.85, opacity: 0.85 }) }}>
                                             <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.65rem' }}>
                                                 Support is typing
                                             </Typography>
@@ -662,14 +660,13 @@ export default function UserChatShow() {
                                         zIndex: 6,
                                         borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
                                         background: '#fff',
-                                        px: { xs: 0.75, sm: 0.95 },
-                                        py: { xs: 0.65, sm: 0.75 },
-                                        pb: { xs: 'calc(7px + env(safe-area-inset-bottom, 0px))', sm: 0.8 },
+                                        p: { xs: '12px', sm: '16px' },
                                     }}
                                 >
-                                    <Stack direction="row" spacing={0.55} alignItems="center">
+                                    <Stack direction="row" sx={{ alignItems: 'center', gap: '8px' }}>
                                         <IconButton
                                             component="label"
+                                            disabled={busy}
                                             sx={{
                                                 width: 44,
                                                 height: 44,
@@ -703,7 +700,7 @@ export default function UserChatShow() {
                                             value={draft}
                                             onChange={(e) => setDraft(e.target.value)}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                                                     e.preventDefault();
                                                     sendNow();
                                                 }
@@ -742,11 +739,11 @@ export default function UserChatShow() {
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+                                                bgcolor: 'primary.main',
                                                 color: '#fff',
-                                                boxShadow: `0 8px 18px ${alpha(theme.palette.primary.main, 0.24)}`,
+                                                boxShadow: 'none',
                                                 '&:hover': {
-                                                    background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.dark} 100%)`,
+                                                    bgcolor: 'primary.dark',
                                                 },
                                                 '&.Mui-disabled': {
                                                     background: 'rgba(0,0,0,0.08)',

@@ -50,7 +50,7 @@ const purchaseSteps = [
     ['01', 'Find the right product', 'Browse categories, search by name, and use filters or sorting to narrow the catalog.'],
     ['02', 'Choose the selling unit', 'Open the product page, review specifications, then choose the unit and quantity you want to buy.'],
     ['03', 'Review your cart', 'Confirm each option, quantity, current price, promotion, and subtotal before checkout.'],
-    ['04', 'Pay and track', 'Enter delivery details, upload payment proof, place the order, and follow its status in My orders.'],
+    ['04', 'Submit payment and track your order', 'Enter delivery details, transfer to a listed payment account, upload proof, and place your order. The store verifies payment before processing your order.'],
 ];
 
 const faqs = [
@@ -104,7 +104,7 @@ function GuideTopic({ topic, t }) {
                 scrollMarginTop: '104px',
             }}
         >
-            <Stack direction="row" spacing="12px" alignItems="flex-start">
+            <Stack direction="row" spacing="12px"  sx={{ alignItems: "flex-start", ...({}) }}>
                 <Box
                     sx={{
                         width: 40,
@@ -131,7 +131,7 @@ function GuideTopic({ topic, t }) {
 
             <Stack spacing="10px" sx={{ mt: '16px' }}>
                 {topic.items.map((item) => (
-                    <Stack key={item} direction="row" spacing="9px" alignItems="flex-start">
+                    <Stack key={item} direction="row" spacing="9px"  sx={{ alignItems: "flex-start", ...({}) }}>
                         <CheckCircleOutlineOutlined sx={{ color: colors.rosin, fontSize: 17, mt: '2px', flexShrink: 0 }} />
                         <Typography variant="body2" sx={{ lineHeight: 1.55 }}>
                             {t(item)}
@@ -167,14 +167,14 @@ export default function BuyingGuide() {
     const topics = useMemo(() => [
         {
             id: 'choose',
-            title: 'Choose an instrument with confidence',
-            summary: 'Start with how and where you will use it, then compare the details that affect comfort, sound, and compatibility.',
+            title: 'Find and compare products',
+            summary: 'Browse the products published by the store and check their details before adding them to your cart.',
             icon: MusicNoteOutlined,
             keywords: 'browse category beginner practice stage studio specifications dimensions accessories compatibility reviews',
             items: [
-                'Choose your main use first: learning, home practice, live performance, recording, teaching, or a gift.',
+                'Browse Shop or Categories, then open a product to check its description, available selling units and current price.',
                 'Use categories, catalog search, filters, and sorting to compare suitable products without opening every item.',
-                'Read the description and specifications for dimensions, materials, connections, power needs, included accessories, and intended player level.',
+                'Check the product description and any specifications provided by the store. Ask support if a detail you need is missing.',
                 'For electronic gear, check that ports, voltage, cables, adapters, software, and other equipment are compatible before ordering.',
                 'Use customer reviews as extra context, and ask support when a technical detail is missing or unclear.',
             ],
@@ -182,16 +182,16 @@ export default function BuyingGuide() {
         },
         {
             id: 'options',
-            title: 'Variants, SKUs, stock, and pre-orders',
-            summary: 'The exact selectable option controls its price, stock, and quantity—not only the product name.',
+            title: 'Selling units, stock and flash sales',
+            summary: 'Choose an available selling unit, such as Piece or Box. Its price and stock limit determine what you can order.',
             icon: TuneOutlined,
             keywords: 'selling unit conversion stock quantity availability flash sale',
             items: [
-                'On the product page, select the exact model, finish, size, color, bundle, or other option shown in the selector.',
-                'Check the price and available stock beside that option. Different SKUs of the same product may have different prices or availability.',
-                'Set a quantity within the available limit. If the item is marked Pre-order, its fulfillment timing can differ from in-stock items.',
-                'Flash-sale prices apply only while the promotion is active and may apply to selected SKUs rather than every option.',
-                'Review your selected option again in the add-to-cart dialog and cart before continuing.',
+                'Select one of the selling units offered on the product page. Check the displayed unit conversion and price.',
+                'Each selling unit has its own price. Stock availability is calculated from the inventory available to the online shop.',
+                'Choose a quantity within the available stock limit. An unavailable selling unit cannot be checked out.',
+                'Flash-sale discounts apply only to eligible items while the promotion is active. Checkout rechecks the current promotional price.',
+                'Review the selling unit, quantity, original price and any flash-sale savings in your cart and checkout summary.',
             ],
             note: 'If an option becomes unavailable before checkout, return to the product page and choose an available alternative.',
         },
@@ -234,11 +234,13 @@ export default function BuyingGuide() {
             items: [
                 'Open My orders from the account menu or mobile navigation, then select an order to see its full details.',
                 'Payment statuses are Awaiting verification, Paid, or Rejected. A rejection reason appears on the order detail page when provided.',
-                'Fulfillment moves through Pending, Processing, Shipped, and Delivered. Cancelled orders stop progressing.',
+                'A new online order starts as Pending with payment Awaiting verification. Store staff check the uploaded transfer proof.',
+                'When staff confirm payment, the order becomes Paid and Processing and inventory is deducted. Staff then update it to Shipped and Delivered.',
+                'If staff reject payment, the order is cancelled. Read any rejection reason on the order detail page and contact support before paying again.',
                 'The order page keeps the receiver details, items, totals, payment screenshot, and current progress together.',
                 'When contacting support, provide the order number so the team can find the correct purchase quickly.',
             ],
-            note: 'If a payment is rejected, review the reason before making another payment or placing the replacement order.',
+            note: 'Payment status and delivery status are separate. Uploading a screenshot does not automatically confirm payment or dispatch the order.',
         },
         {
             id: 'account',
@@ -310,10 +312,10 @@ export default function BuyingGuide() {
                                 {t('Customer help center')}
                             </Typography>
                             <Typography component="h1" variant="h3" sx={{ fontSize: { xs: '1.65rem', sm: '2rem', md: '2.25rem' }, fontWeight: 700, lineHeight: 1.15 }}>
-                                {t('Buying Guide & Store Help')}
+                                {t('Shopping & Order Help')}
                             </Typography>
                             <Typography variant="body1" sx={{ mt: '10px', maxWidth: 680, color: 'rgba(255,255,255,0.84)', lineHeight: 1.65 }}>
-                                {t(`Everything you need to choose the right gear, order safely, submit payment, track delivery, and use your ${appName} account.`)}
+                                {t(`Learn how to shop at ${appName}, choose selling units, use discounts, submit transfer proof and track your order after the store verifies payment.`)}
                             </Typography>
                             <Stack direction={{ xs: 'column', sm: 'row' }} spacing="10px" sx={{ mt: '20px' }}>
                                 <Button
@@ -379,7 +381,7 @@ export default function BuyingGuide() {
                             </Paper>
 
                             <Paper elevation={0} sx={{ ...sectionShellSxForTheme(theme), p: '14px', mt: '12px' }}>
-                                <Stack direction="row" spacing="8px" alignItems="center">
+                                <Stack direction="row" spacing="8px"  sx={{ alignItems: "center", ...({}) }}>
                                     <LockOutlined sx={{ fontSize: 18, color: colors.rosin }} />
                                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t('Shop safely')}</Typography>
                                 </Stack>
@@ -396,11 +398,11 @@ export default function BuyingGuide() {
                                 placeholder={t('Search this guide: stock, payment, delivery...')}
                                 aria-label={t('Search buying guide')}
                                 fullWidth
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start"><Search color="primary" /></InputAdornment>,
-                                }}
+
                                 sx={{ mb: '14px', '& .MuiOutlinedInput-root': { bgcolor: colors.sheet, borderRadius: 2 } }}
-                            />
+                             slotProps={{ input: {
+                                    startAdornment: <InputAdornment position="start"><Search color="primary" /></InputAdornment>,
+                                } }}/>
 
                             <Stack spacing="14px">
                                 {visibleTopics.map((topic) => <GuideTopic key={topic.id} topic={topic} t={t} />)}
@@ -417,7 +419,7 @@ export default function BuyingGuide() {
 
                             {!normalizedQuery && (
                                 <Paper component="section" id="faq" elevation={0} sx={{ ...sectionShellSxForTheme(theme), mt: '14px', p: { xs: '16px', sm: '20px' }, scrollMarginTop: '104px' }}>
-                                    <Stack direction="row" spacing="10px" alignItems="center" sx={{ mb: '8px' }}>
+                                    <Stack direction="row" spacing="10px"  sx={{ alignItems: "center", ...({ mb: '8px' }) }}>
                                         <HelpOutlineOutlined sx={{ color: colors.rosin }} />
                                         <Box>
                                             <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.08rem' }, fontWeight: 700 }}>{t('Common questions')}</Typography>
@@ -438,12 +440,12 @@ export default function BuyingGuide() {
                             )}
 
                             <Paper elevation={0} sx={{ mt: '14px', p: { xs: '18px 16px', sm: '20px' }, borderRadius: 2, border: `1px solid ${alpha(colors.rosin, 0.18)}`, bgcolor: alpha(colors.rosin, 0.07) }}>
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing="14px" justifyContent="space-between" alignItems={{ sm: 'center' }}>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing="14px"   sx={{ justifyContent: "space-between", alignItems: { sm: 'center' }, ...({}) }}>
                                     <Box>
                                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Still need help?')}</Typography>
                                         <Typography variant="body2" color="text.secondary" sx={{ mt: '3px' }}>{t('The shop team can help with a product detail, payment review, or an existing order.')}</Typography>
                                     </Box>
-                                    <Stack direction="row" spacing="8px" flexWrap="wrap">
+                                    <Stack direction="row" spacing="8px"  sx={{ flexWrap: "wrap", ...({}) }}>
                                         {auth?.user && (
                                             <Button component={Link} href={routeWithBase('/orders', app_base)} variant="outlined" startIcon={<ReceiptLongOutlined />}>
                                                 {t('My orders')}

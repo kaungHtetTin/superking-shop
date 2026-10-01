@@ -14,6 +14,7 @@ use App\Models\ProductUnit;
 use App\Models\ProductPriceType;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\FlashSalePricingService;
 use App\Services\POS\PosCheckoutService;
 use App\Services\POS\PosShiftService;
 use Illuminate\Http\Request;
@@ -168,7 +169,7 @@ class PosController extends Controller
         return response()->json(['message' => 'Shift closed successfully.', 'shift' => $closed]);
     }
 
-    public function products(Request $request)
+    public function products(Request $request, FlashSalePricingService $flashSales)
     {
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
         $validated = $request->validate([
@@ -232,8 +233,9 @@ class PosController extends Controller
             ->orderBy('sort_order')
             ->offset(($page - 1) * $perPage)
             ->limit($perPage + 1)
-            ->get()
-            ->map(function (ProductUnit $unit) {
+            ->get();
+        $saleItems = $flashSales->activeItemsForUnitIds($products->flatMap(fn (ProductUnit $unit) => $unit->product->units->pluck('id'))->unique()->all());
+        $products = $products->map(function (ProductUnit $unit) use ($flashSales, $saleItems) {
                 $balance = $unit->product->inventoryBalances->first();
                 $availableBaseQuantity = (float) ($balance?->available_qty ?? 0);
                 $factor = max((float) $unit->conversion_factor, 0.000001);
@@ -271,10 +273,12 @@ class PosController extends Controller
                     'image_path' => $unit->product->primaryImage?->image_path,
                     'prices' => $unitPrices,
                     'price' => (float) ($unitPrices->firstWhere('price_type', 'retail')['price'] ?? 0),
+                    'flash_sale' => $flashSales->posOffer($saleItems->get($unit->id), (float) ($unitPrices->firstWhere('price_type', 'retail')['price'] ?? 0)),
                     'available_base_qty' => $availableBaseQuantity,
                     'available_qty' => floor((($availableBaseQuantity / $factor) + 0.0000001) * 10000) / 10000,
-                    'unit_options' => $unit->product->units->map(function (ProductUnit $option) use ($availableBaseQuantity, $effectivePrices) {
+                    'unit_options' => $unit->product->units->map(function (ProductUnit $option) use ($availableBaseQuantity, $effectivePrices, $flashSales, $saleItems) {
                         $optionFactor = max((float) $option->conversion_factor, 0.000001);
+                        $optionPrices = $effectivePrices($option);
 
                         return [
                             'id' => $option->id,
@@ -284,7 +288,8 @@ class PosController extends Controller
                             'is_base' => $option->is_base,
                             'is_default_selling' => $option->is_default_selling,
                             'available_qty' => floor((($availableBaseQuantity / $optionFactor) + 0.0000001) * 10000) / 10000,
-                            'prices' => $effectivePrices($option),
+                            'prices' => $optionPrices,
+                            'flash_sale' => $flashSales->posOffer($saleItems->get($option->id), (float) ($optionPrices->firstWhere('price_type', 'retail')['price'] ?? 0)),
                         ];
                     })->values(),
                     'sold_qty' => (float) ($unit->pos_sold_qty ?? 0),
@@ -361,19 +366,27 @@ class PosController extends Controller
         ])], 201);
     }
 
-    public function prices(Request $request)
+    public function prices(Request $request, FlashSalePricingService $flashSales)
     {
         $validated = $request->validate(['unit_ids' => ['required', 'array', 'max:200'], 'unit_ids.*' => ['integer']]);
-        return ProductUnit::whereIn('id', $validated['unit_ids'])->where('is_active', true)
+        $units = ProductUnit::whereIn('id', $validated['unit_ids'])->where('is_active', true)
             ->whereHas('product', fn ($q) => $q->where('status', 'active')->where('is_active', true))
-            ->with(['prices', 'product.baseUnit.prices'])->get()->map(fn ($unit) => [
-                'id' => $unit->id,
-                'prices' => $unit->prices->map(function ($price) use ($unit) {
+            ->with(['prices', 'product.baseUnit.prices'])->get();
+        $saleItems = $flashSales->activeItemsForUnitIds($units->pluck('id')->all());
+
+        return $units->map(function (ProductUnit $unit) use ($flashSales, $saleItems) {
+            $prices = $unit->prices->map(function ($price) use ($unit) {
                     $base = (float) ($unit->product->baseUnit?->priceFor($price->price_type)?->price ?? 0);
                     $amount = $unit->hasUnavailableAutomaticPrice($price->price_type) ? 0 : ((float) $price->price > 0 ? (float) $price->price : round($base * (float) $unit->conversion_factor, 2));
                     return ['price_type' => $price->price_type, 'price' => $amount, 'display_name' => $price->typeDefinition?->pricingRule?->name ?? $price->price_type];
-                })->values(),
-            ])->values();
+                })->values();
+
+            return [
+                'id' => $unit->id,
+                'prices' => $prices,
+                'flash_sale' => $flashSales->posOffer($saleItems->get($unit->id), (float) ($prices->firstWhere('price_type', 'retail')['price'] ?? 0)),
+            ];
+        })->values();
     }
 
     public function checkout(Request $request, PosCheckoutService $service)
@@ -390,6 +403,7 @@ class PosController extends Controller
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:9999'],
             'items.*.price_type' => ['required', 'string', 'max:60'],
             'items.*.expected_unit_price' => ['sometimes', 'numeric', 'min:0'],
+            'items.*.use_flash_sale' => ['sometimes', 'boolean'],
             'items.*.foc_quantity' => ['sometimes', 'numeric', 'min:0', 'max:9999'],
             'items.*.foc_product_unit_id' => ['nullable', 'integer', 'exists:product_units,id'],
             'discount_type' => ['nullable', 'string', Rule::in(['percent', 'amount'])],
@@ -398,6 +412,7 @@ class PosController extends Controller
             'credit_deposit_method' => ['nullable', 'string', Rule::in(['cash', 'mmqr'])],
             'amount_tendered' => ['required', 'numeric', 'min:0'],
             'payment_details' => ['nullable', 'array'],
+            'payment_details.reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 

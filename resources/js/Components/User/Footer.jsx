@@ -95,7 +95,7 @@ export default function Footer() {
                 color: 'white',
                 py: { xs: '24px', md: '32px' },
                 mt: 'auto',
-                borderTop: `1px solid ${musicColors.amber}`,
+                borderTop: `1px solid ${musicColors.rosin}`,
             }}
         >
             <Container maxWidth="lg">
@@ -107,7 +107,7 @@ export default function Footer() {
                     }}
                 >
                     <Box>
-                        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1 }}>
+                        <Stack direction="row" spacing={1.25}  sx={{ alignItems: "center", ...({ mb: 1 }) }}>
                             {app_settings?.logo_url && (
                                 <Box
                                     component="img"
@@ -118,7 +118,7 @@ export default function Footer() {
                                         height: 32,
                                         objectFit: 'contain',
                                         borderRadius: 1,
-                                        bgcolor: musicColors.sheet,
+                                        bgcolor: musicColors.smoke,
                                     }}
                                 />
                             )}
@@ -130,8 +130,8 @@ export default function Footer() {
                                         display: 'grid',
                                         placeItems: 'center',
                                         borderRadius: 1.5,
-                                        bgcolor: musicColors.amber,
-                                        color: musicColors.ink,
+                                        bgcolor: 'rgba(255,255,255,0.14)',
+                                        color: 'white',
                                     }}
                                 >
                                     <MusicNote fontSize="small" />
@@ -222,8 +222,8 @@ export default function Footer() {
                     )}
                 </Box>
 
-                <Divider sx={{ my: { xs: '20px', md: '24px' }, bgcolor: 'rgba(244,194,103,0.22)' }} />
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ opacity: 0.72, mb: 0.75 }}>
+                <Divider sx={{ my: { xs: '20px', md: '24px' }, bgcolor: 'rgba(255,255,255,0.2)' }} />
+                <Stack direction="row" spacing={1}   sx={{ alignItems: "center", justifyContent: "center", ...({ opacity: 0.72, mb: 0.75 }) }}>
                     <Headphones sx={{ fontSize: 15 }} />
                     <Typography variant="caption" sx={{ fontWeight: 700 }}>
                         {t('storefront.footer_note', 'Built for musicians, teachers, producers, and first-time players.')}

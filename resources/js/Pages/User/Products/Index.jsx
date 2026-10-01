@@ -208,16 +208,16 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                     placeholder={t('Search guitars, keyboards, microphones...')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    InputProps={{
+
+                    sx={{ flex: 1 }}
+                 slotProps={{ input: {
                         startAdornment: (
                             <InputAdornment position="start">
                                 <Search fontSize="small" color="action" />
                             </InputAdornment>
                         ),
                         sx: { borderRadius: 1.5, bgcolor: musicColors.sheet },
-                    }}
-                    sx={{ flex: 1 }}
-                />
+                    } }}/>
                 <Button
                     type="submit"
                     variant="contained"
@@ -338,25 +338,25 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                 <Box
                     sx={{
                         ...sectionShellSx,
-                        p: { xs: '16px', sm: '20px' },
+                        p: { xs: '20px', sm: '24px' },
                         display: 'flex',
                         alignItems: 'flex-start',
                         justifyContent: 'space-between',
                         gap: 1.5,
-                        mb: 2.5,
+                        mb: '24px',
                     }}
                 >
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ ...eyebrowSxForTheme(theme), mb: 0.5 }}>
-                            {t('Instrument catalog')}
+                            {t('Product catalog')}
                         </Typography>
                         <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5, color: musicColors.ink, lineHeight: 1.1 }}>
                             {filters.category
                                 ? categories.find((c) => c.slug === filters.category)?.name
-                                : t('All instruments & gear')}
+                                : t('Shop all products')}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                            {t('Showing')} {products.from || 0}-{products.to || 0} {t('of')} {products.total} {t('items for players, studios, and stage setups.')}
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: '8px' }}>
+                            {t('Showing')} {products.from || 0}–{products.to || 0} {t('of')} {products.total} {t('products')}
                         </Typography>
                         {filters.flash_sale ? (
                             <Chip
@@ -408,8 +408,8 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                         <Stack
                             direction={{ xs: 'column', md: 'row' }}
                             spacing={1.5}
-                            alignItems={{ md: 'flex-start' }}
-                            sx={{ mb: '16px' }}
+
+                            sx={{ alignItems: { md: 'center' }, gap: '12px', mb: '24px', p: '20px', pt: '24px', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '10px' }}
                         >
                             <Box
                                 component="form"
@@ -429,16 +429,16 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                                     placeholder={t('Search guitars, keyboards, microphones...')}
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    InputProps={{
+
+                                    sx={{ flex: 1 }}
+                                 slotProps={{ input: {
                                         startAdornment: (
                                             <InputAdornment position="start">
                                                 <Search fontSize="small" color="action" />
                                             </InputAdornment>
                                         ),
                                         sx: { borderRadius: 1.5, bgcolor: musicColors.sheet },
-                                    }}
-                                    sx={{ flex: 1 }}
-                                />
+                                    } }}/>
                                 <Button
                                     type="submit"
                                     variant="contained"
@@ -576,7 +576,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                             flexDirection: { xs: 'column', sm: 'row' },
                         }}
                     >
-                        <Stack direction="row" spacing={1.25} alignItems="center">
+                        <Stack direction="row" spacing={1.25}  sx={{ alignItems: "center", ...({}) }}>
                             <Box
                                 sx={{
                                     width: 34,
@@ -624,7 +624,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                         ))}
                     </Box>
                 ) : (
-                    <Stack alignItems="center" justifyContent="center" sx={{ py: 12 }}>
+                    <Stack   sx={{ alignItems: "center", justifyContent: "center", ...({ py: 12 }) }}>
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                             {t('No products found')}
                         </Typography>
@@ -638,7 +638,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                 )}
 
                 {products.total > products.per_page && (
-                    <Stack alignItems="center" sx={{ mt: 4, mb: 8 }}>
+                    <Stack  sx={{ alignItems: "center", ...({ mt: 4, mb: 8 }) }}>
                         <Pagination
                             count={products.last_page}
                             page={products.current_page}

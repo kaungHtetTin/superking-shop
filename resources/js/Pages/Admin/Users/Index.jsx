@@ -15,9 +15,10 @@ const emptyForm = {
     password_confirmation: '',
     role: 'staff',
     status: 'active',
+    location_ids: [],
 };
 
-export default function UsersIndex({ users, filters, roles }) {
+export default function UsersIndex({ users, filters, roles, locations = [] }) {
     const { app_base, auth, flash } = usePage().props;
     const t = usePhraseTranslation();
     const currentUserId = auth?.user?.id;
@@ -65,6 +66,7 @@ export default function UsersIndex({ users, filters, roles }) {
             password_confirmation: '',
             role: user.role,
             status: user.status,
+            location_ids: (user.locations || []).map((location) => location.id),
         });
         setOpen(true);
     };
@@ -328,6 +330,20 @@ export default function UsersIndex({ users, filters, roles }) {
                                 </select>
                                 {form.errors.status && <small style={{ color: '#ce4444' }}>{form.errors.status}</small>}
                             </label>
+                            <fieldset className="form-field span-2" style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 14, minWidth: 0 }}>
+                                <legend>{t('Assigned branches')}</legend>
+                                {form.data.role === 'super_admin' ? <small className="muted">{t('All branches — Super Admin access is automatic and cannot be restricted to selected branches.')}</small> : <>
+                                <small className="muted">{t('Select one or more branches for this staff account. Role permissions still control available actions.')}</small>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 12, maxHeight: 200, overflowY: 'auto' }}>
+                                    {locations.map((location) => <label key={location.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <input type="checkbox" checked={form.data.location_ids.includes(location.id)} onChange={(e) => form.setData('location_ids', e.target.checked ? [...form.data.location_ids, location.id] : form.data.location_ids.filter((id) => id !== location.id))} />
+                                        <span>{location.name} <small className="muted">({location.code})</small></span>
+                                    </label>)}
+                                </div>
+                                {locations.length === 0 && <small className="muted">{t('No accessible active branches. Ask an administrator to configure branch access.')}</small>}
+                                {Object.entries(form.errors).filter(([key]) => key === 'location_ids' || key.startsWith('location_ids.')).map(([key, message]) => <small key={key} style={{ color: '#ce4444' }}>{message}</small>)}
+                                </>}
+                            </fieldset>
                             <label className="form-field span-2">
                                 <span>{editUser ? t('New password (optional)') : t('Password')}</span>
                                 <input

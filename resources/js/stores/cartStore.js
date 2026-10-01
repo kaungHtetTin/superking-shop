@@ -83,6 +83,7 @@ export const useCartStore = create(
                         ? {
                             ...item,
                             unitId: option.id,
+                            unavailable: false,
                             unitName: option.name || option.code,
                             price: Number(option.price || 0),
                             originalPrice: Number(option.originalPrice || option.price || 0),
@@ -99,11 +100,12 @@ export const useCartStore = create(
                     if (Number(item.productId) !== Number(productId)) return item;
 
                     const selected = unitOptions.find((unit) => Number(unit.id) === Number(item.unitId));
-                    if (!selected) return { ...item, unitOptions };
+                    if (!selected) return { ...item, unitOptions, unavailable: true };
 
                     const maxQty = Math.min(get().orderQtyCap, Number(selected.maxQty || 0));
                     return {
                         ...item,
+                        unavailable: maxQty <= 0,
                         unitOptions,
                         unitName: selected.name || selected.code,
                         price: Number(selected.price || 0),

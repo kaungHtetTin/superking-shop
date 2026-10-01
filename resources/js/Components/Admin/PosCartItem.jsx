@@ -3,7 +3,7 @@ import Icon from '@/Components/Admin/icons';
 import '@/styles/pos-cart.css';
 import { formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
-export default function PosCartItem({ line, money, t, exceedsStock, canFoc, onQuantity, onUnit, onFocQuantity, onFocUnit, onRemove }) {
+export default function PosCartItem({ line, money, t, exceedsStock, canFoc, canFlashSale, onFlashSale, onQuantity, onUnit, onFocQuantity, onFocUnit, onRemove }) {
     const [showFoc, setShowFoc] = useState(false);
     const [quantityDraft, setQuantityDraft] = useState(String(line.quantity ?? 1));
     const free = Number(line.foc_quantity || 0);
@@ -11,6 +11,8 @@ export default function PosCartItem({ line, money, t, exceedsStock, canFoc, onQu
     const freeUnit = units.find(unit => Number(unit.id) === Number(line.foc_product_unit_id));
     const selectedUnit = units.find(unit => Number(unit.id) === Number(line.product_unit_id)) || line;
     const quantityId = `cart-qty-${line.id}`;
+    const exceedsFlashSale = line.use_flash_sale && line.flash_sale?.remaining_qty !== null
+        && Number(line.quantity || 0) > Number(line.flash_sale?.remaining_qty);
 
     useEffect(() => {
         setQuantityDraft(String(line.quantity ?? 1));
@@ -47,7 +49,7 @@ export default function PosCartItem({ line, money, t, exceedsStock, canFoc, onQu
 
     const displayedQuantity = Number(quantityDraft || line.quantity || 1);
 
-    return <article className={`pos-item ${exceedsStock ? 'pos-item--error' : ''}`} aria-label={line.product_name || line.name}>
+    return <article className={`pos-item ${exceedsStock || exceedsFlashSale ? 'pos-item--error' : ''}`} aria-label={line.product_name || line.name}>
         <header className="pos-item__header">
             <div className="pos-item__identity"><strong>{line.product_name || line.name}</strong><small>{line.product_code || '—'}</small></div>
             <div className="pos-item__total"><small>{t('Total')}</small><strong>{money(Number(line.unit_price || 0) * Number(line.quantity || 0))}</strong></div>
@@ -83,7 +85,7 @@ export default function PosCartItem({ line, money, t, exceedsStock, canFoc, onQu
             <label className="pos-item__field"><span>{t('Unit')}</span><select value={line.product_unit_id} onChange={event => onUnit(event.target.value)}>{units.map(unit => <option key={unit.id} value={unit.id} disabled={Number(unit.available_qty) <= 0}>{unit.name} ({unit.code})</option>)}</select></label>
             <div className="pos-item__price"><small>{t('Unit price')}</small><span>{line.unit_price > 0 ? money(line.unit_price) : t('Price unavailable')}</span></div>
         </div>
-        <footer className="pos-item__footer"><small>{t('Available')}: {formatSelectedUnitQuantity(line.available_qty, selectedUnit, units)}</small>{canFoc && <div className="pos-item__free-actions">
+        <footer className="pos-item__footer"><div className="pos-item__availability"><small>{t('Available')}: {formatSelectedUnitQuantity(line.available_qty, selectedUnit, units)}</small>{canFlashSale && line.flash_sale && <label className="pos-item__flash-sale" title={line.flash_sale.name || t('Flash sale')}><input type="checkbox" checked={Boolean(line.use_flash_sale)} onChange={event => onFlashSale(event.target.checked)} />{t('Flash sale')} −{money(Number(line.flash_sale.original_price) - Number(line.flash_sale.sale_price))}</label>}</div>{canFoc && <div className="pos-item__free-actions">
             <button type="button" aria-expanded={showFoc} aria-controls={`cart-foc-${line.id}`} onClick={() => setShowFoc(!showFoc)}>{free > 0 ? `${t('Free')}: ${free} ${freeUnit?.name || line.unit_name} · ${t('Edit')}` : `+ ${t('FOC')}`} <span aria-hidden="true">{showFoc ? '−' : '+'}</span></button>
             {free > 0 && <button type="button" onClick={() => onFocQuantity(0, true)}>{t('Clear')}</button>}
         </div>}</footer>
@@ -92,5 +94,6 @@ export default function PosCartItem({ line, money, t, exceedsStock, canFoc, onQu
             <label className="pos-item__field"><span>{t('Free unit')}</span><select value={line.foc_product_unit_id || line.product_unit_id} onChange={event => onFocUnit(event.target.value)}>{units.map(unit => <option key={unit.id} value={unit.id} disabled={Number(unit.available_qty) <= 0}>{unit.name} ({unit.code})</option>)}</select></label>
         </div>}
         {exceedsStock && <small className="pos-item__error" role="alert">{t('Quantity including free items exceeds available stock.')}</small>}
+        {exceedsFlashSale && <small className="pos-item__error" role="alert">{t('Flash sale quantity exceeds the remaining offer limit.')}</small>}
     </article>;
 }

@@ -76,13 +76,14 @@ export default function CouponsIndex({ coupons, filters }) {
             if (event.key === 'Escape' && !form.processing) closeModal();
         };
         window.addEventListener('keydown', handleEscape);
-        window.requestAnimationFrame(() => {
-            const firstInvalid = document.querySelector('.admin-form-modal [aria-invalid="true"]');
-            (firstInvalid || codeInputRef.current)?.focus();
-        });
-
         return () => window.removeEventListener('keydown', handleEscape);
-    }, [open, form.errors, form.processing]);
+    }, [open, form.processing]);
+
+    useEffect(() => {
+        if (!open) return undefined;
+        const frame = window.requestAnimationFrame(() => codeInputRef.current?.focus());
+        return () => window.cancelAnimationFrame(frame);
+    }, [open]);
 
     const applyFilters = (patch) => {
         router.get(routeWithBase('/admin/coupons', app_base), { ...filters, ...patch }, { preserveState: true, replace: true });
@@ -122,7 +123,7 @@ export default function CouponsIndex({ coupons, filters }) {
 
     const setField = (field, value) => {
         form.setData(field, value);
-        form.clearErrors(field);
+        if (form.errors[field]) form.clearErrors(field);
     };
 
     const submit = (e) => {
@@ -132,7 +133,13 @@ export default function CouponsIndex({ coupons, filters }) {
             starts_at: localDateBoundaryToIso(data.starts_at),
             expires_at: localDateBoundaryToIso(data.expires_at, true),
         }));
-        const options = { preserveScroll: true, onSuccess: closeModal };
+        const options = {
+            preserveScroll: true,
+            onSuccess: closeModal,
+            onError: () => window.requestAnimationFrame(() => {
+                document.querySelector('.admin-form-modal [aria-invalid="true"]')?.focus();
+            }),
+        };
         if (editing) form.patch(routeWithBase(`/admin/coupons/${editing.id}`, app_base), options);
         else form.post(routeWithBase('/admin/coupons', app_base), options);
     };

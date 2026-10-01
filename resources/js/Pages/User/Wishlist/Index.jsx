@@ -87,7 +87,7 @@ export default function WishlistIndex() {
                     Continue shopping
                 </BackLink>
 
-                <Stack direction="row" alignItems="center" justifyContent="space-between" gap="12px" sx={{ mb: '16px' }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: '16px', mb: '24px' }}>
                     <Typography variant="h5" sx={{ fontWeight: 700 }}>Wishlist {visibleItems.length > 0 && `(${visibleItems.length})`}</Typography>
                     {visibleItems.length > 0 && <Button variant="outlined" onClick={moveAllToCart}>Move all to cart</Button>}
                 </Stack>
@@ -111,7 +111,7 @@ export default function WishlistIndex() {
                             ))}
                         </Box>
                         {pageCount > 1 && (
-                            <Stack alignItems="center" sx={{ mb: 4 }}>
+                            <Stack  sx={{ alignItems: "center", ...({ mb: 4 }) }}>
                                 <Pagination
                                     count={pageCount}
                                     page={page}

@@ -110,10 +110,10 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
 
     return (
         <Box
+            className="user-storefront"
             sx={{
                 ...storefrontBackgroundSx(theme),
                 minHeight: '100dvh',
-                pt: { xs: '20px', md: '32px' },
                 pb: {
                     xs: `calc(${MOBILE_BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px) + 12px)`,
                     md: 4,
@@ -121,9 +121,9 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
             }}
         >
             <Navbar />
-            <Container maxWidth="md" sx={{ pb: { xs: '28px', md: '40px' } }}>
+            <Container maxWidth="md" sx={{ pt: { xs: '20px', md: '28px' }, pb: { xs: '28px', md: '40px' } }}>
                 <Paper elevation={0} sx={{ p: { xs: '18px', sm: '24px' }, mb: { xs: '20px', md: '24px' }, borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: '0 12px 32px rgba(15,23,42,.05)' }}>
-                    <Stack direction="row" spacing={{ xs: '14px', sm: '18px' }} alignItems="center">
+                    <Stack direction="row" spacing={{ xs: '14px', sm: '18px' }}  sx={{ alignItems: "center", ...({}) }}>
                         <Avatar
                             src={auth?.user?.avatar ? storageUrl(auth.user.avatar, app_url) : undefined}
                             sx={{ width: { xs: 56, sm: 64 }, height: { xs: 56, sm: 64 }, bgcolor: 'primary.main', fontWeight: 700, border: '3px solid', borderColor: 'background.paper', boxShadow: '0 6px 18px rgba(15,23,42,.12)' }}
@@ -137,7 +137,7 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
                         </Box>
                     </Stack>
                 </Paper>
-                <Stack direction="row" alignItems="center" gap="12px" sx={{ mb: '16px', width: '100%' }} flexWrap="wrap">
+                <Stack direction="row"   sx={{ alignItems: "center", gap: "12px", flexWrap: "wrap", ...({ mb: '16px', width: '100%' }) }} >
                     <Typography variant="h5" sx={{ fontWeight: 700, flexShrink: 0 }}>
                         {t('My account')}
                     </Typography>

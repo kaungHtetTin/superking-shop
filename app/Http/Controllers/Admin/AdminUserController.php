@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Models\Location;
 use App\Models\User;
 use App\Notifications\StaffWelcomeNotification;
 use App\Services\AuditLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +20,7 @@ class AdminUserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::adminStaff()->with('roles:id,name,display_name,is_admin')->latest();
+        $query = User::adminStaff()->with(['roles:id,name,display_name,is_admin', 'locations:id,name,code,is_active'])->latest();
 
         if ($request->filled('q')) {
             $term = '%'.$request->string('q')->trim().'%';
@@ -58,6 +60,7 @@ class AdminUserController extends Controller
                 'status' => $request->string('status')->toString(),
             ],
             'roles' => $roles,
+            'locations' => Location::query()->whereIn('id', $request->user()->accessibleLocationIds())->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 
@@ -70,11 +73,14 @@ class AdminUserController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
             'role' => ['required', Rule::exists('roles', 'name')->where(fn ($query) => $query->where('is_admin', true))],
             'status' => ['required', Rule::in(['active', 'suspended'])],
+            'location_ids' => [Rule::excludeIf($request->input('role') === 'super_admin'), 'required', 'array', 'min:1'],
+            'location_ids.*' => ['required', 'integer', 'distinct', Rule::in($request->user()->accessibleLocationIds())],
         ]);
 
         $plainPassword = $validated['password'];
         $this->ensureRoleAssignmentAllowed($request->user(), $validated['role']);
 
+        $user = DB::transaction(function () use ($validated, $plainPassword) {
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -86,6 +92,9 @@ class AdminUserController extends Controller
             'email_verified_at' => now(),
         ]);
         $user->syncAdminRole($validated['role']);
+        $user->locations()->sync($validated['role'] === 'super_admin' ? [] : $validated['location_ids']);
+        return $user;
+        });
 
         try {
             $user->notify(new StaffWelcomeNotification($plainPassword));
@@ -94,6 +103,7 @@ class AdminUserController extends Controller
         }
         $auditLogService->record('staff.created', $user, [
             'role' => $user->role,
+            'location_ids' => $validated['location_ids'] ?? [],
         ], $request);
 
         return redirect()->back()->with('success', 'Staff account created successfully.');
@@ -111,6 +121,8 @@ class AdminUserController extends Controller
             'password' => ['nullable', 'confirmed', Password::min(8)],
             'role' => ['required', Rule::exists('roles', 'name')->where(fn ($query) => $query->where('is_admin', true))],
             'status' => ['required', Rule::in(['active', 'suspended'])],
+            'location_ids' => [Rule::excludeIf($request->input('role') === 'super_admin'), 'sometimes', 'required', 'array', 'min:1'],
+            'location_ids.*' => ['required', 'integer', 'distinct', Rule::in($actor->accessibleLocationIds())],
         ]);
 
         $this->ensureRoleAssignmentAllowed($actor, $validated['role'], $user);
@@ -147,21 +159,29 @@ class AdminUserController extends Controller
             $payload['password'] = Hash::make($validated['password']);
         }
 
-        $user->update($payload);
-        $user->syncAdminRole($validated['role']);
+        DB::transaction(function () use ($user, $payload, $validated) {
+            $user->update($payload);
+            $user->syncAdminRole($validated['role']);
+            if ($validated['role'] === 'super_admin') {
+                $user->locations()->sync([]);
+            } elseif (array_key_exists('location_ids', $validated)) {
+                $user->locations()->sync($validated['location_ids']);
+            }
+        });
         $auditLogService->record('staff.updated', $user, [
             'role' => $user->role,
             'status' => $user->status,
+            'location_ids' => $user->locations()->pluck('locations.id')->all(),
         ], $request);
 
         if ($request->expectsJson()) {
-            $updatedUser = $user->fresh()->load('roles:id,name,display_name,is_admin');
+            $updatedUser = $user->fresh()->load(['roles:id,name,display_name,is_admin', 'locations:id,name,code,is_active']);
             $updatedUser->setAttribute('role', $updatedUser->adminRoleName());
             $updatedUser->setAttribute('role_label', $updatedUser->adminRoleLabel());
 
             return response()->json([
                 'message' => 'Staff account updated successfully.',
-                'user' => $updatedUser->only(['id', 'name', 'email', 'phone', 'role', 'role_label', 'status', 'created_at', 'updated_at']),
+                'user' => $updatedUser->only(['id', 'name', 'email', 'phone', 'role', 'role_label', 'status', 'created_at', 'updated_at', 'locations']),
             ]);
         }
 

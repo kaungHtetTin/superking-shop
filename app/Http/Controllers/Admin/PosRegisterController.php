@@ -18,10 +18,12 @@ class PosRegisterController extends Controller
 
         return Spa::render('Admin/Registers/Index', [
             'registers' => PosRegister::query()
+                ->whereIn('location_id', $request->user()->accessibleLocationIds())
                 ->with(['location:id,code,name,type'])
                 ->orderBy('code')
                 ->get(),
             'locations' => Location::query()
+                ->whereIn('id', $request->user()->accessibleLocationIds())
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'type']),
@@ -45,6 +47,7 @@ class PosRegisterController extends Controller
     {
         abort_unless($request->user()->hasAdminPermission('registers.manage'), 403);
         $validated = $this->validated($request, $register);
+        abort_unless(in_array((int) $register->location_id, array_map('intval', $request->user()->accessibleLocationIds()), true), 403);
 
         $register->update($validated);
         $audit->record('pos.register.updated', $register, ['code' => $register->code], $request);
@@ -57,7 +60,7 @@ class PosRegisterController extends Controller
     private function validated(Request $request, ?PosRegister $register = null): array
     {
         return $request->validate([
-            'location_id' => ['required', 'integer', Rule::exists('locations', 'id')->where('is_active', true)],
+            'location_id' => ['required', 'integer', Rule::in($request->user()->accessibleLocationIds()), Rule::exists('locations', 'id')->where('is_active', true)],
             'code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', Rule::unique('pos_registers', 'code')->ignore($register?->id)],
             'name' => ['required', 'string', 'max:255'],
             'is_active' => ['required', 'boolean'],

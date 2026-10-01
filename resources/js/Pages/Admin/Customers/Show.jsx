@@ -126,8 +126,8 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
                                 <input type="number" min="1" max="365" value={creditSettingsForm.data.credit_terms_days} onChange={(e) => creditSettingsForm.setData('credit_terms_days', e.target.value)} />
                                 {creditSettingsForm.errors.credit_terms_days && <small className="field-error">{creditSettingsForm.errors.credit_terms_days}</small>}
                             </label>
-                            <div className="form-field" style={{ justifyContent: 'flex-end' }}>
-                                <button type="submit" className="btn primary" disabled={creditSettingsForm.processing}>{t('Save credit settings')}</button>
+                            <div className="span-2" style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-end' }}>
+                                <button type="submit" className="btn primary" style={{ width: 200, maxWidth: '100%' }} disabled={creditSettingsForm.processing}>{t('Save credit settings')}</button>
                             </div>
                         </form>
 

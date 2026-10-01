@@ -66,6 +66,28 @@ class FlashSalePricingService
         return $item ? $item->salePrice($price) : round($price, 2);
     }
 
+    public function posOffer(?FlashSaleItem $item, float $retailPrice): ?array
+    {
+        if (! $item || $retailPrice <= 0 || ($item->remainingQuantity() !== null && $item->remainingQuantity() <= 0)) {
+            return null;
+        }
+
+        $salePrice = $item->salePrice($retailPrice);
+        if ($salePrice >= $retailPrice) {
+            return null;
+        }
+
+        return [
+            'item_id' => $item->id,
+            'name' => $item->flashSale?->name,
+            'discount_type' => $item->discount_type,
+            'discount_value' => (float) $item->discount_value,
+            'original_price' => $retailPrice,
+            'sale_price' => $salePrice,
+            'remaining_qty' => $item->remainingQuantity(),
+        ];
+    }
+
     public function attachToUnit(ProductUnit $unit, FlashSaleItem $item): void
     {
         $originalPrice = (float) ($unit->priceFor('retail')?->price ?? 0);

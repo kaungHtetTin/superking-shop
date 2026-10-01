@@ -59,9 +59,13 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
     const paymentLabel = paymentStatusLabels[order.payment_status] || order.payment_status;
     const proofUrl = order.payment_proof_url || storageUrl(order.payment_proof_path, app_url);
     const creditBalance = Math.max(0, Number(order.final_amount) - Number(order.paid_amount || 0));
+    const placedDate = new Date(order.created_at);
+    const placedLabel = Number.isNaN(placedDate.getTime()) ? '—' : placedDate.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const panelSx = { p: { xs: '16px', sm: '24px' }, borderRadius: '10px', border: '1px solid', borderColor: 'divider', minWidth: 0 };
+    const amountRowSx = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '16px', alignItems: 'baseline', '& > :last-child': { textAlign: 'right', fontVariantNumeric: 'tabular-nums' } };
 
     return (
-        <Box className="user-storefront" sx={{ ...storefrontBackgroundSx(theme), minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+        <Box className="user-storefront storefront-purchase" sx={{ ...storefrontBackgroundSx(theme), minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
             <UserBrandHead title={`Order ${order.order_number}`} />
             <Navbar />
 
@@ -69,7 +73,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                 <BackLink href={routeWithBase('/orders', app_base)}>
                     {t('All orders')}
                 </BackLink>
-                <Stack direction="row" spacing="10px" flexWrap="wrap" sx={{ mb: '20px' }}>
+                <Stack direction="row" useFlexGap spacing="10px" sx={{ mb: '20px', flexWrap: 'wrap' }}>
                     <Button component={Link} href={routeWithBase('/products', app_base)} variant="outlined">{t('Continue shopping')}</Button>
                     <Button component={Link} href={routeWithBase('/chat', app_base)} variant="outlined">{t('Contact support')}</Button>
                 </Stack>
@@ -98,20 +102,20 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                     </Alert>
                 )}
 
-                <Paper elevation={0} sx={{ p: { xs: '16px', sm: '20px' }, borderRadius: 2, border: '1px solid', borderColor: 'divider', mb: '16px' }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} alignItems={{ sm: 'flex-start' }}>
+                <Paper elevation={0} sx={{ ...panelSx, mb: '20px' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing="16px" sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' } }}>
                         <Box>
                             <Typography variant="h6" sx={{ fontWeight: 700 }}>
                                 {order.order_number}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                                Placed {order.created_at}
+                                {t('Placed')} · {placedLabel}
                             </Typography>
                         </Box>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                        <Stack direction="row" useFlexGap spacing="8px" sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
                             <Chip
                                 size="small"
-                                label={`Order: ${orderStatusLabels[order.status] || order.status}`}
+                                label={`${t('Order')}: ${t(orderStatusLabels[order.status] || order.status)}`}
                                 color={statusColor[order.status] || 'default'}
                                 variant="outlined"
                             />
@@ -126,7 +130,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
 
                     <Divider sx={{ my: 2 }} />
 
-                    <Stack direction="row" alignItems="flex-start" sx={{ mb: '20px', overflowX: 'auto', pb: '4px' }}>
+                    <Stack direction="row" sx={{ mb: '24px', mt: '20px', alignItems: 'flex-start', overflowX: 'auto', pb: '4px' }}>
                         {['Placed', 'Processing', 'Shipped', 'Delivered'].map((label, index) => {
                             const current = Math.max(0, ['pending', 'processing', 'shipped', 'delivered'].indexOf(order.status));
                             const active = order.status !== 'cancelled' && index <= current;
@@ -138,7 +142,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                     </Stack>
 
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                        Ship to
+                        {t('Ship to')}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
                         {order.receiver_name} · {order.receiver_phone}
@@ -150,7 +154,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                     {order.order_notes && (
                         <>
                             <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 2, mb: 0.5 }}>
-                                Notes
+                                {t('Notes')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
                                 {order.order_notes}
@@ -161,26 +165,27 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
 
                 {Number(order.credit_amount) > 0 && (
                     <Paper elevation={0} sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2.5, border: '1px solid', borderColor: creditBalance > 0 ? 'warning.light' : 'success.light', mb: 2, bgcolor: creditBalance > 0 ? 'rgba(237,108,2,.035)' : 'rgba(46,125,50,.035)' }}>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }}  spacing={2} sx={{ justifyContent: "space-between", ...({}) }}>
                             <Stack direction="row" spacing={1.25}>
                                 <Box sx={{ width: 42, height: 42, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: creditBalance > 0 ? 'warning.light' : 'success.light', color: creditBalance > 0 ? 'warning.dark' : 'success.dark' }}><CreditScoreOutlined /></Box>
                                 <Box><Typography sx={{ fontWeight: 800 }}>{t('Credit payment')}</Typography><Typography variant="body2" color="text.secondary">{t('Paid')} {formatMoney(order.paid_amount || 0)} · {t('Total')} {formatMoney(order.final_amount)}</Typography></Box>
                             </Stack>
                             <Box sx={{ textAlign: { sm: 'right' } }}><Typography variant="caption" color="text.secondary">{t('Balance due')}</Typography><Typography variant="h6" sx={{ fontWeight: 900, color: creditBalance > 0 ? 'warning.dark' : 'success.main' }}>{formatMoney(creditBalance)}</Typography></Box>
                         </Stack>
-                        {creditBalance > 0 && <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1.5 }}><EventOutlined sx={{ fontSize: 18, color: 'warning.dark' }} /><Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Due date')}: {order.credit_due_date || '-'}</Typography></Stack>}
+                        {creditBalance > 0 && <Stack direction="row" spacing={0.75}  sx={{ alignItems: "center", ...({ mt: 1.5 }) }}><EventOutlined sx={{ fontSize: 18, color: 'warning.dark' }} /><Typography variant="body2" sx={{ fontWeight: 700 }}>{t('Due date')}: {order.credit_due_date || '-'}</Typography></Stack>}
                         <Button component={Link} href={routeWithBase('/my-credit', app_base)} size="small" sx={{ mt: 1 }}>{t('View my credit history')} →</Button>
                     </Paper>
                 )}
 
-                <Paper elevation={0} sx={{ p: { xs: '16px', sm: '20px' }, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' }, gap: '20px', alignItems: 'start' }}>
+                <Paper elevation={0} sx={panelSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
-                        Items
+                        {t('Items')}
                     </Typography>
                     <Stack spacing={2}>
                         {order.items.map((item) => (
-                            <Stack key={item.id} direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                                <Box component="img" src={item.product?.primary_image?.image_url || (item.product?.primary_image?.image_path ? storageUrl(item.product.primary_image.image_path, app_url) : routeWithBase('/images/product-default.png', app_base))} alt="" sx={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 1.5, bgcolor: 'grey.100', flexShrink: 0 }} />
+                            <Box key={item.id} sx={{ display: 'grid', gridTemplateColumns: { xs: '56px minmax(0, 1fr)', sm: '64px minmax(0, 1fr) auto' }, gap: '12px', alignItems: 'start', pb: '16px', borderBottom: '1px solid', borderColor: 'divider' }}>
+                                <Box component="img" src={item.product?.primary_image?.image_url || (item.product?.primary_image?.image_path ? storageUrl(item.product.primary_image.image_path, app_url) : routeWithBase('/images/product-default.png', app_base))} alt="" sx={{ width: { xs: 56, sm: 64 }, height: { xs: 56, sm: 64 }, objectFit: 'contain', borderRadius: '8px', bgcolor: 'grey.100' }} />
                                 <Box sx={{ minWidth: 0 }}>
                                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                         {item.product?.name}
@@ -189,38 +194,43 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                                         {t('Selling unit')}: {item.unit_name || item.unit?.name || t('unit')}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {t('Qty')} {item.quantity} · {formatMoney(item.unit_price)} {t('each')}
+                                        {t('Qty')} {Number(item.quantity)} · {formatMoney(item.unit_price)} {t('each')}
                                     </Typography>
+                                    {item.promotion_snapshot?.flash_sale_id && <Typography variant="caption" color="primary" sx={{ display: 'block', mt: '4px', fontWeight: 700 }}>{t('Flash Sale')}</Typography>}
                                     {Number(item.foc_quantity || 0) > 0 && (
                                         <Typography variant="caption" color="info.main" sx={{ display: 'block', fontWeight: 700 }}>
                                             {t('FOC')}: {item.foc_quantity} {item.foc_unit?.name || t('unit')}
                                         </Typography>
                                     )}
                                 </Box>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 800, textAlign: 'right', gridColumn: { xs: 2, sm: 'auto' }, whiteSpace: 'nowrap' }}>
                                     {formatMoney(item.total_price)}
                                 </Typography>
-                            </Stack>
+                            </Box>
                         ))}
                     </Stack>
-                    <Divider sx={{ my: 2 }} />
+                </Paper>
+                <Paper elevation={0} sx={{ ...panelSx, position: { md: 'sticky' }, top: 88 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, mb: '20px' }}>{t('Order summary')}</Typography>
                     <Stack spacing={0.75}>
-                        <Stack direction="row" justifyContent="space-between">
+                        <Box sx={amountRowSx}>
                             <Typography variant="body2">{t('Subtotal')}</Typography>
                             <Typography variant="body2">{formatMoney(order.total_amount)}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between">
+                        </Box>
+                        {Number(order.discount_amount || 0) > 0 && <Box sx={amountRowSx}><Typography variant="body2">{t('Discount')}</Typography><Typography variant="body2" color="primary">-{formatMoney(order.discount_amount)}</Typography></Box>}
+                        <Box sx={amountRowSx}>
                             <Typography variant="body2">{t('Shipping')}</Typography>
                             <Typography variant="body2">{formatMoney(order.shipping_fee)}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" sx={{ pt: 1 }}>
+                        </Box>
+                        <Divider sx={{ my: '12px' }} />
+                        <Box sx={amountRowSx}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                                Total
+                                {t('Total')}
                             </Typography>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800 }}>
                                 {formatMoney(order.final_amount)}
                             </Typography>
-                        </Stack>
+                        </Box>
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
                         {t('Payment')}: {t('Manual transfer')}{proofUrl ? ` ${t('(screenshot submitted)')}` : ''}
@@ -267,6 +277,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
                         </Box>
                     )}
                 </Paper>
+                </Box>
             </Container>
 
             <Dialog open={proofLightbox} onClose={() => setProofLightbox(false)} maxWidth="lg" fullWidth>

@@ -1,30 +1,30 @@
 import { alpha } from '@mui/material/styles';
 
 export const musicStoreColors = {
-    ink: '#171312',
-    coal: '#241b18',
-    brass: '#c28a2e',
-    amber: '#f4c267',
-    rosin: '#9c3f2c',
-    stage: '#fffaf1',
-    sheet: '#fffdf8',
-    smoke: '#f2eee5',
+    ink: '#172033',
+    coal: '#102e38',
+    brass: '#087f74',
+    amber: '#bde7e1',
+    rosin: '#087f74',
+    stage: '#eef4f4',
+    sheet: '#ffffff',
+    smoke: '#f2f6f6',
 };
 
-export const musicGradient = `linear-gradient(135deg, ${musicStoreColors.coal} 0%, #3a211b 44%, ${musicStoreColors.rosin} 100%)`;
+export const musicGradient = `linear-gradient(135deg, ${musicStoreColors.coal} 0%, #125e61 55%, ${musicStoreColors.rosin} 100%)`;
 
 export const getMusicStoreColors = (theme) => ({
     ...musicStoreColors,
-    brass: theme?.palette?.primary?.dark || musicStoreColors.brass,
-    amber: theme?.palette?.primary?.light || musicStoreColors.amber,
+    brass: theme?.palette?.secondary?.main || musicStoreColors.brass,
+    amber: theme?.palette?.secondary?.light || musicStoreColors.amber,
     rosin: theme?.palette?.primary?.main || musicStoreColors.rosin,
-    stage: theme?.palette?.primary?.main ? alpha(theme.palette.primary.main, 0.06) : musicStoreColors.stage,
+    stage: theme?.palette?.background?.default || musicStoreColors.stage,
     sheet: theme?.palette?.background?.paper || musicStoreColors.sheet,
 });
 
 export const musicGradientForTheme = (theme) => {
     const colors = getMusicStoreColors(theme);
-    return `linear-gradient(135deg, ${musicStoreColors.coal} 0%, ${colors.brass} 48%, ${colors.rosin} 100%)`;
+    return `linear-gradient(125deg, ${musicStoreColors.coal} 0%, #125e61 58%, ${colors.rosin} 100%)`;
 };
 
 export const storefrontBackgroundSx = (theme) => {
@@ -32,22 +32,21 @@ export const storefrontBackgroundSx = (theme) => {
 
     return {
         bgcolor: colors.stage,
-        backgroundImage: `linear-gradient(180deg, ${alpha(colors.rosin, 0.12)} 0%, ${alpha(colors.amber, 0.2)} 48%, ${colors.sheet} 100%)`,
+        backgroundImage: 'none',
     };
 };
 
 export const glassPanelSx = {
-    bgcolor: 'rgba(255, 253, 248, 0.9)',
-    border: '1px solid rgba(36, 27, 24, 0.1)',
-    boxShadow: '0 18px 48px rgba(36, 27, 24, 0.08)',
-    backdropFilter: 'blur(14px)',
+    bgcolor: 'rgba(255, 255, 255, 0.92)',
+    border: '1px solid rgba(15, 23, 42, 0.1)',
+    boxShadow: '0 2px 8px rgba(15, 23, 42, 0.035)',
 };
 
 export const sectionShellSx = {
     bgcolor: musicStoreColors.sheet,
-    border: '1px solid rgba(36, 27, 24, 0.08)',
-    borderRadius: 2,
-    boxShadow: '0 14px 38px rgba(36, 27, 24, 0.065)',
+    border: '1px solid rgba(15, 23, 42, 0.09)',
+    borderRadius: '10px',
+    boxShadow: '0 2px 8px rgba(15, 23, 42, 0.035)',
 };
 
 export const sectionShellSxForTheme = (theme) => {
@@ -55,9 +54,9 @@ export const sectionShellSxForTheme = (theme) => {
 
     return {
         bgcolor: colors.sheet,
-        border: `1px solid ${alpha(colors.rosin, 0.12)}`,
-        borderRadius: 2,
-        boxShadow: `0 14px 38px ${alpha(colors.rosin, 0.07)}`,
+        border: `1px solid ${alpha(colors.ink, 0.1)}`,
+        borderRadius: '10px',
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.035)',
     };
 };
 

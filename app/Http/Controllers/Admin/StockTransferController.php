@@ -45,7 +45,7 @@ class StockTransferController extends Controller
             'canCreate' => $request->user()->can('create', StockTransfer::class),
             'realtime' => [
                 'locationIds' => $locationIds,
-                'canAll' => $request->user()->hasAdminPermission('locations.manage'),
+                'canAll' => $request->user()->isSuperAdmin(),
             ],
             'lastUpdated' => now()->toIso8601String(),
             'pollIntervalMs' => 20000,
@@ -100,6 +100,7 @@ class StockTransferController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'type']),
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
+            'destinationLocations' => Location::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'type']),
         ]);
     }
 
@@ -118,7 +119,7 @@ class StockTransferController extends Controller
         $source = Location::findOrFail($validated['source_location_id']);
         $destination = Location::findOrFail($validated['destination_location_id']);
         abort_unless($request->user()->canAccessLocation($source), 403);
-        abort_unless($request->user()->canAccessLocation($destination), 403);
+        abort_unless($source->is_active && $destination->is_active, 422, 'Choose active source and destination branches.');
 
         $transfer = $service->transferNow(
             $source,

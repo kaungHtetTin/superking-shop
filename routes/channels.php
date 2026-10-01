@@ -28,5 +28,5 @@ Broadcast::channel('inventory.location.{locationId}', function ($user, $location
 
 Broadcast::channel('inventory.all', function ($user) {
     return $user->hasAdminPermission('inventory.view')
-        && $user->hasAdminPermission('locations.manage');
+        && $user->isSuperAdmin();
 });

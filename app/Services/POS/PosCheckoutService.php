@@ -11,6 +11,7 @@ use App\Models\ProductUnit;
 use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\CustomerCreditService;
+use App\Services\FlashSalePricingService;
 use App\Services\Inventory\InventoryService;
 use App\Services\LoyaltyService;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ use Illuminate\Validation\ValidationException;
 
 class PosCheckoutService
 {
-    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService, private CustomerCreditService $creditService, private PosShiftService $shiftService)
+    public function __construct(private InventoryService $inventoryService, private AuditLogService $auditLogService, private LoyaltyService $loyaltyService, private CustomerCreditService $creditService, private PosShiftService $shiftService, private FlashSalePricingService $flashSalePricing)
     {
     }
 
@@ -58,6 +59,7 @@ class PosCheckoutService
                 ])
                 ->get()
                 ->keyBy('id');
+            $saleItems = $this->flashSalePricing->activeItemsForUnitIds($lines->filter(fn ($line) => ! empty($line['use_flash_sale']))->pluck('product_unit_id')->unique()->all(), true);
             $subtotal = 0.0;
             $items = [];
 
@@ -111,13 +113,29 @@ class PosCheckoutService
                         'items' => "{$unit->product->name} has no positive {$priceType} selling price for {$unit->name} or its base unit.",
                     ]);
                 }
+                $saleItem = null;
+                $regularUnitPrice = $unitPrice;
+                if (! empty($line['use_flash_sale'])) {
+                    $saleItem = $saleItems->get($unit->id);
+                    if ($priceType !== 'retail' || ! $this->flashSalePricing->posOffer($saleItem, $unitPrice)) {
+                        throw ValidationException::withMessages(['items' => "Flash sale is no longer available for {$unit->product->name} / {$unit->name}. Review the cart price."]);
+                    }
+                    $unitPrice = $saleItem->salePrice($unitPrice);
+                }
                 $lineTotal = round($unitPrice * $quantity, 2);
                 if (isset($line['expected_unit_price']) && bccomp((string) $line['expected_unit_price'], (string) $unitPrice, 2) !== 0) {
                     throw ValidationException::withMessages(['items' => 'Selling prices changed. Reopen the payment dialog to review the updated total.']);
                 }
                 $baseQuantity = $unit->toBaseQuantity($quantity);
                 $subtotal += $lineTotal;
-                $items[] = compact('unit', 'quantity', 'baseQuantity', 'priceType', 'unitPrice', 'lineTotal', 'focUnit', 'focQuantity', 'focBaseQuantity');
+                $items[] = compact('unit', 'quantity', 'baseQuantity', 'priceType', 'unitPrice', 'regularUnitPrice', 'lineTotal', 'focUnit', 'focQuantity', 'focBaseQuantity', 'saleItem');
+            }
+
+            foreach (collect($items)->filter(fn ($item) => $item['saleItem'] !== null)->groupBy(fn ($item) => $item['saleItem']->id) as $saleLines) {
+                $saleItem = $saleLines->first()['saleItem'];
+                if ($saleItem->remainingQuantity() !== null && $saleLines->sum('quantity') > $saleItem->remainingQuantity() + 0.00005) {
+                    throw ValidationException::withMessages(['items' => 'Flash sale quantity is no longer available. Reduce the quantity or turn off flash sale.']);
+                }
             }
 
             $requiredByProduct = collect($items)->groupBy(fn ($item) => $item['unit']->product_id)
@@ -221,7 +239,19 @@ class PosCheckoutService
                     'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 2),
                     'foc_cost_price' => round((float) $unit->product->original_price * $item['focBaseQuantity'], 2),
                     'total_price' => $item['lineTotal'],
+                    'promotion_snapshot' => $item['saleItem'] ? [
+                        'type' => 'flash_sale',
+                        'flash_sale_item_id' => $item['saleItem']->id,
+                        'flash_sale_id' => $item['saleItem']->flash_sale_id,
+                        'name' => $item['saleItem']->flashSale?->name,
+                        'regular_unit_price' => round($item['regularUnitPrice'], 2),
+                        'sale_unit_price' => round($item['unitPrice'], 2),
+                        'discount_amount' => round(max(0, $item['regularUnitPrice'] - $item['unitPrice']) * $item['quantity'], 2),
+                    ] : null,
                 ]);
+                if ($item['saleItem']) {
+                    $item['saleItem']->increment('sold_count', $item['quantity']);
+                }
                 $this->inventoryService->completeSale($location, $unit->product, $item['baseQuantity'], 0, $cashier, "pos:order:{$order->id}:item:{$orderItem->id}:paid", $order, $unit, $item['quantity']);
                 if ($item['focUnit'] && $item['focQuantity'] > 0) {
                     $this->inventoryService->completeSale($location, $unit->product, $item['focBaseQuantity'], 0, $cashier, "pos:order:{$order->id}:item:{$orderItem->id}:foc", $order, $item['focUnit'], $item['focQuantity']);

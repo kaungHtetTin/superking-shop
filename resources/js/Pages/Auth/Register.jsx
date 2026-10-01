@@ -68,10 +68,9 @@ export default function Register({ error, googleAuthAvailable = false }) {
                 <Paper elevation={0} sx={{
                     p: { xs: '24px', sm: '28px' },
                     borderRadius: 2,
-                    bgcolor: 'rgba(255, 253, 248, 0.92)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(244, 194, 103, 0.26)',
-                    boxShadow: '0 24px 70px rgba(23,19,18,0.24)',
+                    bgcolor: 'background.paper',
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                    boxShadow: '0 12px 32px rgba(15,23,42,0.12)',
                     textAlign: 'center',
                 }}>
                     {app_settings?.logo_url && <Box component="img" src={app_settings.logo_url} alt={app_settings?.app_name || t('Store')} sx={{ width: 56, height: 56, objectFit: 'contain', mx: 'auto', mb: '16px', borderRadius: 2, bgcolor: 'white' }} />}
@@ -97,15 +96,15 @@ export default function Register({ error, googleAuthAvailable = false }) {
                                 onChange={(e) => setData('name', e.target.value)}
                                 error={!!errors.name}
                                 helperText={errors.name}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <PersonIcon color="primary" sx={{ opacity: 0.7 }} />
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <TextField
                                 fullWidth
@@ -114,15 +113,15 @@ export default function Register({ error, googleAuthAvailable = false }) {
                                 onChange={(e) => setData('contact', e.target.value)}
                                 error={!!errors.contact}
                                 helperText={errors.contact}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <EmailIcon color="primary" sx={{ opacity: 0.7 }} />
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <TextField
                                 fullWidth
@@ -132,7 +131,9 @@ export default function Register({ error, googleAuthAvailable = false }) {
                                 onChange={(e) => setData('password', e.target.value)}
                                 error={!!errors.password}
                                 helperText={errors.password}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <LockIcon color="primary" sx={{ opacity: 0.7 }} />
@@ -145,9 +146,7 @@ export default function Register({ error, googleAuthAvailable = false }) {
                                             </IconButton>
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <TextField
                                 fullWidth
@@ -157,15 +156,15 @@ export default function Register({ error, googleAuthAvailable = false }) {
                                 onChange={(e) => setData('password_confirmation', e.target.value)}
                                 error={!!errors.password_confirmation}
                                 helperText={errors.password_confirmation}
-                                InputProps={{
+
+                                sx={{ bgcolor: 'white', borderRadius: 2 }}
+                             slotProps={{ input: {
                                     startAdornment: (
                                         <InputAdornment position="start">
                                             <LockIcon color="primary" sx={{ opacity: 0.7 }} />
                                         </InputAdornment>
                                     ),
-                                }}
-                                sx={{ bgcolor: 'white', borderRadius: 2 }}
-                            />
+                                } }}/>
 
                             <Button
                                 fullWidth

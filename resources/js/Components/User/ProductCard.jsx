@@ -46,8 +46,6 @@ const ProductCard = ({ product, returnTo = null }) => {
     const reviewText = reviewCount > 0
         ? `${reviewCount.toLocaleString()} ${t(reviewCount === 1 ? 'review' : 'reviews')}`
         : t('No reviews yet');
-    const hasProductImage = Boolean(product.primary_image?.image_url || product.primary_image?.image_path);
-
     const imageUrl = useMemo(() => {
         const imagePath = product.primary_image?.image_url || product.primary_image?.image_path;
         return imagePath
@@ -189,23 +187,24 @@ const ProductCard = ({ product, returnTo = null }) => {
                 flexDirection: 'column',
                 position: 'relative',
                 border: '1px solid',
-                borderColor: 'rgba(36,27,24,0.09)',
-                borderRadius: 2,
+                borderColor: 'rgba(15,23,42,0.09)',
+                borderRadius: 2.5,
                 bgcolor: musicColors.sheet,
                 overflow: 'hidden',
-                boxShadow: '0 14px 34px rgba(36,27,24,0.06)',
+                boxShadow: '0 2px 8px rgba(15,23,42,0.05)',
                 transition: 'transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
                 '&:hover': {
-                    borderColor: musicColors.brass,
-                    transform: 'translateY(-3px)',
-                    boxShadow: '0 20px 44px rgba(36,27,24,0.12)',
+                    borderColor: musicColors.rosin,
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 10px 24px rgba(15,23,42,0.1)',
                 },
+                '&:focus-within': { borderColor: musicColors.rosin, boxShadow: '0 0 0 3px rgba(8,127,116,0.12)' },
             }}
         >
             <Box
                 component={Link}
                 href={detailHref}
-                sx={{ position: 'relative', pt: '125%', display: 'block' }}
+                sx={{ position: 'relative', pt: '92%', display: 'block', overflow: 'hidden' }}
             >
                 <CardMedia
                     component="img"
@@ -218,16 +217,18 @@ const ProductCard = ({ product, returnTo = null }) => {
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
-                        objectPosition: hasProductImage ? 'center center' : 'left center',
-                        bgcolor: '#eee6d8',
+                        objectPosition: 'center center',
+                        bgcolor: musicColors.smoke,
+                        transition: 'transform 220ms ease',
+                        '.MuiCard-root:hover &': { transform: 'scale(1.035)' },
                     }}
                 />
                 <Box
                     sx={{
                         position: 'absolute',
                         inset: 'auto 0 0 0',
-                        height: '38%',
-                        background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(23,19,18,0.38) 100%)',
+                        height: '24%',
+                        background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(15,23,42,0.17) 100%)',
                         pointerEvents: 'none',
                     }}
                 />
@@ -238,10 +239,10 @@ const ProductCard = ({ product, returnTo = null }) => {
                         right: 10,
                         width: 44,
                         height: 44,
-                        bgcolor: 'rgba(255,253,248,0.94)',
+                        bgcolor: 'rgba(255,255,255,0.96)',
                         padding: 0,
                         zIndex: 1,
-                        border: '1px solid rgba(36,27,24,0.08)',
+                        border: '1px solid rgba(15,23,42,0.1)',
                         '&:hover': { bgcolor: 'white' },
                     }}
                     size="small"
@@ -254,28 +255,8 @@ const ProductCard = ({ product, returnTo = null }) => {
                         <FavoriteBorder sx={{ fontSize: '1.15rem' }} color="primary" />
                     )}
                 </IconButton>
-                <IconButton
-                    sx={{
-                        position: 'absolute',
-                        top: 62,
-                        right: 10,
-                        width: 44,
-                        height: 44,
-                        bgcolor: 'rgba(255,253,248,0.94)',
-                        padding: 0,
-                        zIndex: 1,
-                        border: '1px solid rgba(36,27,24,0.08)',
-                        '&:hover': { bgcolor: 'white' },
-                    }}
-                    size="small"
-                    onClick={handleAddToCart}
-                    disabled={!defaultUnit || !canAddCart}
-                    aria-label={t('Add to cart')}
-                >
-                    <AddShoppingCart sx={{ fontSize: '1.15rem' }} color="primary" />
-                </IconButton>
             </Box>
-            <CardContent sx={{ flexGrow: 1, p: { xs: '12px !important', sm: '14px !important' } }}>
+            <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: { xs: '12px !important', sm: '14px !important' } }}>
                 <Typography variant="caption" sx={{ fontSize: '0.68rem', fontWeight: 700, color: musicColors.rosin, textTransform: 'uppercase', letterSpacing: '0.035em' }}>
                     {product.category?.name || t('Uncategorized')}
                 </Typography>
@@ -302,7 +283,7 @@ const ProductCard = ({ product, returnTo = null }) => {
                     {product.name}
                 </Typography>
 
-                <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mb: 1, minHeight: 18 }}>
+                <Stack direction="row"  spacing={0.5} sx={{ alignItems: "center", ...({ mb: 1.5, minHeight: 18 }) }}>
                     <StarRounded sx={{ fontSize: '0.95rem', color: reviewCount > 0 ? '#f5a623' : 'text.disabled' }} />
                     {reviewCount > 0 && (
                         <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.primary', fontWeight: 600 }}>
@@ -322,7 +303,7 @@ const ProductCard = ({ product, returnTo = null }) => {
                     </Typography>
                 </Stack>
 
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
+                <Stack direction="row"   sx={{ justifyContent: "space-between", alignItems: "flex-end", ...({ mt: 'auto', mb: 1.5 }) }}>
                     <Box>
                         {showFlashPrice && (
                             <Typography
@@ -332,10 +313,10 @@ const ProductCard = ({ product, returnTo = null }) => {
                                 {t('Flash Sale')}
                             </Typography>
                         )}
-                        <Stack direction="row" spacing={0.75} alignItems="baseline" useFlexGap flexWrap="wrap">
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.15, color: musicColors.rosin }}>
-                        {formatMoney(minPrice)}
-                    </Typography>
+                        <Stack direction="row" spacing={0.75}  useFlexGap  sx={{ alignItems: "baseline", flexWrap: "wrap", ...({}) }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.15, color: 'primary.main' }}>
+                                {formatMoney(minPrice)}
+                            </Typography>
                             {showFlashPrice && (
                                 <Typography
                                     variant="caption"
@@ -348,6 +329,17 @@ const ProductCard = ({ product, returnTo = null }) => {
                         </Stack>
                     </Box>
                 </Stack>
+                <Button
+                    variant="contained"
+                    fullWidth
+                    size="small"
+                    startIcon={<AddShoppingCart fontSize="small" />}
+                    onClick={handleAddToCart}
+                    disabled={!canAddCart}
+                    sx={{ minHeight: 38, fontWeight: 700, bgcolor: musicColors.rosin, '&:hover': { bgcolor: theme.palette.primary.dark } }}
+                >
+                    {t(canAddCart ? 'Add to cart' : 'Out of stock')}
+                </Button>
             </CardContent>
 
             <Snackbar

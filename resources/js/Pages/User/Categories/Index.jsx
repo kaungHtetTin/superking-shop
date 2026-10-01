@@ -27,9 +27,8 @@ import {
 
 function categoryVisual(cat) {
     return {
-        emoji: cat.metadata?.icon || cat.icon || '🛍️',
+        emoji: cat.metadata?.icon || cat.icon || null,
         imageUrl: cat.icon_image_url || null,
-        accent: cat.metadata?.color || null,
     };
 }
 
@@ -56,30 +55,33 @@ export default function CategoriesIndex({ categories = [] }) {
             <UserBrandHead title="Categories" />
             <Navbar />
 
-            <Container maxWidth="lg" sx={{ mt: { xs: '16px', md: '24px' }, pb: { xs: '24px', md: '32px' } }}>
+            <Container maxWidth="lg" sx={{ mt: { xs: '20px', md: '28px' }, pb: '40px' }}>
                 <BackLink href={routeWithBase('/', app_base)}>
                     Back to home
                 </BackLink>
 
-                <Box sx={{ mb: '16px' }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '20px', mb: '24px', mt: '8px' }}>
+                    <Box>
                     <Typography sx={{ ...eyebrowSxForTheme(theme), mb: 0.5 }}>
-                        Departments
+                        Categories
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5, color: musicColors.ink, lineHeight: 1.1 }}>
-                        Shop by sound
+                        Shop by category
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, maxWidth: 520 }}>
-                        Browse instruments, accessories, studio tools, and stage essentials by department.
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: '8px', maxWidth: 580 }}>
+                        Find instruments, accessories and essentials in one place.
                     </Typography>
+                    </Box>
+                    <Button component={Link} href={routeWithBase('/products', app_base)} variant="outlined">View all products</Button>
                 </Box>
 
                 <Box
                     sx={{
                         display: 'grid',
                         gridTemplateColumns: {
-                            xs: 'repeat(2, minmax(0, 1fr))',
-                            sm: 'repeat(3, minmax(0, 1fr))',
-                            md: 'repeat(4, minmax(0, 1fr))',
+                            xs: '1fr',
+                            sm: `repeat(${Math.max(1, Math.min(2, categoryRows.length))}, minmax(0, 1fr))`,
+                            md: `repeat(${Math.max(1, Math.min(3, categoryRows.length))}, minmax(0, 1fr))`,
                         },
                         gap: { xs: '10px', sm: '12px', md: '16px' },
                     }}
@@ -92,36 +94,34 @@ export default function CategoriesIndex({ categories = [] }) {
                         return (
                             <Paper
                                 key={cat.id}
-                                component={Link}
-                                href={routeWithBase(`/categories/${cat.slug}`, app_base)}
                                 elevation={0}
                                 sx={{
-                                    p: { xs: '12px', sm: '14px' },
-                                    borderRadius: 3,
+                                    p: { xs: '20px', sm: '24px' },
+                                    borderRadius: '10px',
                                     textDecoration: 'none',
                                     color: 'inherit',
-                                    border: '1px solid rgba(36,27,24,0.08)',
-                                    background: `linear-gradient(145deg, ${musicColors.sheet} 0%, ${alpha(musicColors.amber, 0.12)} 100%)`,
-                                    boxShadow: '0 14px 40px rgba(36,27,24,0.07)',
+                                    border: '1px solid rgba(15,23,42,0.1)',
+                                    background: musicColors.sheet,
+                                    boxShadow: '0 4px 14px rgba(15,23,42,0.05)',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'stretch',
-                                    minHeight: { xs: 128, sm: 140 },
-                                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                    minWidth: 0,
+                                    transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
                                     '&:hover': {
-                                        transform: 'translateY(-3px)',
-                                        boxShadow: '0 20px 48px rgba(36,27,24,0.12)',
+                                        borderColor: musicColors.rosin,
                                     },
+                                    '&:focus-visible': { outline: `2px solid ${musicColors.rosin}`, outlineOffset: 3 },
                                 }}
                             >
-                                <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                                <Stack component={Link} href={routeWithBase(`/categories/${cat.slug}`, app_base)} direction="row" sx={{ alignItems: 'center', gap: '16px', color: 'inherit', textDecoration: 'none', '&:focus-visible': { outline: `2px solid ${musicColors.rosin}`, outlineOffset: 4 } }}>
                                     <Avatar
                                         src={v.imageUrl || undefined}
                                         sx={{
                                             width: { xs: 44, sm: 52 },
                                             height: { xs: 44, sm: 52 },
-                                            bgcolor: v.accent || alpha(musicColors.amber, 0.22),
-                                            borderRadius: 2,
+                                            bgcolor: alpha(musicColors.rosin, 0.08),
+                                            borderRadius: '10px',
                                             fontSize: '1.35rem',
                                             flexShrink: 0,
                                             color: musicColors.rosin,
@@ -133,12 +133,11 @@ export default function CategoriesIndex({ categories = [] }) {
                                     <Box sx={{ minWidth: 0, flex: 1 }}>
                                         <Typography
                                             variant="subtitle2"
-                                            sx={{ fontWeight: 700, lineHeight: 1.25, mb: 0.25 }}
-                                            noWrap
+                                            sx={{ fontWeight: 700, lineHeight: 1.4, mb: '4px', overflowWrap: 'anywhere' }}
                                         >
                                             {cat.name}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                        <Typography variant="body2" color="text.secondary">
                                             {count} {count === 1 ? 'item' : 'items'}
                                         </Typography>
                                     </Box>
@@ -150,12 +149,11 @@ export default function CategoriesIndex({ categories = [] }) {
                                         variant="caption"
                                         color="text.secondary"
                                         sx={{
-                                            mt: 1.25,
+                                            mt: '16px',
                                             display: '-webkit-box',
                                             WebkitLineClamp: 2,
                                             WebkitBoxOrient: 'vertical',
                                             overflow: 'hidden',
-                                            fontWeight: 600,
                                             lineHeight: 1.45,
                                         }}
                                     >
@@ -164,7 +162,7 @@ export default function CategoriesIndex({ categories = [] }) {
                                 ) : null}
 
                                 {subs.length > 0 ? (
-                                    <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 'auto', pt: 1.5 }}>
+                                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: '8px', mt: '16px', pt: '16px', borderTop: '1px solid', borderColor: 'divider' }}>
                                         {subs.slice(0, 3).map((sub) => (
                                             <Chip
                                                 key={sub.id}
@@ -200,22 +198,10 @@ export default function CategoriesIndex({ categories = [] }) {
                             Browse all products
                         </Button>
                     </Paper>
-                ) : (
-                    <Box sx={{ mt: 4, textAlign: 'center' }}>
-                        <Button
-                            component={Link}
-                            href={routeWithBase('/products', app_base)}
-                            variant="outlined"
-                            color="primary"
-                            sx={{ fontWeight: 700, borderRadius: 999, px: 3 }}
-                        >
-                            View all products
-                        </Button>
-                    </Box>
-                )}
+                ) : null}
 
                 {categories.last_page > 1 && (
-                    <Stack alignItems="center" sx={{ mt: 3, mb: 2 }}>
+                    <Stack  sx={{ alignItems: "center", ...({ mt: 3, mb: 2 }) }}>
                         <Pagination
                             count={categories.last_page}
                             page={categories.current_page}

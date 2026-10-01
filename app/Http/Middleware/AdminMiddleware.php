@@ -28,6 +28,20 @@ class AdminMiddleware
                 return redirect('/admin/login')->with('error', 'Your account has been suspended.');
             }
 
+            if (! $user->isSuperAdmin()) {
+                $allowed = array_map('intval', $user->accessibleLocationIds());
+                if ($request->filled('location_id')) {
+                    abort_unless(in_array((int) $request->input('location_id'), $allowed, true), 403);
+                }
+                foreach ($request->route()?->parameters() ?? [] as $model) {
+                    if ($model instanceof \App\Models\Location) {
+                        abort_unless($user->canAccessLocation($model), 403);
+                    } elseif ($model instanceof \Illuminate\Database\Eloquent\Model && array_key_exists('location_id', $model->getAttributes())) {
+                        abort_unless(in_array((int) $model->getAttribute('location_id'), $allowed, true), 403);
+                    }
+                }
+            }
+
             return $next($request);
         }
 

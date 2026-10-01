@@ -44,7 +44,7 @@ function UnitIdentity({ unit }) {
     );
 }
 
-export default function TransferDocumentForm({ locations, categories = [] }) {
+export default function TransferDocumentForm({ locations, destinationLocations = locations, categories = [] }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const firstSource = locations[0]?.id || "";
@@ -52,13 +52,13 @@ export default function TransferDocumentForm({ locations, categories = [] }) {
     const form = useForm({
         source_location_id: firstSource,
         destination_location_id:
-            locations.find(
+            destinationLocations.find(
                 (location) => String(location.id) !== String(firstSource),
             )?.id || "",
         notes: "",
         items: [],
     });
-    const destinations = locations.filter(
+    const destinations = destinationLocations.filter(
         (location) =>
             String(location.id) !== String(form.data.source_location_id),
     );
@@ -66,7 +66,7 @@ export default function TransferDocumentForm({ locations, categories = [] }) {
         (location) =>
             String(location.id) === String(form.data.source_location_id),
     );
-    const destinationLocation = locations.find(
+    const destinationLocation = destinationLocations.find(
         (location) =>
             String(location.id) === String(form.data.destination_location_id),
     );
@@ -127,7 +127,7 @@ export default function TransferDocumentForm({ locations, categories = [] }) {
             ...form.data,
             source_location_id: sourceId,
             destination_location_id:
-                locations.find(
+                destinationLocations.find(
                     (location) => String(location.id) !== String(sourceId),
                 )?.id || "",
             items: [],

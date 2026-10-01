@@ -45,7 +45,7 @@ class CreditReportController extends Controller
             'customers' => $customers,
             'filters' => ['q' => $filters['q'] ?? '', 'bucket' => $bucket],
             'aging' => $aging + ['total' => array_sum($aging)],
-            'collections' => CustomerCreditTransaction::query()->where('type', 'payment')->where('created_at', '>=', now()->subDays(30))->selectRaw('DATE(created_at) day, ABS(SUM(amount)) amount, COUNT(*) payments')->groupBy('day')->orderBy('day')->get(),
+            'collections' => CustomerCreditTransaction::query()->when(! $request->user()->isSuperAdmin(), fn ($query) => $query->whereHas('order', fn ($orders) => $orders->whereIn('location_id', $request->user()->accessibleLocationIds())))->where('type', 'payment')->where('created_at', '>=', now()->subDays(30))->selectRaw('DATE(created_at) day, ABS(SUM(amount)) amount, COUNT(*) payments')->groupBy('day')->orderBy('day')->get(),
         ]);
     }
 
@@ -69,7 +69,7 @@ class CreditReportController extends Controller
 
     private function openOrders(): Builder
     {
-        return Order::query()->where('orders.credit_amount', '>', 0)->where('orders.status', '!=', 'cancelled')->whereRaw('orders.final_amount > orders.paid_amount');
+        return Order::query()->whereIn('orders.location_id', request()->user()->accessibleLocationIds())->where('orders.credit_amount', '>', 0)->where('orders.status', '!=', 'cancelled')->whereRaw('orders.final_amount > orders.paid_amount');
     }
 
     private function applyBucket(Builder $query, string $bucket): Builder

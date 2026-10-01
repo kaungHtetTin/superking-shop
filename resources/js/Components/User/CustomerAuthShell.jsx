@@ -12,10 +12,10 @@ export default function CustomerAuthShell({ title, subtitle, children }) {
     const appName = app_settings?.app_name || 'Music Store';
 
     return (
-        <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: musicGradientForTheme(theme), py: { xs: '20px', sm: '32px' } }}>
+        <Box className="user-storefront" sx={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: musicGradientForTheme(theme), py: { xs: '20px', sm: '32px' } }}>
             <Container maxWidth="xs">
-                <Paper elevation={0} sx={{ p: { xs: '20px', sm: '24px' }, borderRadius: 3, bgcolor: 'rgba(255,253,248,.96)', border: `1px solid ${alpha(colors.amber, .32)}`, boxShadow: '0 24px 70px rgba(23,19,18,.24)', backdropFilter: 'blur(18px)' }}>
-                    <Stack alignItems="center" spacing="10px" sx={{ textAlign: 'center', mb: '20px' }}>
+                <Paper elevation={0} sx={{ p: { xs: '20px', sm: '24px' }, borderRadius: 2, bgcolor: 'rgba(255,255,255,.97)', border: `1px solid ${alpha(colors.rosin, .18)}`, boxShadow: '0 18px 48px rgba(15,23,42,.18)', backdropFilter: 'blur(18px)' }}>
+                    <Stack  spacing="10px" sx={{ alignItems: "center", ...({ textAlign: 'center', mb: '20px' }) }}>
                         {app_settings?.logo_url ? (
                             <Box component="img" src={app_settings.logo_url} alt={appName} sx={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 2, bgcolor: 'white' }} />
                         ) : (

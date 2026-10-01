@@ -24,6 +24,7 @@ return [
     'locations.manage' => ['description' => 'Manage warehouses and grant access to all active locations. This affects inventory and report visibility.'],
     'inventory.history' => ['description' => 'View and export stock movement history for accessible locations.'],
     'manage_finance' => ['description' => 'Manage financial entries and access finance summaries/exports, subject to location access.'],
+    'finance_book.manage' => ['label' => 'Manage finance book', 'description' => 'View daily branch expense funds, add funding and record actual cash balances for assigned branches.'],
     'view_reports' => ['description' => 'Access all report views, including sales, POS, inventory and operational health.'],
     'reports.sales' => ['description' => 'Access sales and POS reports for accessible locations.'],
     'reports.inventory' => ['description' => 'Access inventory and operational health reports for accessible locations.'],

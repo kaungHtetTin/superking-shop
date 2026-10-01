@@ -46,6 +46,7 @@ import {
     ExpandMore as ExpandMoreIcon,
     ImageOutlined as ImagePlaceholderIcon,
     MoneyOff as FocIcon,
+    LocalOfferOutlined as FlashSaleIcon,
     PointOfSale as CheckoutIcon,
     Print as PrintIcon,
     QrCodeScanner as ScanIcon,
@@ -93,6 +94,13 @@ const resolveSellingPrice = (prices, priceType) => {
 
     return { price_type: priceType, price: 0 };
 };
+const resolveCartPrice = (prices, priceType, flashSale, useFlashSale = false) => {
+    const regular = resolveSellingPrice(prices, priceType);
+    const flashAvailable = regular.price_type === 'retail' && flashSale && Number(flashSale.sale_price) > 0;
+    return flashAvailable && useFlashSale
+        ? { price_type: 'retail', price: Number(flashSale.sale_price), use_flash_sale: true }
+        : { ...regular, use_flash_sale: false };
+};
 
 export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
     const { app_base, app_url, app_settings = {}, admin_landing_path, auth, flash = {}, errors: pageErrors = {} } = usePage().props;
@@ -114,6 +122,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [scanError, setScanError] = useState('');
     const [mobileAppBarExpanded, setMobileAppBarExpanded] = useState(false);
     const [cart, setCart] = useState([]);
+    const [flashSelection, setFlashSelection] = useState({});
     const [customerOptions, setCustomerOptions] = useState([WALK_IN_CUSTOMER]);
     const [customerSearchInput, setCustomerSearchInput] = useState('');
     const [customerLoading, setCustomerLoading] = useState(false);
@@ -130,6 +139,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [tenderType, setTenderType] = useState('cash');
     const [amountTendered, setAmountTendered] = useState('');
     const [creditDepositMethod, setCreditDepositMethod] = useState('cash');
+    const [paymentReference, setPaymentReference] = useState('');
+    const [saleNote, setSaleNote] = useState('');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [errors, setErrors] = useState({});
@@ -147,6 +158,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const searchInputRef = useRef(null);
     const categoryScrollRef = useRef(null);
     const checkoutIntentRef = useRef('complete');
+    const checkoutSubmittingRef = useRef(false);
     const productScrollFrameRef = useRef(null);
     const productLoadMoreSentinelRef = useRef(null);
     const productLoadMoreLockRef = useRef(false);
@@ -188,6 +200,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     useEffect(() => {
         setRegisterId(String(locationRegisters[0]?.id || ''));
         setCart([]);
+        setFlashSelection({});
         refreshShift();
     }, [locationId, refreshShift]);
 
@@ -228,6 +241,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             setCountedCash('');
             setClosingNotes('');
             setCart([]);
+            setFlashSelection({});
             setMessage(tp('Cash shift closed.'));
         } finally {
             setShiftBusy(false);
@@ -449,6 +463,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     useEffect(() => {
         setCart([]);
+        setFlashSelection({});
         setSearchResults([]);
         setResultMeta((prev) => ({ ...prev, page: 1, has_more: false, next_page: null, mode: 'popular' }));
         setSearchQuery('');
@@ -457,7 +472,21 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
 
     const resolveProductPrice = (product, priceType = salePriceType) => {
-        return resolveSellingPrice(product?.prices, priceType).price;
+        return resolveCartPrice(product?.prices, priceType, product?.flash_sale, Boolean(flashSelection[product?.id])).price;
+    };
+
+    const toggleFlashSale = (productUnitId, checked) => {
+        setFlashSelection((current) => ({ ...current, [productUnitId]: checked }));
+        setCart((current) => current.map((line) => {
+            if (Number(line.product_unit_id) !== Number(productUnitId)) return line;
+            const sellingPrice = resolveCartPrice(line.prices, salePriceType, line.flash_sale, checked);
+            return {
+                ...line,
+                price_type: sellingPrice.price_type,
+                unit_price: sellingPrice.price,
+                use_flash_sale: sellingPrice.use_flash_sale,
+            };
+        }));
     };
 
     const addProductToCart = (product) => {
@@ -467,9 +496,9 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         }
 
         setCart((prev) => {
-            const sellingPrice = resolveSellingPrice(product.prices, salePriceType);
+            const sellingPrice = resolveCartPrice(product.prices, salePriceType, product.flash_sale, Boolean(flashSelection[product.id]));
             const appliedPriceType = sellingPrice.price_type;
-            const existingIndex = prev.findIndex((line) => line.product_unit_id === product.id && line.price_type === appliedPriceType);
+            const existingIndex = prev.findIndex((line) => Number(line.product_unit_id) === Number(product.id));
             if (existingIndex >= 0) {
                 const updated = [...prev];
                 const line = updated[existingIndex];
@@ -497,9 +526,11 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     available_base_qty: Number(product.available_base_qty || 0),
                     conversion_factor: Number(product.conversion_factor || 1),
                     prices: product.prices || [],
+                    flash_sale: product.flash_sale || null,
                     unit_options: product.unit_options || [],
                     price_type: appliedPriceType,
                     unit_price: sellingPrice.price,
+                    use_flash_sale: sellingPrice.use_flash_sale,
                     quantity: 1,
                     foc_quantity: 0,
                     foc_product_unit_id: product.id,
@@ -523,7 +554,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             if (line.id !== id) return line;
             const unit = (line.unit_options || []).find((option) => Number(option.id) === Number(productUnitId));
             if (!unit || Number(unit.available_qty || 0) <= 0) return line;
-            const sellingPrice = resolveSellingPrice(unit.prices, salePriceType);
+            const sellingPrice = resolveCartPrice(unit.prices, salePriceType, unit.flash_sale, false);
 
             return {
                 ...line,
@@ -534,8 +565,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 available_qty: Number(unit.available_qty || 0),
                 conversion_factor: Number(unit.conversion_factor || 1),
                 prices: unit.prices || [],
+                flash_sale: unit.flash_sale || null,
                 price_type: sellingPrice.price_type,
                 unit_price: sellingPrice.price,
+                use_flash_sale: false,
                 quantity: Math.max(1, Math.min(Number(line.quantity || 1), Number(unit.available_qty || 1))),
             };
         }));
@@ -567,9 +600,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const changeSalePriceType = (next) => {
         if (!next || next === salePriceType) return;
         setSalePriceType(next);
+        setFlashSelection({});
         setCart((prev) => prev.map((line) => {
             const sellingPrice = resolveSellingPrice(line.prices, next);
-            return { ...line, price_type: sellingPrice.price_type, unit_price: sellingPrice.price };
+            return { ...line, price_type: sellingPrice.price_type, unit_price: sellingPrice.price, use_flash_sale: false };
         }));
     };
 
@@ -583,6 +617,29 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
         return { subtotal, discount, grandTotal };
     }, [cart, discountType, discountValue]);
+    const flashSaleSummary = useMemo(() => {
+        const items = cart.filter((line) => line.use_flash_sale).map((line) => {
+            const regularPrice = Number(resolveSellingPrice(line.prices, 'retail').price || 0);
+            const flashPrice = Number(line.unit_price || 0);
+            const quantity = Number(line.quantity || 0);
+
+            return {
+                id: line.id,
+                name: line.name,
+                campaign: line.flash_sale?.name,
+                quantity,
+                regularPrice,
+                flashPrice,
+                remaining: line.flash_sale?.remaining_qty,
+                savings: Math.max(0, regularPrice - flashPrice) * quantity,
+            };
+        });
+
+        return {
+            items,
+            savings: items.reduce((sum, item) => sum + item.savings, 0),
+        };
+    }, [cart]);
     const creditDeposit = tenderType === 'credit' ? Math.max(0, Number(amountTendered || 0)) : 0;
     const creditAmount = tenderType === 'credit' ? Math.max(0, totals.grandTotal - creditDeposit) : 0;
     const creditUnavailable = tenderType === 'credit' && (
@@ -592,6 +649,12 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         || creditAmount <= 0
         || creditAmount > Number(selectedCustomer.available_credit || 0) + 0.009
     );
+    const quickCashAmounts = useMemo(() => {
+        const total = Math.ceil(Number(totals.grandTotal || 0));
+        const denominations = [1000, 5000, 10000, 20000, 50000, 100000];
+        return [...new Set([total, ...denominations.map((denomination) => Math.ceil(total / denomination) * denomination)])]
+            .filter((amount) => amount >= total).sort((a, b) => a - b).slice(0, 4);
+    }, [totals.grandTotal]);
 
     const hasStockIssue = useMemo(() => {
         const usageByProduct = new Map();
@@ -604,6 +667,17 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         });
 
         return [...usageByProduct.values()].some((stock) => stock.used > stock.available + 0.00005);
+    }, [cart]);
+    const hasFlashSaleIssue = useMemo(() => {
+        const requested = new Map();
+        cart.filter((line) => line.use_flash_sale).forEach((line) => {
+            if (!line.flash_sale || line.flash_sale.remaining_qty === null) return;
+            const key = line.flash_sale.item_id;
+            const current = requested.get(key) || { quantity: 0, remaining: Number(line.flash_sale.remaining_qty) };
+            current.quantity += Number(line.quantity || 0);
+            requested.set(key, current);
+        });
+        return [...requested.values()].some((item) => item.quantity > item.remaining + 0.00005);
     }, [cart]);
     const hasAlternatePriceItems = useMemo(() => cart.some((line) => line.price_type !== 'retail'), [cart]);
     const focLineCount = useMemo(() => cart.filter((line) => Number(line.foc_quantity || 0) > 0).length, [cart]);
@@ -642,6 +716,11 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             if (isMobile) setMobileStep('cart');
             return;
         }
+        if (hasFlashSaleIssue) {
+            setScanError(tp('Flash sale quantity exceeds the remaining offer limit.'));
+            if (isMobile) setMobileStep('cart');
+            return;
+        }
         if (cart.length) {
             setBusy(true);
             let updated;
@@ -649,10 +728,26 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 const latest = await api('/admin/pos/products/prices', { method: 'get', params: { unit_ids: cart.map(line => line.product_unit_id) } });
                 updated = cart.map(line => {
                     const unit = latest.find(unit => Number(unit.id) === Number(line.product_unit_id));
-                    const sellingPrice = resolveSellingPrice(unit?.prices, salePriceType);
-                    return { ...line, prices: unit?.prices || [], price_type: sellingPrice.price_type, unit_price: sellingPrice.price };
+                    const sellingPrice = resolveCartPrice(unit?.prices, salePriceType, unit?.flash_sale, line.use_flash_sale);
+                    return {
+                        ...line,
+                        prices: unit?.prices || [],
+                        flash_sale: unit?.flash_sale || null,
+                        price_type: sellingPrice.price_type,
+                        unit_price: sellingPrice.price,
+                        use_flash_sale: sellingPrice.use_flash_sale,
+                    };
                 });
                 setCart(updated);
+                setFlashSelection((current) => {
+                    const next = { ...current };
+                    updated.forEach((line) => { next[line.product_unit_id] = Boolean(line.use_flash_sale); });
+                    return next;
+                });
+                if (updated.some((line, index) => cart[index].use_flash_sale && (!line.use_flash_sale || (line.flash_sale?.remaining_qty !== null && Number(line.quantity) > Number(line.flash_sale?.remaining_qty))))) {
+                    setScanError(tp('Flash sale changed or sold out. Review the cart before payment.'));
+                    return;
+                }
                 if (updated.some(line => line.unit_price <= 0)) { setScanError('A cart item is unavailable or needs a selling price. Review the cart.'); return; }
                 const subtotal = updated.reduce((sum, item) => sum + calculateLineTotal(item), 0);
                 const discount = Math.min(subtotal, Math.max(0, discountType === 'percent' ? subtotal * Number(discountValue || 0) / 100 : Number(discountValue || 0)));
@@ -669,12 +764,13 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     const checkout = async (event) => {
         event.preventDefault();
-        if (!locationId || !cart.length) return;
+        if (!locationId || !cart.length || checkoutSubmittingRef.current) return;
         if (!selectedCustomer && tenderType === 'credit') {
             setScanError(tp('Choose a registered customer before completing the sale.'));
             return;
         }
 
+        checkoutSubmittingRef.current = true;
         setBusy(true);
         try {
             const data = await api('/admin/pos/checkout', {
@@ -690,6 +786,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         quantity: item.quantity,
                         price_type: item.price_type,
                         expected_unit_price: item.unit_price,
+                        use_flash_sale: Boolean(item.use_flash_sale),
                         foc_quantity: Number(item.foc_quantity || 0),
                         foc_product_unit_id: Number(item.foc_quantity || 0) > 0 ? item.foc_product_unit_id : null,
                     })),
@@ -698,6 +795,10 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     tender_type: tenderType,
                     amount_tendered: ['cash', 'credit'].includes(tenderType) ? Number(amountTendered || 0) : totals.grandTotal,
                     credit_deposit_method: tenderType === 'credit' ? creditDepositMethod : null,
+                    payment_details: paymentReference.trim() && (tenderType === 'mmqr' || (tenderType === 'credit' && creditDepositMethod === 'mmqr'))
+                        ? { reference: paymentReference.trim() }
+                        : null,
+                    notes: saleNote.trim() || null,
                 },
             });
             if ((checkoutIntentRef.current === 'print' || app_settings.receipt?.auto_print) && data.receipt_url) {
@@ -707,10 +808,13 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             }
             setReceipt(data);
             setCart([]);
+            setFlashSelection({});
             setDiscountType('');
             setDiscountValue('');
             setSelectedCustomer(WALK_IN_CUSTOMER);
             setCustomerSearchInput('');
+            setPaymentReference('');
+            setSaleNote('');
             setPaymentDialogOpen(false);
             setMobileStep('products');
             setMessage(`${tp('Sale completed')}: ${data.order.receipt_number}`);
@@ -718,6 +822,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             window.setTimeout(() => searchInputRef.current?.focus(), 100);
         } finally {
             checkoutIntentRef.current = 'complete';
+            checkoutSubmittingRef.current = false;
             setBusy(false);
         }
     };
@@ -806,12 +911,79 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 </Stack>
             )}
 
+            {flashSaleSummary.items.length > 0 && (
+                <Box
+                    className="pos-console__flash-summary"
+                    sx={{
+                        p: 1.25,
+                        border: '1px solid',
+                        borderColor: hasFlashSaleIssue ? 'error.main' : 'primary.main',
+                        bgcolor: hasFlashSaleIssue ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.primary.main, 0.07),
+                        color: 'text.primary',
+                        borderRadius: 1,
+                    }}
+                >
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                            <FlashSaleIcon color={hasFlashSaleIssue ? 'error' : 'primary'} sx={{ fontSize: 18 }} />
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{tp('Flash sale applied')}</Typography>
+                            <Chip size="small" label={flashSaleSummary.items.length} sx={{ height: 22, fontWeight: 800 }} />
+                        </Stack>
+                        <Typography variant="body2" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>
+                            {tp('You save')} {money(flashSaleSummary.savings)}
+                        </Typography>
+                    </Stack>
+                    <Stack spacing={0.75}>
+                        {flashSaleSummary.items.map((item) => (
+                            <Box
+                                key={item.id}
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: 'minmax(0, 1fr) auto auto' },
+                                    gap: { xs: 0.25, sm: 1.5 },
+                                    alignItems: 'center',
+                                    p: 0.75,
+                                    bgcolor: 'background.paper',
+                                    color: 'text.primary',
+                                    borderRadius: 1,
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary" noWrap>
+                                        {item.campaign || tp('Flash sale')} · {tp('Qty')} {item.quantity}
+                                        {item.remaining !== null && item.remaining !== undefined ? ` · ${tp('Remaining')} ${item.remaining}` : ''}
+                                    </Typography>
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ textDecoration: 'line-through', whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' } }}>
+                                    {money(item.regularPrice)}
+                                </Typography>
+                                <Typography variant="body2" color="success.main" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                    {money(item.flashPrice)}
+                                </Typography>
+                            </Box>
+                        ))}
+                    </Stack>
+                    {hasFlashSaleIssue && (
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.75, fontWeight: 800 }}>
+                            {tp('Flash sale quantity exceeds the remaining offer limit.')}
+                        </Typography>
+                    )}
+                </Box>
+            )}
+
             <Box className="pos-console__totals" sx={{ p: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <Stack spacing={0.85}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" color="text.secondary">{tp('Subtotal')}</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>{money(totals.subtotal)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, textAlign: 'right' }}>{money(totals.subtotal + flashSaleSummary.savings)}</Typography>
                     </Box>
+                    {flashSaleSummary.savings > 0 && (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" color="primary.main">{tp('Flash sale discount')}</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main', textAlign: 'right' }}>-{money(flashSaleSummary.savings)}</Typography>
+                        </Box>
+                    )}
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" color="text.secondary">{tp('Discount')}</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: totals.discount > 0 ? 'success.main' : 'inherit', textAlign: 'right' }}>-{money(totals.discount)}</Typography>
@@ -838,6 +1010,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         if (!next) return;
                         setTenderType(next);
                         setAmountTendered(next === 'credit' ? '0' : String(totals.grandTotal));
+                        setPaymentReference('');
                     }}
                 >
                     {paymentMethods.map((method) => (
@@ -846,19 +1019,25 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 </ToggleButtonGroup>
             </Box>
             {tenderType === 'cash' && (
-                <TextField
-                    size="small"
-                    type="number"
-                    label={tp('Cash received')}
-                    value={amountTendered}
-                    onChange={(event) => setAmountTendered(event.target.value)}
-                    error={Number(amountTendered || 0) < totals.grandTotal}
-                    helperText={Number(amountTendered || 0) < totals.grandTotal
-                        ? tp('Cash received must cover the sale total.')
-                        : `${tp('Change')}: ${money(Math.max(0, Number(amountTendered || 0) - totals.grandTotal))}`}
-                    inputProps={{ min: totals.grandTotal, step: 100 }}
-                    fullWidth
-                />
+                <Stack spacing={0.75}>
+                    <TextField size="small" type="number" label={tp('Cash received')} value={amountTendered}
+                        onChange={(event) => setAmountTendered(event.target.value)} error={Number(amountTendered || 0) < totals.grandTotal}
+                        helperText={Number(amountTendered || 0) < totals.grandTotal ? tp('Cash received must cover the sale total.') : `${tp('Change')}: ${money(Math.max(0, Number(amountTendered || 0) - totals.grandTotal))}`}
+                        inputProps={{ min: totals.grandTotal, step: 100 }} fullWidth />
+                    <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                        {quickCashAmounts.map((amount) => (
+                            <Chip key={amount} clickable color={Number(amountTendered) === amount ? 'primary' : 'default'}
+                                variant={Number(amountTendered) === amount ? 'filled' : 'outlined'}
+                                label={amount === Math.ceil(totals.grandTotal) ? tp('Exact') : money(amount)}
+                                onClick={() => setAmountTendered(String(amount))} />
+                        ))}
+                    </Stack>
+                </Stack>
+            )}
+            {tenderType === 'mmqr' && (
+                <TextField size="small" label={tp('Transaction reference')} value={paymentReference}
+                    onChange={(event) => setPaymentReference(event.target.value)} inputProps={{ maxLength: 100 }}
+                    helperText={tp('Optional payment reference for reconciliation.')} fullWidth />
             )}
             {tenderType === 'credit' && (
                 <Stack spacing={1}>
@@ -883,13 +1062,22 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         fullWidth
                     />
                     {creditDeposit > 0 && (
-                        <TextField select size="small" label={tp('Deposit method')} value={creditDepositMethod} onChange={(event) => setCreditDepositMethod(event.target.value)} fullWidth>
+                        <TextField select size="small" label={tp('Deposit method')} value={creditDepositMethod} onChange={(event) => {
+                            setCreditDepositMethod(event.target.value);
+                            setPaymentReference('');
+                        }} fullWidth>
                             <MenuItem value="cash">{tp('cash')}</MenuItem>
                             <MenuItem value="mmqr">MMQR (Pay)</MenuItem>
                         </TextField>
                     )}
+                    {creditDeposit > 0 && creditDepositMethod === 'mmqr' && (
+                        <TextField size="small" label={tp('Transaction reference')} value={paymentReference}
+                            onChange={(event) => setPaymentReference(event.target.value)} inputProps={{ maxLength: 100 }} fullWidth />
+                    )}
                 </Stack>
             )}
+            <TextField size="small" label={tp('Sale note (optional)')} value={saleNote}
+                onChange={(event) => setSaleNote(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
         </Stack>
     );
 
@@ -899,7 +1087,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -919,7 +1107,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -1527,7 +1715,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                                     variant="contained"
                                     size="small"
                                     startIcon={<CheckoutIcon />}
-                                    disabled={busy || !isOnline || !locationId || cart.length === 0 || hasStockIssue}
+                                    disabled={busy || !isOnline || !locationId || cart.length === 0 || hasStockIssue || hasFlashSaleIssue}
                                     onClick={openPaymentDialog}
                                     sx={{ minWidth: 128, fontWeight: 800 }}
                                 >
@@ -1543,6 +1731,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         <div className="pos-items">
                             {cart.map(line => <PosCartItem key={line.id} line={line} money={money} t={tp}
                                 exceedsStock={lineExceedsStock(line)} canFoc={can.discount}
+                                canFlashSale={salePriceType === 'retail'} onFlashSale={checked => toggleFlashSale(line.product_unit_id, checked)}
                                 onQuantity={quantity => updateCartLine(line.id, { quantity })}
                                 onUnit={unit => changeCartUnit(line.id, unit)}
                                 onFocQuantity={(quantity, normalize) => changeCartFocQuantity(line.id, quantity, normalize)}
@@ -1632,8 +1821,8 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             '--color-muted': theme.palette.text.secondary,
                         },
                         sx: {
-                            width: 'min(520px, calc(100vw - 24px))',
-                            maxWidth: 520,
+                            width: 'min(680px, calc(100vw - 24px))',
+                            maxWidth: 680,
                             borderRadius: 1.5,
                             border: `1px solid ${alpha(theme.palette.primary.main, 0.16)}`,
                             boxShadow: '0 18px 48px rgba(10, 19, 24, 0.20), 0 3px 10px rgba(10, 19, 24, 0.08)',

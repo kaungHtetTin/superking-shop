@@ -129,6 +129,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::get('/flash-sales/{flashSale}', [FlashSaleController::class, 'show'])->name('flash-sales.show');
         Route::get('/flash-sales/{flashSale}/edit', [FlashSaleController::class, 'edit'])->name('flash-sales.edit');
         Route::patch('/flash-sales/{flashSale}', [FlashSaleController::class, 'update'])->name('flash-sales.update');
+        Route::post('/flash-sales/{flashSale}', [FlashSaleController::class, 'update'])->name('flash-sales.update.post');
         Route::delete('/flash-sales/{flashSale}', [FlashSaleController::class, 'destroy'])->name('flash-sales.destroy');
     });
 
@@ -179,6 +180,12 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::middleware('admin.any_permission:view_reports,reports.sales,reports.inventory')->group(function () {
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+    });
+
+    Route::middleware('admin.permission:finance_book.manage')->group(function () {
+        Route::get('/finance-book', [\App\Http\Controllers\Admin\FinanceBookController::class, 'index'])->name('finance-book.index');
+        Route::post('/finance-book', [\App\Http\Controllers\Admin\FinanceBookController::class, 'store'])->name('finance-book.store');
+        Route::post('/finance-book/counts', [\App\Http\Controllers\Admin\FinanceBookController::class, 'saveCount'])->name('finance-book.counts.store');
     });
 
     Route::middleware('admin.permission:manage_finance')->group(function () {

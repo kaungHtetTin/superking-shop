@@ -308,15 +308,23 @@ export default function FlashSaleForm({
     };
     const submit = () => {
         if (!pricingComplete || form.processing) return;
+        if (mode === "edit" && !flashSale?.id) {
+            form.setError("request", t("Unable to identify the flash sale to update."));
+            return;
+        }
         form.transform((data) => ({
             ...data,
             starts_at: dateToIsoMidnight(data.starts_at),
             ends_at: dateToIsoMidnight(data.ends_at),
             items: data.items.map(({ sold_count, ...item }) => item),
         }));
-        const options = { preserveScroll: true, onError: serverErrors };
+        const options = {
+            preserveScroll: true,
+            refreshRedirected: false,
+            onError: serverErrors,
+        };
         mode === "edit"
-            ? form.patch(
+            ? form.post(
                   routeWithBase(`/admin/flash-sales/${flashSale.id}`, app_base),
                   options,
               )
@@ -330,15 +338,6 @@ export default function FlashSaleForm({
                 mode === "edit" ? t("Edit flash sale") : t("Create flash sale")
             }
             eyebrow={t("Marketing")}
-            action={
-                <Link
-                    href={routeWithBase("/admin/flash-sales", app_base)}
-                    className="btn secondary"
-                >
-                    <Icon name="navigation" size={14} />
-                    {t("Back to list")}
-                </Link>
-            }
         >
             <Head
                 title={
@@ -348,7 +347,13 @@ export default function FlashSaleForm({
                 }
             />
             <AdminFlash flash={flash} errors={form.errors} />
+            <div className="sticky-toolbar">
+                <Link className="back-link" href={routeWithBase("/admin/flash-sales", app_base)}>
+                    <Icon name="navigation" size={14} style={{ transform: "rotate(180deg)" }} /> {t("Back to flash sales")}
+                </Link>
+            </div>
             <form
+                className="admin-wizard flash-sale-wizard"
                 onSubmit={(event) => {
                     event.preventDefault();
                     tab < 3 ? next() : submit();
@@ -669,221 +674,100 @@ export default function FlashSaleForm({
                                     </small>
                                 }
                             />
-                            <div
-                                className="wizard-qty-table"
-                                style={{
-                                    "--wizard-qty-fields": 5,
-                                    "--wizard-qty-unit": "108px",
-                                }}
-                            >
-                                {selectedItems.length > 0 && (
-                                    <div
-                                        className="wizard-qty-list-head"
-                                        aria-hidden="true"
-                                    >
-                                        <span>{t("Product / Unit")}</span>
-                                        <span>{t("Original")}</span>
-                                        <span>{t("Discount")}</span>
-                                        <span>{t("Value")}</span>
-                                        <span>{t("Limit")}</span>
-                                        <span>{t("Sale price")}</span>
-                                        <span>{t("Action")}</span>
-                                    </div>
-                                )}
-                                <div className="receipt-price-lines wizard-console-lines">
-                                    {selectedItems.map(
-                                        ({ item, index, unit }) => {
-                                            const locked =
-                                                Number(item.sold_count || 0) >
-                                                0;
-                                            const discountError =
-                                                form.errors[
-                                                    `items.${index}.discount_value`
-                                                ] ||
-                                                pricingErrors[
-                                                    `items.${index}.discount_value`
-                                                ];
-                                            const quantityError =
-                                                form.errors[
-                                                    `items.${index}.quantity_limit`
-                                                ] ||
-                                                pricingErrors[
-                                                    `items.${index}.quantity_limit`
-                                                ];
+                            <div className="receipt-sheet-wrap flash-sale-sheet-wrap">
+                                <table className="receipt-spreadsheet flash-sale-sheet">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col">{t("Product / Unit")}</th>
+                                            <th scope="col">{t("Original")}</th>
+                                            <th scope="col">{t("Discount")}</th>
+                                            <th scope="col">{t("Value")}</th>
+                                            <th scope="col">{t("Limit")}</th>
+                                            <th scope="col">{t("Sale price")}</th>
+                                            <th scope="col" aria-label={t("Action")} />
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {selectedItems.map(({ item, index, unit }, rowIndex) => {
+                                            const locked = Number(item.sold_count || 0) > 0;
+                                            const discountError = form.errors[`items.${index}.discount_value`] || pricingErrors[`items.${index}.discount_value`];
+                                            const quantityError = form.errors[`items.${index}.quantity_limit`] || pricingErrors[`items.${index}.quantity_limit`];
+                                            const salePrice = salePriceFor(unit, item);
                                             return (
-                                                <div
-                                                    className={`receipt-price-line has-remove wizard-console-line${discountError || quantityError ? " is-invalid" : ""}`}
-                                                    key={unit.id}
-                                                >
-                                                    <UnitIdentity
-                                                        unit={unit}
-                                                        detail={`${formatUnitWithConversion(unit, unit.product_units)} · ${formatSelectedUnitQuantity(unit.available_qty, unit, unit.product_units)} ${t("available")}`}
-                                                    />
-                                                    <div className="wizard-qty-value">
-                                                        <span>
-                                                            {t("Original")}
-                                                        </span>
-                                                        <strong>
-                                                            {formatMoney(
-                                                                unit.price,
-                                                            )}
-                                                        </strong>
-                                                    </div>
-                                                    <label className="form-field">
-                                                        <span>
-                                                            {t("Discount")}
-                                                        </span>
+                                                <tr key={unit.id}>
+                                                    <th scope="row">{String(rowIndex + 1).padStart(2, "0")}</th>
+                                                    <td>
+                                                        <div className="receipt-sheet-product">
+                                                            <strong title={unit.product_name}>{unit.product_name}</strong>
+                                                            <small title={formatUnitWithConversion(unit, unit.product_units)}>
+                                                                {formatUnitWithConversion(unit, unit.product_units)} · {formatSelectedUnitQuantity(unit.available_qty, unit, unit.product_units)} {t("available")}
+                                                            </small>
+                                                        </div>
+                                                    </td>
+                                                    <td className="flash-sale-sheet-value">{formatMoney(unit.price)}</td>
+                                                    <td>
                                                         <select
+                                                            className="sheet-input"
                                                             name={`items.${index}.discount_type`}
-                                                            value={
-                                                                item.discount_type
-                                                            }
+                                                            aria-label={t("Discount")}
+                                                            value={item.discount_type}
                                                             disabled={locked}
-                                                            onChange={(e) =>
-                                                                updateItem(
-                                                                    unit.id,
-                                                                    {
-                                                                        discount_type:
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        discount_value:
-                                                                            "",
-                                                                    },
-                                                                )
-                                                            }
+                                                            onChange={(e) => updateItem(unit.id, { discount_type: e.target.value, discount_value: "" })}
                                                         >
-                                                            <option value="percentage">
-                                                                {t(
-                                                                    "Percentage",
-                                                                )}
-                                                            </option>
-                                                            <option value="fixed_price">
-                                                                {t(
-                                                                    "Fixed price",
-                                                                )}
-                                                            </option>
+                                                            <option value="percentage">{t("Percentage")}</option>
+                                                            <option value="fixed_price">{t("Fixed price")}</option>
                                                         </select>
-                                                    </label>
-                                                    <label
-                                                        className={
-                                                            discountError
-                                                                ? "form-field is-invalid"
-                                                                : "form-field"
-                                                        }
-                                                    >
-                                                        <span>
-                                                            {t("Value")}
-                                                        </span>
+                                                    </td>
+                                                    <td className={discountError ? "flash-sale-sheet-error" : undefined}>
                                                         <input
+                                                            className="sheet-input numeric"
                                                             name={`items.${index}.discount_value`}
+                                                            aria-label={t("Value")}
                                                             type="number"
                                                             min="0.01"
                                                             step="0.01"
-                                                            value={
-                                                                item.discount_value
-                                                            }
+                                                            value={item.discount_value}
                                                             disabled={locked}
-                                                            onChange={(e) =>
-                                                                updateItem(
-                                                                    unit.id,
-                                                                    {
-                                                                        discount_value:
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                            aria-invalid={Boolean(
-                                                                discountError,
-                                                            )}
-                                                            title={
-                                                                discountError ||
-                                                                undefined
-                                                            }
+                                                            onChange={(e) => updateItem(unit.id, { discount_value: e.target.value })}
+                                                            aria-invalid={Boolean(discountError)}
+                                                            title={discountError || undefined}
                                                         />
-                                                    </label>
-                                                    <label
-                                                        className={
-                                                            quantityError
-                                                                ? "form-field is-invalid"
-                                                                : "form-field"
-                                                        }
-                                                    >
-                                                        <span>
-                                                            {t("Limit")}
-                                                        </span>
+                                                    </td>
+                                                    <td className={quantityError ? "flash-sale-sheet-error" : undefined}>
                                                         <input
+                                                            className="sheet-input numeric"
                                                             name={`items.${index}.quantity_limit`}
+                                                            aria-label={t("Limit")}
                                                             type="number"
                                                             min="0.0001"
                                                             step="0.0001"
-                                                            value={
-                                                                item.quantity_limit
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateItem(
-                                                                    unit.id,
-                                                                    {
-                                                                        quantity_limit:
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                            placeholder={t(
-                                                                "No limit",
-                                                            )}
-                                                            aria-invalid={Boolean(
-                                                                quantityError,
-                                                            )}
-                                                            title={
-                                                                quantityError ||
-                                                                undefined
-                                                            }
+                                                            value={item.quantity_limit}
+                                                            onChange={(e) => updateItem(unit.id, { quantity_limit: e.target.value })}
+                                                            placeholder={t("No limit")}
+                                                            aria-invalid={Boolean(quantityError)}
+                                                            title={quantityError || undefined}
                                                         />
-                                                    </label>
-                                                    <div className="wizard-qty-value">
-                                                        <span>
-                                                            {t("Sale price")}
-                                                        </span>
-                                                        <strong>
-                                                            {salePriceFor(
-                                                                unit,
-                                                                item,
-                                                            )
-                                                                ? formatMoney(
-                                                                      salePriceFor(
-                                                                          unit,
-                                                                          item,
-                                                                      ),
-                                                                  )
-                                                                : "-"}
-                                                        </strong>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="icon-btn small danger wizard-qty-remove"
-                                                        disabled={locked}
-                                                        onClick={() =>
-                                                            removeUnit(unit.id)
-                                                        }
-                                                        aria-label={t(
-                                                            "Remove unit",
-                                                        )}
-                                                    >
-                                                        <Icon
-                                                            name="trash"
-                                                            size={13}
-                                                        />
-                                                    </button>
-                                                </div>
+                                                    </td>
+                                                    <td className="flash-sale-sheet-value flash-sale-sheet-price">
+                                                        {salePrice !== null ? formatMoney(salePrice) : "-"}
+                                                    </td>
+                                                    <td className="sheet-action">
+                                                        <button
+                                                            type="button"
+                                                            className="icon-btn small danger"
+                                                            disabled={locked}
+                                                            onClick={() => removeUnit(unit.id)}
+                                                            aria-label={t("Remove unit")}
+                                                        >
+                                                            <Icon name="trash" size={13} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
                                             );
-                                        },
-                                    )}
-                                </div>
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </>
                     )}

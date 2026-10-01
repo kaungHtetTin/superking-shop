@@ -213,6 +213,9 @@ function AdminChrome({ children, mainClassName = '' }) {
                               },
                           ]
                         : []),
+                    ...(can('finance_book.manage')
+                        ? [{ label: t('Finance book'), href: routeWithBase('/admin/finance-book', app_base), icon: 'wallet' }]
+                        : []),
                     ...(can('manage_payment_methods')
                         ? [
                               {

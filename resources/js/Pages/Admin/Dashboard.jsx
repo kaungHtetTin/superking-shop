@@ -2,7 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { useMemo } from 'react';
-import { Head, Link, usePage } from '@/spa/router';
+import { Head, Link, router, usePage } from '@/spa/router';
 import { routeWithBase } from '@/Utils/url';
 import { paymentLabels } from '@/constants/orderLabels';
 import { usePhraseTranslation } from '@/Utils/i18n';
@@ -246,7 +246,7 @@ function LowStockList({ items }) {
     );
 }
 
-export default function Dashboard({ stats = {}, recentOrders = [], productCount = 0, customerCount = 0, dashboard = {} }) {
+export default function Dashboard({ stats = {}, recentOrders = [], productCount = 0, customerCount = 0, dashboard = {}, locations = [], filters = {} }) {
     const { app_base, auth, is_super_admin } = usePage().props;
     const t = usePhraseTranslation();
     const can = (permission) => is_super_admin || (auth?.user?.permissions || []).includes(permission);
@@ -314,7 +314,7 @@ export default function Dashboard({ stats = {}, recentOrders = [], productCount 
     ].filter((item) => item.show);
 
     return (
-        <AdminLayout title={t('Dashboard')} eyebrow={t('Operations overview')}>
+        <AdminLayout title={t('Dashboard')} eyebrow={t('Operations overview')} action={<select aria-label={t('Branch')} value={filters.location_id || ''} onChange={(event) => router.get(routeWithBase('/admin/dashboard', app_base), event.target.value ? { location_id: event.target.value } : {}, { preserveState: true })}><option value="">{t('All allowed branches')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name} ({location.code})</option>)}</select>}>
             <Head title={t('Admin Dashboard')} />
 
             <div className="metrics-grid six compact-kpi-strip dashboard-kpi-strip">

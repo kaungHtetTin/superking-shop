@@ -39,13 +39,14 @@ function BlogCard({ post }) {
                 bgcolor: 'white',
                 color: 'inherit',
                 textDecoration: 'none',
-                border: '1px solid rgba(0,0,0,0.06)',
+                border: '1px solid rgba(15,23,42,0.1)',
                 borderRadius: 2,
                 overflow: 'hidden',
                 minHeight: 300,
-                boxShadow: '0 12px 34px rgba(36,27,24,.06)',
+                boxShadow: '0 4px 14px rgba(15,23,42,.05)',
                 transition: 'transform .2s ease, box-shadow .2s ease',
-                '&:hover': { borderColor: 'primary.main', transform: 'translateY(-3px)', boxShadow: '0 18px 42px rgba(36,27,24,.11)' },
+                '&:hover': { borderColor: 'primary.main', transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(15,23,42,.1)' },
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 3 },
             }}
         >
             <Box sx={{ aspectRatio: '16 / 9', bgcolor: 'primary.light', display: 'grid', placeItems: 'center', overflow: 'hidden', position: 'relative' }}>
@@ -75,7 +76,7 @@ function BlogCard({ post }) {
                 )}
             </Box>
             <Stack spacing="10px" sx={{ p: { xs: '16px', md: '18px' } }}>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Stack direction="row" spacing={1}   sx={{ alignItems: "center", flexWrap: "wrap", ...({}) }}>
                     {post.category && <Chip size="small" label={post.category.name} color="primary" variant="outlined" />}
                     <Typography variant="caption" color="text.secondary">{formatDate(post.published_at)}</Typography>
                 </Stack>
@@ -86,7 +87,7 @@ function BlogCard({ post }) {
                     </Typography>
                 )}
                 <Box sx={{ flexGrow: 1 }} />
-                <Stack direction="row" spacing={0.75} flexWrap="wrap">
+                <Stack direction="row" spacing={0.75}  sx={{ flexWrap: "wrap", ...({}) }}>
                     {(post.tags || []).slice(0, 3).map((tag) => (
                         <Typography key={tag.id} variant="caption" color="text.secondary">#{tag.name}</Typography>
                     ))}
@@ -111,7 +112,7 @@ export default function BlogsIndex({ posts, filters, categories, tags }) {
     };
 
     return (
-        <Box sx={{ bgcolor: 'background.default', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+        <Box className="user-storefront" sx={{ bgcolor: 'background.default', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
             <UserBrandHead title="Blog" />
             <Head title={t('Blog')} />
             <Navbar />
@@ -130,7 +131,7 @@ export default function BlogsIndex({ posts, filters, categories, tags }) {
                     <Button type="submit" variant="contained">{t('Search')}</Button>
                 </Box>
 
-                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1, mb: 3 }}>
+                <Stack direction="row" spacing={1}  sx={{ flexWrap: "wrap", ...({ gap: 1, mb: 3 }) }}>
                     <Chip label={t('All')} color={!filters.category && !filters.tag ? 'primary' : 'default'} onClick={() => router.get(routeWithBase('/blogs', app_base))} />
                     {categories.map((category) => (
                         <Chip
@@ -168,7 +169,7 @@ export default function BlogsIndex({ posts, filters, categories, tags }) {
                 )}
 
                 {posts.last_page > 1 && (
-                    <Stack alignItems="center" sx={{ mt: 4 }}>
+                    <Stack  sx={{ alignItems: "center", ...({ mt: 4 }) }}>
                         <Pagination
                             count={posts.last_page}
                             page={posts.current_page}

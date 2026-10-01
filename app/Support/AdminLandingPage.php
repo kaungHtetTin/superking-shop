@@ -19,6 +19,7 @@ class AdminLandingPage
             ['orders.view', '/admin/orders'],
             ['view_customers', '/admin/customers'],
             ['manage_finance', '/admin/finance'],
+            ['finance_book.manage', '/admin/finance-book'],
             ['manage_payment_methods', '/admin/payment-methods'],
             ['view_reports', '/admin/reports'],
             ['reports.sales', '/admin/reports'],

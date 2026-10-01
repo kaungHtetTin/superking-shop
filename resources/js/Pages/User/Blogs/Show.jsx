@@ -84,7 +84,7 @@ export default function BlogShow({ post, related = [] }) {
                 </Button>
 
                 <Stack spacing="8px" sx={{ mb: '20px' }}>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+                    <Stack direction="row" spacing={1}   sx={{ flexWrap: "wrap", alignItems: "center", ...({}) }}>
                         {post.category && (
                             <Chip
                                 label={post.category.name}
@@ -129,7 +129,7 @@ export default function BlogShow({ post, related = [] }) {
                         bgcolor: 'white',
                         borderRadius: 2,
                         p: { xs: '16px', md: '28px' },
-                        border: '1px solid rgba(0,0,0,0.06)',
+                        border: '1px solid rgba(15,23,42,0.1)',
                         fontSize: { xs: '1rem', md: '1.0625rem' },
                         lineHeight: 1.75,
                         '& p': { lineHeight: 1.75, mb: '16px' },
@@ -144,7 +144,7 @@ export default function BlogShow({ post, related = [] }) {
                 />
 
                 {(post.tags || []).length > 0 && (
-                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1, mt: 3 }}>
+                    <Stack direction="row" spacing={1}  sx={{ flexWrap: "wrap", ...({ gap: 1, mt: 3 }) }}>
                         {post.tags.map((tag) => (
                             <Chip
                                 key={tag.id}
@@ -159,8 +159,8 @@ export default function BlogShow({ post, related = [] }) {
                 )}
 
                 {related.length > 0 && (
-                    <Box sx={{ mt: '32px', p: { xs: '16px', md: '20px' }, bgcolor: 'white', borderRadius: 2, border: '1px solid rgba(0,0,0,0.06)' }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Box sx={{ mt: '32px', p: { xs: '16px', md: '20px' }, bgcolor: 'white', borderRadius: 2, border: '1px solid rgba(15,23,42,0.1)' }}>
+                        <Stack direction="row"   sx={{ justifyContent: "space-between", alignItems: "center", ...({ mb: 2 }) }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Related posts')}</Typography>
                             <Button component={Link} href={routeWithBase('/blogs', app_base)} size="small" endIcon={<ArrowForward />}>
                                 All posts

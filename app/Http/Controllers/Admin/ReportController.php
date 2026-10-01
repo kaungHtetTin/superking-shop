@@ -39,10 +39,8 @@ class ReportController extends Controller
         $requestedLocationId = (int) ($filters['location_id'] ?? 0);
         abort_if($requestedLocationId && ! in_array($requestedLocationId, $accessibleLocationIds, true), 403);
         $locationIds = $requestedLocationId ? [$requestedLocationId] : $accessibleLocationIds;
-        if ($view === 'product-sales') {
-            $filters['from'] = $filters['from'] ?? now()->startOfMonth()->toDateString();
-            $filters['to'] = $filters['to'] ?? now()->toDateString();
-        }
+        $filters['from'] = $filters['from'] ?? now('Asia/Bangkok')->subYearNoOverflow()->toDateString();
+        $filters['to'] = $filters['to'] ?? now('Asia/Bangkok')->toDateString();
         $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
         $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
         $paidOrders = Order::query()
@@ -363,6 +361,8 @@ class ReportController extends Controller
             'breakdown' => ['nullable', 'string', 'in:summary,daily'],
         ]);
 
+        $filters['from'] = $filters['from'] ?? now('Asia/Bangkok')->subYearNoOverflow()->toDateString();
+        $filters['to'] = $filters['to'] ?? now('Asia/Bangkok')->toDateString();
         $accessibleIds = array_map('intval', $request->user()->accessibleLocationIds());
         $locationId = (int) ($filters['location_id'] ?? 0);
         abort_if($locationId && ! in_array($locationId, $accessibleIds, true), 403);

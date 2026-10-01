@@ -342,16 +342,17 @@ class OrderManagementService
     /**
      * @return array{total: int, pending_payment: int, processing: int, shipped: int, delivered: int, cancelled: int, revenue_paid: float}
      */
-    public function stats(): array
+    public function stats(?array $locationIds = null): array
     {
+        $orders = Order::query()->when($locationIds !== null, fn ($query) => $query->whereIn('location_id', $locationIds));
         return [
-            'total' => Order::count(),
-            'pending_payment' => Order::where('payment_status', 'pending_review')->count(),
-            'processing' => Order::where('status', 'processing')->where('payment_status', 'paid')->count(),
-            'shipped' => Order::where('status', 'shipped')->count(),
-            'delivered' => Order::where('status', 'delivered')->count(),
-            'cancelled' => Order::where('status', 'cancelled')->count(),
-            'revenue_paid' => (float) Order::where('payment_status', 'paid')->sum('final_amount'),
+            'total' => (clone $orders)->count(),
+            'pending_payment' => (clone $orders)->where('payment_status', 'pending_review')->count(),
+            'processing' => (clone $orders)->where('status', 'processing')->where('payment_status', 'paid')->count(),
+            'shipped' => (clone $orders)->where('status', 'shipped')->count(),
+            'delivered' => (clone $orders)->where('status', 'delivered')->count(),
+            'cancelled' => (clone $orders)->where('status', 'cancelled')->count(),
+            'revenue_paid' => (float) (clone $orders)->where('payment_status', 'paid')->sum('final_amount'),
         ];
     }
 }

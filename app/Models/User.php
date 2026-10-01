@@ -165,13 +165,13 @@ class User extends Authenticatable
 
     public function canAccessLocation(Location $location): bool
     {
-        return $this->hasAdminPermission('locations.manage')
+        return $this->isSuperAdmin()
             || $this->locations()->whereKey($location->id)->exists();
     }
 
     public function accessibleLocationIds(): array
     {
-        if ($this->hasAdminPermission('locations.manage')) {
+        if ($this->isSuperAdmin()) {
             return Location::query()->where('is_active', true)->pluck('id')->all();
         }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Badge, InputBase, Box, Container, Stack, Button } from '@mui/material';
-import { ArticleOutlined, Search, ShoppingCart, ChatBubbleOutlined, Favorite, MusicNote, Piano, Headphones } from '@mui/icons-material';
+import { ArticleOutlined, Search, ShoppingCartOutlined as ShoppingCart, ChatBubbleOutlineRounded as ChatBubbleOutlined, FavoriteBorderOutlined as Favorite, MusicNote, StorefrontOutlined, CategoryOutlined } from '@mui/icons-material';
 import { styled, alpha, useTheme } from '@mui/material/styles';
 import { Link, router, usePage } from '@/spa/router';
 import { routeWithBase } from '@/Utils/url';
@@ -14,19 +14,26 @@ import { useTranslation } from '@/Utils/i18n';
 
 const SearchContainer = styled('form')(({ theme }) => ({
     position: 'relative',
-    borderRadius: 10,
-    backgroundColor: alpha(theme.palette.common.white, 0.92),
+    borderRadius: 8,
+    backgroundColor: '#f5f8f8',
     '&:hover': {
         backgroundColor: theme.palette.common.white,
+        borderColor: alpha(theme.palette.primary.main, 0.45),
     },
-    marginRight: theme.spacing(1),
+    '&:focus-within': {
+        backgroundColor: theme.palette.common.white,
+        borderColor: theme.palette.primary.main,
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.12)}`,
+    },
+    marginRight: 0,
     marginLeft: 0,
     width: '100%',
     [theme.breakpoints.up('sm')]: {
-        marginLeft: theme.spacing(2),
+        marginLeft: 0,
         width: 'auto',
     },
-    border: '1px solid rgba(244, 194, 103, 0.35)',
+    border: '1px solid rgba(15, 23, 42, 0.12)',
+    transition: 'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
     minWidth: 0,
     minHeight: 44,
 }));
@@ -54,8 +61,9 @@ const StyledInputBase = styled(InputBase)((({ theme }) => ({
     color: theme.palette.text.primary,
     width: '100%',
     '& .MuiInputBase-input': {
-        minHeight: 42,
-        padding: theme.spacing(1, 1.5, 1, 0),
+        minHeight: 44,
+        boxSizing: 'border-box',
+        padding: '10px 12px 10px 44px',
         paddingLeft: 44,
         transition: theme.transitions.create('width'),
         fontSize: '0.875rem',
@@ -68,7 +76,7 @@ const StyledInputBase = styled(InputBase)((({ theme }) => ({
         },
         width: '100%',
         [theme.breakpoints.up('md')]: {
-            width: '28ch',
+            width: '24ch',
         },
     },
 })));
@@ -84,6 +92,15 @@ const Navbar = ({ persistentRoot = false }) => {
     const appName = app_settings?.app_name || 'Harmony House';
     const userChrome = useUserChrome();
     const t = useTranslation();
+    const currentPath = String(url || '').split('?')[0];
+    const isActive = (section) => new RegExp(`/${section}(?:/|$)`).test(currentPath);
+    const actionSx = {
+        color: musicColors.rosin,
+        width: { xs: 40, sm: 42 },
+        height: { xs: 40, sm: 42 },
+        borderRadius: 2,
+        '&:hover': { bgcolor: alpha(musicColors.rosin, 0.09) },
+    };
 
     useEffect(() => {
         const queryString = typeof url === 'string' ? url.split('?')[1] : '';
@@ -125,15 +142,18 @@ const Navbar = ({ persistentRoot = false }) => {
 
     return (
         <AppBar position="sticky" elevation={0} sx={{
-            bgcolor: 'rgba(31, 23, 20, 0.94)',
-            color: 'white',
+            bgcolor: 'rgba(255, 255, 255, 0.96)',
+            color: musicColors.ink,
             backdropFilter: 'blur(16px)',
-            borderBottom: `1px solid ${alpha(musicColors.amber, 0.34)}`,
-            boxShadow: '0 3px 12px rgba(23, 19, 18, 0.12)',
+            borderBottom: `1px solid ${alpha(musicColors.rosin, 0.17)}`,
+            boxShadow: 'none',
+            borderRadius: 0,
+            '& .storefront-language-switcher': { borderRadius: '8px', minHeight: 44 },
+            '& .MuiIconButton-root': { width: 44, height: 44, borderRadius: '8px' },
             zIndex: 1100,
         }}>
             <Container maxWidth="lg">
-                <Toolbar variant="dense" sx={{ px: { xs: 0, sm: 1 }, minHeight: { xs: 56, sm: 64 } }}>
+                <Toolbar variant="dense" sx={{ px: '0 !important', gap: { xs: '4px', lg: '12px' }, minHeight: { xs: 64, sm: 72 } }}>
                     <Box
                         component={Link}
                         href={routeWithBase('/', app_base)}
@@ -142,7 +162,7 @@ const Navbar = ({ persistentRoot = false }) => {
                             alignItems: 'center',
                             gap: 1,
                             minWidth: 0,
-                            mr: { xs: 0.75, sm: 2 },
+                            mr: 0,
                             color: 'inherit',
                             textDecoration: 'none',
                         }}
@@ -157,7 +177,7 @@ const Navbar = ({ persistentRoot = false }) => {
                                     height: { xs: 32, sm: 36 },
                                     objectFit: 'contain',
                                     borderRadius: 1,
-                                    bgcolor: musicColors.sheet,
+                                    bgcolor: musicColors.smoke,
                                 }}
                             />
                         ) : (
@@ -168,8 +188,8 @@ const Navbar = ({ persistentRoot = false }) => {
                                     display: 'grid',
                                     placeItems: 'center',
                                     borderRadius: 1.5,
-                                    bgcolor: musicColors.brass,
-                                    color: musicColors.ink,
+                                    bgcolor: alpha(musicColors.rosin, 0.12),
+                                    color: musicColors.rosin,
                                     fontSize: '0.95rem',
                                     fontWeight: 700,
                                 }}
@@ -184,13 +204,13 @@ const Navbar = ({ persistentRoot = false }) => {
                                 sx={{
                                     maxWidth: { sm: 180, md: 220 },
                                     fontWeight: 700,
-                                    color: musicColors.amber,
+                                    color: musicColors.ink,
                                     lineHeight: 1.05,
                                 }}
                             >
                                 {appName}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500, fontSize: '0.75rem', display: { sm: 'none', md: 'block' } }}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 400, fontSize: '0.75rem', display: { xs: 'none', xl: 'block' } }}>
                                 {t('storefront.tagline', 'Instruments, gear & studio essentials')}
                             </Typography>
                         </Box>
@@ -203,27 +223,29 @@ const Navbar = ({ persistentRoot = false }) => {
                             display: { xs: 'none', lg: 'flex' },
                             ml: 1,
                             '& .MuiButton-root': {
-                                color: 'rgba(255,255,255,0.78)',
+                                color: musicColors.ink,
                                 fontWeight: 700,
-                                px: 1.25,
-                                minHeight: 42,
-                                '&:hover': { color: musicColors.amber, bgcolor: alpha(musicColors.amber, 0.08) },
+                                px: '12px',
+                                minHeight: 44,
+                                borderRadius: '8px',
+                                '&:hover': { color: musicColors.rosin, bgcolor: alpha(musicColors.rosin, 0.07) },
+                                '&[aria-current="page"]': { color: musicColors.rosin, bgcolor: alpha(musicColors.rosin, 0.1) },
                             },
                         }}
                     >
-                        <Button component={Link} href={routeWithBase('/products', app_base)} startIcon={<Piano fontSize="small" />}>
+                        <Button component={Link} href={routeWithBase('/products', app_base)} aria-current={isActive('products') ? 'page' : undefined} startIcon={<StorefrontOutlined fontSize="small" />}>
                             {t('storefront.shop', 'Shop')}
                         </Button>
-                        <Button component={Link} href={routeWithBase('/categories', app_base)} startIcon={<Headphones fontSize="small" />}>
+                        <Button component={Link} href={routeWithBase('/categories', app_base)} aria-current={isActive('categories') ? 'page' : undefined} startIcon={<CategoryOutlined fontSize="small" />}>
                             {t('storefront.categories', 'Categories')}
                         </Button>
-                        <Button component={Link} href={routeWithBase('/blogs', app_base)} startIcon={<ArticleOutlined fontSize="small" />}>
+                        <Button component={Link} href={routeWithBase('/blogs', app_base)} aria-current={isActive('blogs') ? 'page' : undefined} startIcon={<ArticleOutlined fontSize="small" />}>
                             {t('storefront.blog', 'Blog')}
                         </Button>
                     </Stack>
 
                     <Box sx={{ flexGrow: 1 }} />
-                    
+
                     <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                         {renderSearch(t('storefront.search_desktop', 'Search instruments, cables, amps...'))}
                     </Box>
@@ -234,7 +256,7 @@ const Navbar = ({ persistentRoot = false }) => {
                             aria-label={t('storefront.support_chat', 'Open support chat')}
                             component={Link}
                             href={routeWithBase(auth?.user ? '/chat' : '/login', app_base)}
-                            sx={{ color: musicColors.amber, width: { xs: 40, sm: 42 }, height: { xs: 40, sm: 42 } }}
+                            sx={actionSx}
                         >
                             <Badge
                                 badgeContent={chat_unread_count || 0}
@@ -250,7 +272,7 @@ const Navbar = ({ persistentRoot = false }) => {
                             component={Link}
                             href={routeWithBase('/wishlist', app_base)}
                             aria-label={t('storefront.wishlist', 'Wishlist')}
-                            sx={{ display: { xs: 'none', sm: 'flex' }, color: musicColors.amber, width: 42, height: 42 }}
+                            sx={{ ...actionSx, display: { xs: 'none', sm: 'flex' } }}
                         >
                             <Badge
                                 badgeContent={wishCount}
@@ -261,12 +283,12 @@ const Navbar = ({ persistentRoot = false }) => {
                                 <Favorite sx={{ fontSize: '1.25rem' }} />
                             </Badge>
                         </IconButton>
-                        <IconButton 
-                            size="small" 
+                        <IconButton
+                            size="small"
                             component={Link}
                             href={routeWithBase('/cart', app_base)}
                             aria-label={t('storefront.cart', 'Cart')}
-                            sx={{ color: musicColors.amber, width: { xs: 40, sm: 42 }, height: { xs: 40, sm: 42 } }}
+                            sx={actionSx}
                         >
                             <Badge
                                 badgeContent={cartCount}

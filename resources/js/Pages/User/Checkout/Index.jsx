@@ -49,6 +49,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
     const [proofPreview, setProofPreview] = useState(null);
     const [quote, setQuote] = useState(null);
     const [quoteError, setQuoteError] = useState(null);
+    const [quoteLoading, setQuoteLoading] = useState(true);
     const fileInputRef = useRef(null);
 
     const { data, setData, post, processing, errors, reset, transform, setError, clearErrors } = useForm({
@@ -116,7 +117,9 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
     React.useEffect(() => {
         if (items.length === 0) return undefined;
-
+        let cancelled = false;
+        setQuoteLoading(true);
+        setQuote(null);
         const timer = window.setTimeout(() => {
             axios
                 .post(routeWithBase('/checkout/quote', app_base), {
@@ -125,22 +128,27 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                     redeem_points: loyaltyEnabled ? Number(data.redeem_points || 0) : 0,
                 })
                 .then(({ data: quoted }) => {
+                    if (cancelled) return;
                     setQuote(quoted);
                     setQuoteError(null);
                 })
                 .catch((error) => {
+                    if (cancelled) return;
                     setQuote(null);
                     const responseErrors = error.response?.data?.errors;
                     setQuoteError(
+                        Object.entries(responseErrors || {}).some(([key]) => key.startsWith('lines.') && key.endsWith('product_unit_id'))
+                            ? t('An item in your cart is no longer available. Return to your cart and remove or reselect its selling unit.')
+                            :
                         responseErrors?.coupon_code?.[0] ||
                             responseErrors?.redeem_points?.[0] ||
                             responseErrors?.lines?.[0] ||
-                            'Could not calculate this discount.',
+                            Object.values(responseErrors || {}).flat()[0] || 'Could not calculate this discount.',
                     );
-                });
+                }).finally(() => { if (!cancelled) setQuoteLoading(false); });
         }, 300);
 
-        return () => window.clearTimeout(timer);
+        return () => { cancelled = true; window.clearTimeout(timer); };
     }, [items, data.coupon_code, data.redeem_points, app_base]);
 
     const handleProofChange = (e) => {
@@ -172,6 +180,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
     };
 
     const handlePlaceOrder = () => {
+        if (processing || quoteLoading || quoteError || !quote) return;
         transform((formData) => ({
             ...formData,
             lines: items.map((i) => ({ product_unit_id: i.unitId, quantity: i.qty, is_preorder: Boolean(i.isPreorder) })),
@@ -206,7 +215,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
     return (
         <Box
-            className="user-storefront"
+            className="user-storefront storefront-purchase"
             sx={{
                 minHeight: '100dvh',
                 display: 'flex',
@@ -229,17 +238,11 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                     {t('Finish your order')}
                 </Typography>
 
-                <Stepper
-                    activeStep={activeStep}
-                    alternativeLabel
-                    sx={{ mb: '20px', '& .MuiStepLabel-label': { fontSize: { xs: '0.72rem', sm: '0.85rem' } }, '& .MuiStepLabel-label:not(.Mui-active)': { display: { xs: 'none', sm: 'block' } } }}
-                >
-                    {steps.map((label) => (
-                        <Step key={label}>
-                            <StepLabel>{t(label)}</StepLabel>
-                        </Step>
-                    ))}
-                </Stepper>
+                <Paper elevation={0} sx={{ ...sectionShellSx, px: { xs: 1.5, sm: 2.5 }, py: 1.5, mb: 2, borderRadius: 2.5 }}>
+                    <Stepper activeStep={activeStep} sx={{ '& .MuiStepLabel-label': { fontSize: { xs: '0.7rem', sm: '0.82rem' }, fontWeight: 700 }, '& .MuiStepConnector-line': { borderColor: 'divider' } }}>
+                        {steps.map((label) => <Step key={label}><StepLabel>{t(label)}</StepLabel></Step>)}
+                    </Stepper>
+                </Paper>
 
                 {Object.keys(errors).length > 0 && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -248,9 +251,10 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                 )}
 
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 320px' }, gap: { xs: '16px', md: '20px' }, alignItems: 'start' }}>
-                <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '16px', sm: '20px' } }}>
+                <Paper elevation={0} sx={{ ...sectionShellSx, p: { xs: '16px', sm: '24px' }, borderRadius: 2.5 }}>
                     {activeStep === 0 && (
                         <Stack spacing="16px">
+                            <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>{t('Delivery details')}</Typography><Typography variant="body2" color="text.secondary">{t('Enter the contact and address for this order.')}</Typography></Box>
                             <TextField
                                 label={t('Full name')}
                                 value={data.receiver_name}
@@ -305,13 +309,13 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                         onChange={(e) => setData('redeem_points', Math.max(0, Number(e.target.value || 0)))}
                                         error={!!errors.redeem_points}
                                         helperText={errors.redeem_points || `${loyalty?.tier ?? 'Bronze'} ${t('tier')}`}
-                                        inputProps={{
+
+                                        fullWidth
+                                     slotProps={{ htmlInput: {
                                             min: 0,
                                             max: loyalty?.points ?? 0,
                                             step: 1,
-                                        }}
-                                        fullWidth
-                                    />
+                                        } }}/>
                                 )}
                             </Stack>
                             {!loyaltyEnabled && <Alert severity="info">{t('Point rewards are currently disabled.')}</Alert>}
@@ -321,9 +325,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
                     {activeStep === 1 && (
                         <Stack spacing="16px">
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                {t('Choose payment account')}
-                            </Typography>
+                            <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>{t('Payment')}</Typography><Typography variant="body2" color="text.secondary">{t('Choose an account and attach your transfer confirmation.')}</Typography></Box>
                             {paymentMethods.length === 0 ? (
                                 <Alert severity="warning" sx={{ borderRadius: 2 }}>
                                     {t('No payment methods are available right now. Please contact support before placing an order.')}
@@ -352,7 +354,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                                     '&:hover': { borderColor: 'primary.main' },
                                                 }}
                                             >
-                                                <Stack direction="row" spacing={1.25} alignItems="center">
+                                                <Stack direction="row" spacing={1.25}  sx={{ alignItems: "center", ...({}) }}>
                                                     <Box
                                                         sx={{
                                                             width: 48,
@@ -447,7 +449,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                         }}
                                     />
                                     <Stack sx={{ minWidth: 0 }}>
-                                        <Stack direction="row" spacing={0.5} alignItems="center">
+                                        <Stack direction="row" spacing={0.5}  sx={{ alignItems: "center", ...({}) }}>
                                             <ImageIcon fontSize="small" color="primary" />
                                             <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
                                                 {data.payment_proof?.name}
@@ -467,13 +469,14 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
 
                     {activeStep === 2 && (
                         <Stack spacing="16px">
+                            <Box><Typography variant="h6" sx={{ fontWeight: 800 }}>{t('Review order')}</Typography><Typography variant="body2" color="text.secondary">{t('Check your items and payment details before submitting.')}</Typography></Box>
                             {quoteError && (
                                 <Alert severity="warning">
                                     {t(quoteError)}
                                 </Alert>
                             )}
                             {items.map((line) => (
-                                <Stack key={line.unitId} direction="row" justifyContent="space-between" alignItems="flex-start">
+                                <Stack key={line.unitId} direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                                     <Box sx={{ minWidth: 0, pr: 1 }}>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                                             {line.name}
@@ -498,11 +501,12 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                 </Stack>
                             ))}
                             <Divider />
-                            <Stack direction="row" justifyContent="space-between">
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                 <Typography variant="body2">{t('Subtotal')}</Typography>
-                                <Typography variant="body2">{formatMoney(quote?.subtotal ?? subtotal)}</Typography>
+                                <Typography variant="body2">{formatMoney(quote?.regular_subtotal ?? subtotal)}</Typography>
                             </Stack>
-                            <Stack direction="row" justifyContent="space-between">
+                            {Number(quote?.flash_discount || 0) > 0 && <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}><Typography variant="body2" color="primary">{t('Flash sale discount')}</Typography><Typography variant="body2" color="primary">-{formatMoney(quote.flash_discount)}</Typography></Stack>}
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                 <Typography variant="body2">{t('Shipping')}</Typography>
                                 <Typography variant="body2">
                                     {Number(quote?.shipping ?? shipping) === 0 ? t('Free') : formatMoney(quote?.shipping ?? shipping)}
@@ -511,7 +515,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                             {(quote?.coupon_discount > 0 || quote?.points_value > 0) && (
                                 <>
                                     {quote?.coupon_discount > 0 && (
-                                        <Stack direction="row" justifyContent="space-between">
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                             <Typography variant="body2">{t('Coupon')} {quote.coupon_code}</Typography>
                                             <Typography variant="body2" color="success.main">
                                                 -{formatMoney(quote.coupon_discount)}
@@ -519,7 +523,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                         </Stack>
                                     )}
                                     {quote?.points_value > 0 && (
-                                        <Stack direction="row" justifyContent="space-between">
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                             <Typography variant="body2">{t('Points')} ({quote.redeemed_points})</Typography>
                                             <Typography variant="body2" color="success.main">
                                                 -{formatMoney(quote.points_value)}
@@ -530,7 +534,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                             )}
                             <Divider />
                             {selectedPaymentMethod && (
-                                <Stack direction="row" justifyContent="space-between" spacing={2}>
+                                <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                     <Typography variant="body2">{t('Payment account')}</Typography>
                                     <Box sx={{ textAlign: 'right' }}>
                                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -543,7 +547,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                                 </Stack>
                             )}
                             <Divider />
-                            <Stack direction="row" justifyContent="space-between">
+                            <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '16px' }}>
                                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                                     {t('Total to pay')}
                                 </Typography>
@@ -562,7 +566,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                     <Typography variant="subtitle1" sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'space-between', mt: '16px', fontWeight: 700 }}>
                         <span>{t('Total')}</span><span>{formatMoney(total)}</span>
                     </Typography>
-                    <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1.5} justifyContent="space-between" sx={{ mt: '16px', position: { xs: 'sticky', sm: 'static' }, bottom: { xs: 72 }, zIndex: 10, bgcolor: { xs: 'rgba(255,253,248,.96)', sm: 'transparent' }, p: { xs: '8px', sm: 0 }, mx: { xs: '-8px', sm: 0 }, backdropFilter: { xs: 'blur(12px)', sm: 'none' } }}>
+                    <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1.5}  sx={{ justifyContent: "space-between", ...({ mt: '20px', pt: 2, borderTop: '1px solid', borderColor: 'divider' }) }}>
                         <Button
                             disabled={activeStep === 0}
                             onClick={() => setActiveStep((s) => s - 1)}
@@ -586,7 +590,7 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                             <Button
                                 variant="contained"
                                 onClick={handlePlaceOrder}
-                                disabled={processing || items.length === 0 || !data.payment_method_id || !data.payment_proof}
+                                disabled={processing || quoteLoading || !!quoteError || !quote || items.length === 0 || !data.payment_method_id || !data.payment_proof}
                                 fullWidth
                                 sx={{ maxWidth: { sm: 240 }, fontWeight: 700 }}
                             >
@@ -595,13 +599,17 @@ export default function CheckoutIndex({ shop, loyalty, paymentMethods = [] }) {
                         )}
                     </Stack>
                 </Paper>
-                <Paper elevation={0} sx={{ ...sectionShellSx, p: '20px', display: { xs: 'none', md: 'block' }, position: 'sticky', top: 112 }}>
+                <Paper elevation={0} sx={{ ...sectionShellSx, p: '20px', position: { md: 'sticky' }, top: { md: 88 }, borderRadius: 2.5 }}>
                     <Typography variant="h6" sx={{ fontWeight: 700, mb: '16px' }}>{t('Order summary')}</Typography>
                     <Stack spacing="10px">
-                        {items.map((line) => <Stack key={line.unitId} direction="row" justifyContent="space-between" spacing="12px"><Typography variant="body2" sx={{ minWidth: 0 }}>{line.name} × {line.qty}</Typography><Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{formatMoney(line.price * line.qty)}</Typography></Stack>)}
+                        {items.map((line) => <Stack key={line.unitId} direction="row"  spacing="12px" sx={{ justifyContent: "space-between", ...({}) }}><Typography variant="body2" sx={{ minWidth: 0 }}>{line.name} × {line.qty}</Typography><Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{formatMoney(line.price * line.qty)}</Typography></Stack>)}
                         <Divider />
-                        <Stack direction="row" justifyContent="space-between"><Typography variant="body2">{t('Shipping')}</Typography><Typography variant="body2">{shipping === 0 ? t('Free') : formatMoney(shipping)}</Typography></Stack>
-                        <Stack direction="row" justifyContent="space-between"><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Total')}</Typography><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{formatMoney(total)}</Typography></Stack>
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '12px' }}><Typography variant="body2">{t('Subtotal')}</Typography><Typography variant="body2">{formatMoney(quote?.regular_subtotal ?? subtotal)}</Typography></Stack>
+                        {Number(quote?.flash_discount || 0) > 0 && <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '12px' }}><Typography variant="body2" color="primary">{t('Flash sale discount')}</Typography><Typography variant="body2" color="primary">-{formatMoney(quote.flash_discount)}</Typography></Stack>}
+                        {Number(quote?.coupon_discount || 0) > 0 && <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '12px' }}><Typography variant="body2">{t('Coupon')}</Typography><Typography variant="body2">-{formatMoney(quote.coupon_discount)}</Typography></Stack>}
+                        {Number(quote?.points_value || 0) > 0 && <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '12px' }}><Typography variant="body2">{t('Points')}</Typography><Typography variant="body2">-{formatMoney(quote.points_value)}</Typography></Stack>}
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', gap: '12px' }}><Typography variant="body2">{t('Shipping')}</Typography><Typography variant="body2">{Number(quote?.shipping ?? shipping) === 0 ? t('Free') : formatMoney(quote?.shipping ?? shipping)}</Typography></Stack>
+                        <Stack direction="row"  sx={{ justifyContent: "space-between", ...({}) }}><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Total')}</Typography><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{formatMoney(total)}</Typography></Stack>
                     </Stack>
                 </Paper>
                 </Box>

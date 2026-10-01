@@ -23,6 +23,9 @@ import {
     Speaker,
     LibraryMusic,
     MusicNote,
+    LocalShippingOutlined,
+    PaymentsOutlined,
+    SupportAgentOutlined,
 } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import Navbar from '@/Components/User/Navbar';
@@ -79,6 +82,11 @@ const fallbackPromos = [
 ];
 
 const categoryIconCycle = [Piano, GraphicEq, Headphones, Speaker, LibraryMusic, MusicNote];
+const shoppingBenefits = [
+    { icon: LocalShippingOutlined, title: 'Reliable delivery', subtitle: 'Carefully packed and tracked orders' },
+    { icon: PaymentsOutlined, title: 'Secure payment', subtitle: 'Trusted payment options at checkout' },
+    { icon: SupportAgentOutlined, title: 'Helpful support', subtitle: 'Product guidance when you need it' },
+];
 
 const isExternal = (href) => /^https?:\/\//i.test(href || '');
 const blockHref = (href, appBase) => {
@@ -106,7 +114,7 @@ function SectionHeader({ eyebrow, title, subtitle, action }) {
     const t = usePhraseTranslation();
 
     return (
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'flex-end' }} spacing="10px" sx={{ mb: '16px' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }}   spacing="10px" sx={{ justifyContent: "space-between", alignItems: { xs: 'flex-start', sm: 'flex-end' }, ...({ mb: '16px' }) }}>
             <Box>
                 {eyebrow && <Typography sx={{ ...eyebrowSxForTheme(theme), mb: 0.5 }}>{t(eyebrow)}</Typography>}
                 <Typography variant="h5" sx={{ fontWeight: 700, fontSize: { xs: '1.2rem', md: '1.4rem' }, color: musicColors.ink, lineHeight: 1.2 }}>
@@ -165,17 +173,19 @@ function BlogPreviewCard({ post }) {
                 display: 'grid',
                 gridTemplateRows: 'auto 1fr',
                 bgcolor: 'white',
-                border: '1px solid rgba(36,27,24,0.08)',
+                border: '1px solid rgba(15,23,42,0.1)',
                 borderRadius: 2,
                 overflow: 'hidden',
                 color: 'inherit',
                 textDecoration: 'none',
                 minHeight: 260,
-                boxShadow: '0 14px 34px rgba(36,27,24,0.06)',
-                '&:hover': { borderColor: musicColors.brass },
+                boxShadow: '0 4px 14px rgba(15,23,42,0.05)',
+                transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                '&:hover': { borderColor: musicColors.rosin, transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(15,23,42,0.1)' },
+                '&:focus-visible': { outline: `2px solid ${musicColors.rosin}`, outlineOffset: 3 },
             }}
         >
-            <Box sx={{ aspectRatio: '16 / 9', bgcolor: 'rgba(244,194,103,0.2)', display: 'grid', placeItems: 'center', overflow: 'hidden', position: 'relative' }}>
+            <Box sx={{ aspectRatio: '16 / 9', bgcolor: musicColors.smoke, display: 'grid', placeItems: 'center', overflow: 'hidden', position: 'relative' }}>
                 {thumbnail.url ? (
                     <Box
                         component="img"
@@ -324,20 +334,20 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                 md: '1.08fr 0.92fr',
                             },
                             gap: 0,
-                            borderRadius: 2,
+                            borderRadius: 2.5,
                             overflow: 'hidden',
                             background: hero.accent_color || musicGradientForTheme(theme),
-                            minHeight: { xs: 280, sm: 340, md: 390 },
+                            minHeight: { xs: 300, sm: 350, md: 380 },
                             position: 'relative',
-                            boxShadow: '0 24px 70px rgba(36, 27, 24, 0.22)',
-                            border: '1px solid rgba(244,194,103,0.24)',
+                            boxShadow: '0 10px 30px rgba(15, 23, 42, 0.12)',
+                            border: '1px solid rgba(8,127,116,0.18)',
                         }}
                     >
                         <Box
                             sx={{
                                 position: 'absolute',
                                 inset: 0,
-                                opacity: 0.16,
+                                opacity: 0.08,
                                 backgroundImage: 'repeating-linear-gradient(90deg, transparent 0 58px, rgba(255,255,255,0.55) 58px 59px), repeating-linear-gradient(0deg, transparent 0 34px, rgba(255,255,255,0.28) 34px 35px)',
                             }}
                         />
@@ -361,18 +371,18 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                             <Typography variant="body1" sx={{ opacity: 0.88, mb: 3, maxWidth: 500, fontWeight: 600 }}>
                                 {t(hero.subtitle || defaultHero.subtitle)}
                             </Typography>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}  sx={{ alignItems: { xs: 'stretch', sm: 'center' }, ...({}) }}>
                                 <Button
                                     {...blockLinkProps(hero.link_url || '/products', app_base)}
                                     variant="contained"
                                     endIcon={<ArrowForward />}
                                     sx={{
-                                        bgcolor: musicColors.amber,
-                                        color: musicColors.ink,
+                                        bgcolor: 'white',
+                                        color: musicColors.rosin,
                                         px: 3,
                                         py: 1.25,
                                         fontWeight: 700,
-                                        '&:hover': { bgcolor: musicColors.amber },
+                                        '&:hover': { bgcolor: musicColors.smoke },
                                     }}
                                 >
                                     {t(hero.button_label || defaultHero.button_label)}
@@ -387,23 +397,32 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                         px: 2.5,
                                         py: 1.25,
                                         fontWeight: 700,
-                                        '&:hover': { borderColor: musicColors.amber, bgcolor: alpha(musicColors.amber, 0.08) },
+                                        '&:hover': { borderColor: 'white', bgcolor: alpha('#ffffff', 0.12) },
                                     }}
                                 >
                                     {t('Browse categories')}
                                 </Button>
                             </Stack>
-                            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 3 }}>
-                                {['Guitars', 'Keys', 'Drums', 'Audio'].map((label) => (
+                            <Stack direction="row" spacing={1} useFlexGap  sx={{ flexWrap: "wrap", ...({ mt: 3 }) }}>
+                                {[
+                                    ['Guitars', 'guitar'],
+                                    ['Keys', 'keyboard'],
+                                    ['Drums', 'drum'],
+                                    ['Audio', 'audio'],
+                                ].map(([label, query]) => (
                                     <Chip
                                         key={label}
                                         label={t(label)}
+                                        component={Link}
+                                        href={routeWithBase(`/products?search=${encodeURIComponent(query)}`, app_base)}
+                                        clickable
                                         size="small"
                                         sx={{
                                             color: 'white',
                                             border: '1px solid rgba(255,255,255,0.2)',
                                             bgcolor: 'rgba(255,255,255,0.08)',
                                             fontWeight: 700,
+                                            '&:hover': { bgcolor: 'rgba(255,255,255,0.18)' },
                                         }}
                                     />
                                 ))}
@@ -412,7 +431,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                         <Box
                             sx={{
                                 display: {
-                                    xs: 'none',
+                                    xs: hero.image_url ? 'flex' : 'none',
                                     sm: hero.image_url ? 'flex' : 'none',
                                     md: 'flex',
                                 },
@@ -421,18 +440,43 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                 bgcolor: hero.image_url ? 'transparent' : 'rgba(0,0,0,0.1)',
                                 position: 'relative',
                                 overflow: 'hidden',
-                                minHeight: { sm: 340, md: 390 },
+                                minHeight: { xs: 180, sm: 340, md: 390 },
                             }}
                         >
                             {hero.image_url ? (
                                 <Box component="img" src={hero.image_url} alt="" sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
-                                <HeroInstrumentArt />
+                                <Stack spacing={1.25} sx={{ width: '100%', maxWidth: 330, p: { sm: 2.5, md: 3 }, position: 'relative', zIndex: 1 }}>
+                                    <Typography variant="overline" sx={{ color: musicColors.amber }}>{t('Shop with confidence')}</Typography>
+                                    {shoppingBenefits.map(({ icon: BenefitIcon, title, subtitle }) => (
+                                        <Stack key={title} direction="row" spacing={1.5} sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.16)', alignItems: 'center' }}>
+                                            <Box sx={{ width: 38, height: 38, flex: '0 0 auto', borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: 'rgba(255,255,255,0.14)', color: 'white' }}><BenefitIcon fontSize="small" /></Box>
+                                            <Box>
+                                                <Typography variant="body2" sx={{ color: 'white', fontWeight: 800 }}>{t(title)}</Typography>
+                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>{t(subtitle)}</Typography>
+                                            </Box>
+                                        </Stack>
+                                    ))}
+                                </Stack>
                             )}
                         </Box>
                     </Box>
                 </Container>
             )}
+
+            <Container maxWidth="lg" sx={{ mt: { xs: '12px', md: '16px' } }}>
+                <Box sx={{ ...sectionShellSx, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, overflow: 'hidden' }}>
+                    {shoppingBenefits.map(({ icon: BenefitIcon, title, subtitle }, index) => (
+                        <Stack key={title} direction="row" spacing={1.25} sx={{ px: 2, py: 1.75, alignItems: 'center', borderLeft: { sm: index ? '1px solid' : 0 }, borderTop: { xs: index ? '1px solid' : 0, sm: 0 }, borderColor: 'divider' }}>
+                            <Box sx={{ width: 38, height: 38, flex: '0 0 auto', borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: alpha(theme.palette.primary.main, 0.09), color: 'primary.main' }}><BenefitIcon fontSize="small" /></Box>
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 800 }}>{t(title)}</Typography>
+                                <Typography variant="caption" color="text.secondary">{t(subtitle)}</Typography>
+                            </Box>
+                        </Stack>
+                    ))}
+                </Box>
+            </Container>
 
             {sections.categories?.is_active !== false && displayCategories.length > 0 && (
                 <Container maxWidth="lg" sx={{ mt: { xs: '24px', md: '32px' } }}>
@@ -456,9 +500,9 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                         sx={{
                             display: 'grid',
                             gridTemplateColumns: {
-                                xs: 'repeat(4, minmax(0, 1fr))',
-                                sm: 'repeat(6, minmax(0, 1fr))',
-                                md: 'repeat(8, minmax(0, 1fr))',
+                                xs: 'repeat(2, minmax(0, 1fr))',
+                                sm: 'repeat(3, minmax(0, 1fr))',
+                                md: 'repeat(6, minmax(0, 1fr))',
                             },
                             gap: { xs: 1.25, sm: 2 },
                         }}
@@ -466,16 +510,21 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                         {displayCategories.map((cat) => (
                             <Stack
                                 key={cat.id}
-                                alignItems="center"
+
                                 spacing={0.75}
-                                sx={{
+                                sx={{ alignItems: "center", ...({
                                     cursor: 'pointer',
                                     textDecoration: 'none',
                                     color: 'inherit',
-                                    p: 1,
+                                    p: 1.5,
                                     borderRadius: 2,
-                                    '&:hover': { bgcolor: 'rgba(36,27,24,0.04)' },
-                                }}
+                                    bgcolor: musicColors.sheet,
+                                    border: '1px solid rgba(15,23,42,0.1)',
+                                    boxShadow: '0 4px 14px rgba(15,23,42,0.04)',
+                                    transition: 'transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease',
+                                    '&:hover': { borderColor: musicColors.rosin, transform: 'translateY(-3px)', boxShadow: '0 10px 26px rgba(15,23,42,0.1)' },
+                                    '&:focus-visible': { outline: `2px solid ${musicColors.rosin}`, outlineOffset: 3 },
+                                }) }}
                                 component={Link}
                                 href={routeWithBase(`/categories/${cat.slug}`, app_base)}
                             >
@@ -484,11 +533,11 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                     sx={{
                                         width: { xs: 56, md: 64 },
                                         height: { xs: 56, md: 64 },
-                                        bgcolor: cat.color || 'rgba(244,194,103,0.2)',
+                                        bgcolor: cat.color || alpha(musicColors.rosin, 0.1),
                                         fontSize: '1.25rem',
                                         borderRadius: 2,
                                         color: musicColors.rosin,
-                                        border: '1px solid rgba(36,27,24,0.08)',
+                                        border: '1px solid rgba(15,23,42,0.1)',
                                         '& img': { objectFit: 'cover' },
                                         '&:hover': { transform: 'translateY(-2px)', transition: '0.2s' },
                                     }}
@@ -524,8 +573,8 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                 return (
                     <Container key={sale.id || sale.name} maxWidth="lg" sx={{ mt: { xs: '24px', md: '32px' } }}>
                         <Box sx={{ ...sectionShellSx, p: { xs: '16px', sm: '20px' } }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.25} sx={{ mb: 2 }}>
-                                <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                            <Stack direction={{ xs: 'column', sm: 'row' }}   spacing={1.25} sx={{ justifyContent: "space-between", alignItems: { xs: 'flex-start', sm: 'center' }, ...({ mb: 2 }) }}>
+                                <Stack direction="row" spacing={1}  useFlexGap  sx={{ alignItems: "center", flexWrap: "wrap", ...({}) }}>
                                     <LocalFireDepartment sx={{ fontSize: '1.35rem', color: musicColors.rosin }} />
                                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                                         {sale.name || sections.flash_sale?.title || 'Limited-time gear deals'}
@@ -566,8 +615,8 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                     p: { xs: '16px', md: '20px' },
                                     borderRadius: 2,
                                     bgcolor: promo.accent_color || musicColors.sheet,
-                                    border: '1px solid rgba(36,27,24,0.08)',
-                                    boxShadow: '0 16px 44px rgba(36, 27, 24, 0.07)',
+                                    border: '1px solid rgba(15,23,42,0.1)',
+                                    boxShadow: '0 4px 14px rgba(15,23,42,0.05)',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
@@ -575,6 +624,8 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                     textDecoration: 'none',
                                     color: 'inherit',
                                     overflow: 'hidden',
+                                    transition: 'transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease',
+                                    '&:hover': { borderColor: musicColors.rosin, transform: 'translateY(-3px)', boxShadow: '0 12px 28px rgba(15,23,42,0.1)' },
                                 }}
                             >
                                 {promo.image_url ? (
@@ -662,14 +713,14 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                 key={method.id}
                                 direction="row"
                                 spacing={1.25}
-                                alignItems="center"
-                                sx={{
+
+                                sx={{ alignItems: "center", ...({
                                     bgcolor: musicColors.sheet,
-                                    border: '1px solid rgba(36,27,24,0.08)',
+                                    border: '1px solid rgba(15,23,42,0.1)',
                                     borderRadius: 2,
                                     p: '16px',
                                     minWidth: 0,
-                                }}
+                                }) }}
                             >
                                 <Box
                                     sx={{

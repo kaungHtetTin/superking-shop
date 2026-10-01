@@ -207,6 +207,53 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(11.0, (float) $balance->on_hand_qty);
     }
 
+    public function test_pos_flash_sale_is_opt_in_and_tracks_only_discounted_units(): void
+    {
+        [$product, , $box] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 36);
+        $sale = FlashSale::create(['name' => 'Box promotion', 'starts_at' => now()->subMinute(), 'ends_at' => now()->addHour(), 'is_active' => true]);
+        $offer = FlashSaleItem::create(['flash_sale_id' => $sale->id, 'product_unit_id' => $box->id, 'discount_type' => FlashSaleItem::TYPE_PERCENTAGE, 'discount_value' => 10, 'quantity_limit' => 1]);
+        $base = ['location_id' => $location->id, 'shift_id' => $shift->id, 'tender_type' => 'cash'];
+
+        $catalog = $this->actingAs($cashier)->getJson('/admin/pos/products/search?location_id='.$location->id);
+        $catalog->assertOk();
+        $this->assertSame(99.0, (float) $catalog->json('data.0.flash_sale.sale_price'));
+
+        $regular = app(PosCheckoutService::class)->checkout($base + [
+            'items' => [['product_unit_id' => $box->id, 'quantity' => 1, 'price_type' => 'retail', 'use_flash_sale' => false, 'expected_unit_price' => 110]],
+            'amount_tendered' => 110,
+        ], $cashier);
+        $this->assertSame(110.0, (float) $regular->final_amount);
+        $this->assertNull($regular->items->sole()->promotion_snapshot);
+        $this->assertSame(0.0, (float) $offer->fresh()->sold_count);
+
+        $discounted = app(PosCheckoutService::class)->checkout($base + [
+            'items' => [['product_unit_id' => $box->id, 'quantity' => 1, 'price_type' => 'retail', 'use_flash_sale' => true, 'expected_unit_price' => 99]],
+            'amount_tendered' => 99,
+        ], $cashier);
+        $this->assertSame(99.0, (float) $discounted->final_amount);
+        $this->assertSame(99.0, (float) $discounted->items->sole()->unit_price);
+        $this->assertSame($offer->id, $discounted->items->sole()->promotion_snapshot['flash_sale_item_id']);
+        $this->assertSame(1.0, (float) $offer->fresh()->sold_count);
+        $prices = $this->actingAs($cashier)->getJson('/admin/pos/products/prices?unit_ids[0]='.$box->id);
+        $prices->assertOk();
+        $this->assertNull($prices->json('0.flash_sale'));
+
+        try {
+            app(PosCheckoutService::class)->checkout($base + [
+                'items' => [['product_unit_id' => $box->id, 'quantity' => 1, 'price_type' => 'retail', 'use_flash_sale' => true, 'expected_unit_price' => 99]],
+                'amount_tendered' => 99,
+            ], $cashier);
+            $this->fail('Sold-out flash sale was accepted.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('items', $exception->errors());
+        }
+        $this->assertSame(1.0, (float) $offer->fresh()->sold_count);
+    }
+
     public function test_pos_uses_retail_price_when_wholesale_price_is_missing(): void
     {
         [$product, , $box] = $this->productWithUnits();

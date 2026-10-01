@@ -20,7 +20,7 @@ class LocationController extends Controller
 
         $canManage = $request->user()->hasAdminPermission('locations.manage');
         $locationQuery = Location::query();
-        if (! $canManage) {
+        if (! $request->user()->isSuperAdmin()) {
             $locationQuery->whereHas('users', fn ($query) => $query->whereKey($request->user()->id));
         }
 

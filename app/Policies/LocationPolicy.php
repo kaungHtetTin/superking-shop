@@ -15,21 +15,21 @@ class LocationPolicy
     public function view(User $user, Location $location): bool
     {
         return $user->hasAdminPermission('locations.view')
-            && ($user->hasAdminPermission('locations.manage') || $user->locations()->whereKey($location->id)->exists());
+            && $user->canAccessLocation($location);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasAdminPermission('locations.manage');
+        return $user->isSuperAdmin();
     }
 
     public function update(User $user, Location $location): bool
     {
-        return $user->hasAdminPermission('locations.manage');
+        return $user->hasAdminPermission('locations.manage') && $user->canAccessLocation($location);
     }
 
     public function delete(User $user, Location $location): bool
     {
-        return $user->hasAdminPermission('locations.manage') && ! $location->is_system;
+        return $user->hasAdminPermission('locations.manage') && $user->canAccessLocation($location) && ! $location->is_system;
     }
 }

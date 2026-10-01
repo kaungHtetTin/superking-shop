@@ -6,7 +6,7 @@ export default function PwaHeadTags() {
     const appName = app_settings?.app_name || 'Harmony House';
     const manifestUrl = `${app_base || ''}/manifest.webmanifest`;
     const iconUrl = app_settings?.favicon_url || app_settings?.logo_url || `${app_base || ''}/pwa-icon.svg`;
-    const themeColor = app_settings?.theme_color || '#9c3f2c';
+    const themeColor = app_settings?.theme_color || '#087f74';
 
     useEffect(() => {
         const definitions = [

@@ -77,11 +77,11 @@ const MobileBottomNav = ({ persistentRoot = false }) => {
             <Paper
                 elevation={3}
                 sx={{
-                    borderRadius: '14px 14px 0 0',
+                    borderRadius: '12px 12px 0 0',
                     overflow: 'hidden',
-                    borderTop: `1px solid ${musicColors.amber}`,
+                    borderTop: `1px solid ${musicColors.rosin}2b`,
                     bgcolor: musicColors.sheet,
-                    boxShadow: '0 -12px 34px rgba(36,27,24,0.14)',
+                    boxShadow: '0 -8px 24px rgba(15,23,42,0.1)',
                 }}
             >
                 <BottomNavigation
@@ -111,6 +111,7 @@ const MobileBottomNav = ({ persistentRoot = false }) => {
                         },
                         '& .Mui-selected': {
                             color: `${musicColors.rosin} !important`,
+                            bgcolor: 'rgba(8,127,116,0.07)',
                             '&::before': {
                                 content: '""',
                                 position: 'absolute',

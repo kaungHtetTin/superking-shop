@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { usePage, Link, useForm, router } from '@/spa/router';
-import { 
-    Box, Container, Typography, Stack, 
+import {
+    Box, Container, Typography, Stack,
     Button, Chip, Rating, Divider, IconButton,
     ToggleButton, ToggleButtonGroup,
     Snackbar,
@@ -9,8 +9,8 @@ import {
     TextField,
     Pagination
 } from '@mui/material';
-import { 
-    Add as AddIcon, 
+import {
+    Add as AddIcon,
     Remove as RemoveIcon,
     Favorite,
     FavoriteBorder,
@@ -202,7 +202,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
             }}
         >
             <UserBrandHead title={product.name} />
-            
+
             <Navbar />
 
             <Container maxWidth="lg" sx={{ mt: { xs: '16px', md: '24px' }, pb: { xs: '24px', md: '32px' } }}>
@@ -210,9 +210,9 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                     {t('Back to Shop')}
                 </BackLink>
 
-                <Box sx={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 0.4fr) minmax(0, 0.6fr)' }, 
+                <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 0.4fr) minmax(0, 0.6fr)' },
                     gap: { xs: '20px', md: '32px' },
                     alignItems: 'start'
                 }}>
@@ -239,21 +239,21 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                 borderRadius: 2,
                                 overflow: 'hidden',
                                 border: '1px solid',
-                                borderColor: 'rgba(36,27,24,0.1)',
+                                borderColor: 'rgba(15,23,42,0.1)',
                                 bgcolor: musicColors.sheet,
-                                boxShadow: '0 22px 58px rgba(36,27,24,0.14)',
+                                boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
                                 '&:focus-visible': {
                                     outline: `3px solid ${musicColors.rosin}`,
                                     outlineOffset: 3,
                                 },
                             }}
                         >
-                            <Box 
-                                component="img" 
+                            <Box
+                                component="img"
                                 key={images[activeImageIndex]?.id || images[activeImageIndex]?.image_path || activeImageIndex}
                                 src={productImageUrl(images[activeImageIndex], app_url, app_base)}
                                 alt={`${product.name} ${activeImageIndex + 1}`}
-                                sx={{ 
+                                sx={{
                                     position: 'absolute',
                                     top: 0,
                                     left: 0,
@@ -278,9 +278,9 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                             top: '50%',
                                             left: 12,
                                             transform: 'translateY(-50%)',
-                                            bgcolor: 'rgba(255,253,248,0.92)',
-                                            border: '1px solid rgba(36,27,24,0.12)',
-                                            boxShadow: '0 10px 24px rgba(36,27,24,0.16)',
+                                            bgcolor: 'rgba(255,255,255,0.96)',
+                                            border: '1px solid rgba(15,23,42,0.12)',
+                                            boxShadow: '0 6px 18px rgba(15,23,42,0.12)',
                                             '&:hover': { bgcolor: '#fff' },
                                         }}
                                     >
@@ -294,9 +294,9 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                             top: '50%',
                                             right: 12,
                                             transform: 'translateY(-50%)',
-                                            bgcolor: 'rgba(255,253,248,0.92)',
-                                            border: '1px solid rgba(36,27,24,0.12)',
-                                            boxShadow: '0 10px 24px rgba(36,27,24,0.16)',
+                                            bgcolor: 'rgba(255,255,255,0.96)',
+                                            border: '1px solid rgba(15,23,42,0.12)',
+                                            boxShadow: '0 6px 18px rgba(15,23,42,0.12)',
                                             '&:hover': { bgcolor: '#fff' },
                                         }}
                                     >
@@ -313,8 +313,8 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                             px: 1,
                                             py: 0.75,
                                             borderRadius: 999,
-                                            bgcolor: 'rgba(255,253,248,0.9)',
-                                            border: '1px solid rgba(36,27,24,0.08)',
+                                            bgcolor: 'rgba(255,255,255,0.94)',
+                                            border: '1px solid rgba(15,23,42,0.1)',
                                         }}
                                     >
                                         {images.map((img, idx) => (
@@ -331,7 +331,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                                     border: 0,
                                                     borderRadius: 999,
                                                     cursor: 'pointer',
-                                                    bgcolor: activeImageIndex === idx ? musicColors.rosin : 'rgba(36,27,24,0.28)',
+                                                    bgcolor: activeImageIndex === idx ? musicColors.rosin : 'rgba(15,23,42,0.28)',
                                                     transition: 'width 160ms ease, background-color 160ms ease',
                                                 }}
                                             />
@@ -351,7 +351,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                             <Typography variant="h3" sx={{ fontWeight: 700, fontSize: { xs: '1.45rem', sm: '1.75rem' }, mb: 2, lineHeight: 1.18, color: musicColors.ink }}>
                                 {product.name}
                             </Typography>
-                            <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Stack direction="row" spacing={1.5}  sx={{ alignItems: "center", ...({}) }}>
                                 <Rating value={parseFloat(product.rating || 0)} readOnly size="small" precision={0.5} />
                                 <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.5 }}>
                                     ({product.review_count || 0} {t('reviews')})
@@ -364,7 +364,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                 {formatMoney(unitPrice(selectedUnit))}
                             </Typography>
                             {hasFlashSale(selectedUnit) && (
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                                <Stack direction="row" spacing={1}  sx={{ alignItems: "center", ...({ mb: 1 }) }}>
                                     <Chip label={t('Flash Sale')} color="error" size="small" sx={{ fontWeight: 700 }} />
                                     <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
                                         {formatMoney(unitOriginalPrice(selectedUnit))}
@@ -382,15 +382,15 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                         {/* Image Selector moved here */}
                         <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 1 }}>
                             {images.map((img, idx) => (
-                                <Box 
+                                <Box
                                     key={idx}
                                     onClick={() => selectImage(idx)}
                                     component="img"
                                     src={productImageUrl(img, app_url, app_base)}
-                                    sx={{ 
-                                        width: 72, 
-                                        height: 96, 
-                                        borderRadius: 1, 
+                                    sx={{
+                                        width: 72,
+                                        height: 96,
+                                        borderRadius: 1,
                                         border: activeImageIndex === idx ? '2px solid' : '1px solid',
                                         borderColor: activeImageIndex === idx ? 'primary.main' : 'divider',
                                         cursor: 'pointer',
@@ -427,7 +427,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                 >
                                     {buyableUnits.map((unit) => (
                                         <ToggleButton key={unit.id} value={unit.id}>
-                                            <Stack spacing={0.25} alignItems="flex-start">
+                                            <Stack spacing={0.25}  sx={{ alignItems: "flex-start", ...({}) }}>
                                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>
                                                     {formatUnitWithConversion(unit, buyableUnits)}
                                                 </Typography>
@@ -445,15 +445,15 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                         <Stack
                             direction="row"
                             spacing={1.25}
-                            alignItems="center"
-                            sx={{ pt: 2, width: '100%', minWidth: 0, position: { xs: 'sticky', sm: 'static' }, bottom: { xs: 72 }, zIndex: 20, p: { xs: '8px', sm: 0 }, mx: { xs: '-8px', sm: 0 }, bgcolor: { xs: 'rgba(255,253,248,.96)', sm: 'transparent' }, borderRadius: 2, backdropFilter: { xs: 'blur(14px)', sm: 'none' }, boxShadow: { xs: '0 -10px 28px rgba(36,27,24,.10)', sm: 'none' } }}
+
+                            sx={{ alignItems: "center", ...({ pt: 2, width: '100%', minWidth: 0, position: { xs: 'sticky', sm: 'static' }, bottom: { xs: 72 }, zIndex: 20, p: { xs: '8px', sm: 0 }, mx: { xs: '-8px', sm: 0 }, bgcolor: { xs: 'rgba(255,255,255,.96)', sm: 'transparent' }, borderRadius: 2, backdropFilter: { xs: 'blur(14px)', sm: 'none' }, boxShadow: { xs: '0 -8px 24px rgba(15,23,42,.10)', sm: 'none' } }) }}
                         >
-                            <Box sx={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
+                            <Box sx={{
+                                display: 'flex',
+                                alignItems: 'center',
                                 justifyContent: 'space-between',
-                                border: '1px solid', 
-                                borderColor: 'divider', 
+                                border: '1px solid',
+                                borderColor: 'divider',
                                 borderRadius: 2,
                                 bgcolor: musicColors.sheet,
                                 p: 0.5,
@@ -472,8 +472,8 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                     <AddIcon fontSize="small" />
                                 </IconButton>
                             </Box>
-                            <Button 
-                                variant="contained" 
+                            <Button
+                                variant="contained"
                                 startIcon={<ShoppingBag />}
                                 disabled={!selectedUnit}
                                 onClick={handleAddToCart}
@@ -518,7 +518,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                         </Box>}
 
                         <Stack direction="row" spacing={3}>
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}>
+                            <Stack direction="row" spacing={1}  sx={{ alignItems: "center", ...({ cursor: 'pointer', '&:hover': { color: 'primary.main' } }) }}>
                                 <Share fontSize="small" />
                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>{t('Share')}</Typography>
                             </Stack>
@@ -542,8 +542,8 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                 <Stack
                                     direction={{ xs: 'column', sm: 'row' }}
                                     spacing={1}
-                                    alignItems={{ xs: 'flex-start', sm: 'center' }}
-                                    sx={{ mb: 1.5 }}
+
+                                    sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, ...({ mb: 1.5 }) }}
                                 >
                                     <Rating
                                         name="product-rating"
@@ -600,7 +600,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                             <>
                                 {reviewRows.map((r) => (
                                     <Box key={r.id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                        <Stack direction="row"   sx={{ justifyContent: "space-between", alignItems: "center", ...({}) }}>
                                             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                                                 {r.user?.name || t('Customer')}
                                             </Typography>
@@ -614,7 +614,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                                     </Box>
                                 ))}
                                 {reviews.last_page > 1 && (
-                                    <Stack alignItems="center" sx={{ mt: 1 }}>
+                                    <Stack  sx={{ alignItems: "center", ...({ mt: 1 }) }}>
                                         <Pagination
                                             count={reviews.last_page}
                                             page={reviews.current_page}
@@ -650,7 +650,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                 {recommendedProducts.length > 0 && (
                     <Box sx={{ mt: { xs: '32px', md: '48px' }, mb: '24px' }}>
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>{t('Recommended for you')}</Typography>
-                        <Box sx={{ 
+                        <Box sx={{
                             ...productListGridSx,
                         }}>
                             {recommendedProducts.map((p) => (
@@ -664,7 +664,7 @@ const Show = ({ product, relatedProducts, recommendedProducts = [], frequentlyBo
                 {relatedProducts.length > 0 && (
                     <Box sx={{ mt: { xs: '32px', md: '48px' }, mb: '24px' }}>
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>{t('You May Also Like')}</Typography>
-                        <Box sx={{ 
+                        <Box sx={{
                             ...productListGridSx,
                         }}>
                             {relatedProducts.map((p) => (

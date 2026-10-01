@@ -14,11 +14,11 @@ html {
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Poppins', 'Noto Sans Myanmar', 'Roboto', sans-serif;
+  font-family: 'Inter', 'Noto Sans Myanmar', system-ui, sans-serif;
   width: 100%;
   min-width: 0;
   overflow-x: hidden;
-  background: #f6f8f8;
+  background: #eef4f4;
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -55,12 +55,50 @@ canvas {
 }
 
 .user-storefront {
-  color: #171312;
+  color: #172033;
   font-size: 15px;
 }
 
+/* Shared page surfaces, excluding navigation, dialogs and chat bubbles. */
+.user-storefront > .MuiContainer-root {
+  flex: 1;
+}
+
+.user-storefront > .MuiContainer-root .MuiPaper-root:not(.MuiAppBar-root) {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+}
+
+.user-storefront .MuiButton-root,
+.user-storefront .MuiOutlinedInput-root {
+  border-radius: 8px;
+}
+
+.user-storefront .MuiCard-root {
+  min-width: 0;
+}
+
+.storefront-purchase { background: #f4f7f7 !important; }
+.storefront-purchase .MuiPaper-root { border-radius: 10px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035); }
+.storefront-purchase .MuiButton-root,
+.storefront-purchase .MuiOutlinedInput-root { border-radius: 8px; }
+.storefront-purchase .MuiTypography-h6 { font-size: 1rem; }
+.storefront-purchase .MuiStack-root[justifyContent="space-between"] { justify-content: space-between; gap: 16px; }
+.storefront-purchase .MuiStack-root[alignItems="center"] { align-items: center; }
+
 .user-storefront :focus-visible {
+  outline: 2px solid #087f74;
   outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-storefront *,
+  .user-storefront *::before,
+  .user-storefront *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 .language-switcher {
@@ -74,7 +112,7 @@ canvas {
   border-radius: 999px;
   background: rgb(255 255 255 / 82%);
   box-shadow: 0 8px 22px rgb(15 23 42 / 8%);
-  font-family: 'Poppins', 'Noto Sans Myanmar', system-ui, sans-serif;
+  font-family: 'Inter', 'Noto Sans Myanmar', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 800;
 }
@@ -120,20 +158,20 @@ canvas {
 .storefront-language-switcher {
   min-height: 40px;
   padding: 4px 7px;
-  color: #f4c267;
-  border-color: rgb(244 194 103 / 30%);
-  background: rgb(255 255 255 / 10%);
+  color: #087f74;
+  border-color: rgb(8 127 116 / 18%);
+  background: #f5f8f8;
   box-shadow: none;
 }
 
 .storefront-language-switcher .language-switcher-icon {
-  background: rgb(244 194 103 / 20%);
-  color: #f4c267;
+  background: rgb(8 127 116 / 12%);
+  color: #087f74;
 }
 
 .storefront-language-switcher select {
   min-height: 32px;
-  color: #f4c267;
+  color: #172033;
 }
 
 .pos-language-switcher {

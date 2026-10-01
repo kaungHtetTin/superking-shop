@@ -210,6 +210,8 @@ class CheckoutController extends Controller
             ->keyBy('id');
         $saleItems = $flashSalePricing->activeItemsForUnitIds($lines->keys()->map(fn ($id) => (int) $id)->all());
         $subtotal = 0.0;
+        $regularSubtotal = 0.0;
+        $quotedLines = [];
 
         foreach ($lines as $unitId => $row) {
             $unit = $units->get((int) $unitId);
@@ -221,7 +223,17 @@ class CheckoutController extends Controller
             if ($saleItem && $saleItem->remainingQuantity() !== null && $saleItem->remainingQuantity() < $quantity) {
                 throw ValidationException::withMessages(['lines' => "Flash sale quantity is no longer available for \"{$unit->product->name}\"."]);
             }
-            $subtotal += $flashSalePricing->effectivePrice($unit, $saleItem) * $quantity;
+            $regularPrice = $flashSalePricing->effectivePrice($unit, null);
+            $salePrice = $flashSalePricing->effectivePrice($unit, $saleItem);
+            $subtotal += $salePrice * $quantity;
+            $regularSubtotal += $regularPrice * $quantity;
+            $quotedLines[] = [
+                'product_unit_id' => $unit->id,
+                'unit_price' => $salePrice,
+                'regular_unit_price' => $regularPrice,
+                'total' => round($salePrice * $quantity, 2),
+                'flash_discount' => round(max(0, $regularPrice - $salePrice) * $quantity, 2),
+            ];
         }
 
         $subtotal = round($subtotal, 2);
@@ -238,6 +250,9 @@ class CheckoutController extends Controller
 
         return [
             'subtotal' => $subtotal,
+            'regular_subtotal' => round($regularSubtotal, 2),
+            'flash_discount' => round(max(0, $regularSubtotal - $subtotal), 2),
+            'lines' => $quotedLines,
             'coupon_code' => $coupon?->code,
             'coupon_discount' => $couponDiscount,
             'redeemed_points' => $redeemedPoints,

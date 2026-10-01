@@ -59,6 +59,7 @@ export default function FlashSalesIndex({ flashSales, filters }) {
 
         router.delete(routeWithBase(`/admin/flash-sales/${sale.id}`, app_base), {
             preserveScroll: true,
+            refreshRedirected: false,
         });
     };
 
