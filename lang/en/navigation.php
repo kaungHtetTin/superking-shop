@@ -1215,6 +1215,7 @@ return [
         'Net profit' => 'Net profit',
         'Period controls' => 'Period controls',
         'Finance filters' => 'Finance filters',
+        'Financial entry deleted.' => 'Financial entry deleted.',
         'Search title, reference, notes...' => 'Search title, reference, notes...',
         'All types' => 'All types',
         'Income' => 'Income',

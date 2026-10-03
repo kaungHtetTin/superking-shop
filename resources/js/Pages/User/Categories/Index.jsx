@@ -11,7 +11,7 @@ import {
     Button,
     Pagination,
 } from '@mui/material';
-import { ChevronRight, OilBarrel } from '@mui/icons-material';
+import { Build, ChevronRight, DirectionsCar, Inventory2, LocalGasStation, OilBarrel, Settings } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import BackLink from '@/Components/User/BackLink';
 import Navbar from '@/Components/User/Navbar';
@@ -25,11 +25,10 @@ import {
     storefrontBackgroundSx,
 } from '@/Components/User/musicStoreDesign';
 
-function categoryVisual(cat) {
-    return {
-        emoji: cat.metadata?.icon || cat.icon || null,
-        imageUrl: cat.icon_image_url || null,
-    };
+const categoryIcons = [OilBarrel, DirectionsCar, Settings, Build, LocalGasStation, Inventory2];
+
+function categoryVisual(index) {
+    return { Icon: categoryIcons[index % categoryIcons.length] };
 }
 
 export default function CategoriesIndex({ categories = [] }) {
@@ -86,8 +85,8 @@ export default function CategoriesIndex({ categories = [] }) {
                         gap: { xs: '10px', sm: '12px', md: '16px' },
                     }}
                 >
-                    {categoryRows.map((cat) => {
-                        const v = categoryVisual(cat);
+                    {categoryRows.map((cat, index) => {
+                        const v = categoryVisual(index);
                         const count = cat.products_count ?? 0;
                         const subs = cat.children || [];
 
@@ -116,7 +115,6 @@ export default function CategoriesIndex({ categories = [] }) {
                             >
                                 <Stack component={Link} href={routeWithBase(`/categories/${cat.slug}`, app_base)} direction="row" sx={{ alignItems: 'center', gap: '16px', color: 'inherit', textDecoration: 'none', '&:focus-visible': { outline: `2px solid ${musicColors.rosin}`, outlineOffset: 4 } }}>
                                     <Avatar
-                                        src={v.imageUrl || undefined}
                                         sx={{
                                             width: { xs: 44, sm: 52 },
                                             height: { xs: 44, sm: 52 },
@@ -128,7 +126,7 @@ export default function CategoriesIndex({ categories = [] }) {
                                             '& img': { objectFit: 'cover' },
                                         }}
                                     >
-                                        {v.emoji || <OilBarrel fontSize="small" />}
+                                        <v.Icon fontSize="small" />
                                     </Avatar>
                                     <Box sx={{ minWidth: 0, flex: 1 }}>
                                         <Typography

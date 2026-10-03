@@ -287,6 +287,14 @@ class FinanceController extends Controller
 
         $entry->delete();
 
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Financial entry deleted.',
+                'entry_id' => $entry->id,
+            ]);
+        }
+
         return back()->with('success', 'Financial entry deleted.');
     }
 

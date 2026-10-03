@@ -1215,6 +1215,7 @@ return [
         'Net profit' => 'အသားတင်အမြတ်',
         'Period controls' => 'ကာလထိန်းချုပ်မှု',
         'Finance filters' => 'ငွေကြေး filter များ',
+        'Financial entry deleted.' => 'ငွေကြေးမှတ်တမ်းကို ဖျက်ပြီးပါပြီ။',
         'Search title, reference, notes...' => 'ခေါင်းစဉ်၊ ရည်ညွှန်း၊ မှတ်ချက် ရှာရန်...',
         'All types' => 'အမျိုးအစားအားလုံး',
         'Income' => 'ဝင်ငွေ',

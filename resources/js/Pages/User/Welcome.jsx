@@ -276,8 +276,6 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
     const displayCategories = categories.filter((cat) => Number(cat.products_count || 0) > 0).map((cat, index) => ({
         ...cat,
         Icon: categoryIconCycle[index % categoryIconCycle.length],
-        icon: cat.metadata?.icon || cat.icon || null,
-        imageUrl: cat.icon_image_url,
         color: cat.metadata?.color || defaultAccent,
     }));
 
@@ -501,7 +499,6 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                 href={routeWithBase(`/categories/${cat.slug}`, app_base)}
                             >
                                 <Avatar
-                                    src={cat.imageUrl || undefined}
                                     sx={{
                                         width: { xs: 56, md: 64 },
                                         height: { xs: 56, md: 64 },
@@ -514,7 +511,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                                         '&:hover': { transform: 'translateY(-2px)', transition: '0.2s' },
                                     }}
                                 >
-                                    {cat.icon || <cat.Icon fontSize="small" />}
+                                    <cat.Icon fontSize="small" />
                                 </Avatar>
                                 <Typography
                                     variant="caption"

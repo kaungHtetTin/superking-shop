@@ -245,6 +245,8 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [localSuccess, setLocalSuccess] = useState('');
+    const [visibleEntries, setVisibleEntries] = useState(entries);
+    const [deletingId, setDeletingId] = useState(null);
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
     const [filterState, setFilterState] = useState({
         q: filters.q ?? '',
@@ -266,6 +268,10 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const formCategoryOptions = options.manual_categories?.[form.data.type] || [];
 
     const activeFilterCount = Object.values(filterState).filter(Boolean).length;
+
+    useEffect(() => {
+        setVisibleEntries(entries);
+    }, [entries]);
 
     useEffect(() => {
         if (!filterDrawerOpen) return undefined;
@@ -343,7 +349,32 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
 
     const remove = (entry) => {
         if (!confirm(t('Delete ":title"?', { title: entry.title }))) return;
-        router.delete(routeWithBase(`/admin/finance/entries/${entry.id}`, app_base), { preserveScroll: true });
+        const previousEntries = visibleEntries;
+        setLocalSuccess('');
+        setDeletingId(entry.id);
+        setVisibleEntries((current) => ({
+            ...current,
+            data: current.data.filter((item) => Number(item.id) !== Number(entry.id)),
+            total: Math.max(0, Number(current.total || 0) - 1),
+        }));
+        router.delete(routeWithBase(`/admin/finance/entries/${entry.id}`, app_base), {}, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: (page) => {
+                setLocalSuccess(t('Financial entry deleted.'));
+                if (page?.props?.entries) setVisibleEntries(page.props.entries);
+                router.reload({
+                    preserveScroll: true,
+                    preserveState: true,
+                    showSkeleton: false,
+                    onSuccess: (freshPage) => {
+                        if (freshPage?.props?.entries) setVisibleEntries(freshPage.props.entries);
+                    },
+                });
+            },
+            onError: () => setVisibleEntries(previousEntries),
+            onFinish: () => setDeletingId(null),
+        });
     };
 
     const resetFilters = () => {
@@ -404,7 +435,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
             }
         >
             <Head title={t('Finance')} />
-            <AdminFlash flash={{ ...flash, success: localSuccess || flash?.success }} errors={open ? {} : form.errors} />
+            <AdminFlash flash={flash} errors={open ? {} : form.errors} />
             <p className="muted">{t('Revenue includes completed credit sales. Payments and refunds are tracked separately from profit.')}</p>
             {Number(summary.unvalued_adjustment_lines) > 0 && <p role="status" className="muted">{t('Historical stock adjustments are missing cost snapshots. Profit is incomplete until those records are reconciled.')} ({summary.unvalued_adjustment_lines})</p>}
 
@@ -471,6 +502,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
 
             <section className="panel glass finance-ledger-panel">
                 <PanelHeading eyebrow={t('Financial records')} title={t('Financial activity')} />
+                {localSuccess && <div className="flash success" role="status">{localSuccess}</div>}
                 <div className="table-wrap">
                     <table className="finance-ledger-table">
                         <thead>
@@ -486,9 +518,9 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.data.length === 0 ? (
+                            {visibleEntries.data.length === 0 ? (
                                 <tr><td colSpan={8}><span className="muted">{t('No finance entries match your filters.')}</span></td></tr>
-                            ) : entries.data.map((entry) => {
+                            ) : visibleEntries.data.map((entry) => {
                                 const isManagedEntry = entry.is_system_managed || entry.is_stock_receipt_entry || entry.category === 'stock_receipt';
 
                                 return (
@@ -511,10 +543,10 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                                 <span className="muted">{t('System managed')}</span>
                                             ) : (
                                                 <div className="inline-actions">
-                                                    <button type="button" className="icon-btn small" onClick={() => openModal(entry)} aria-label={t('Edit entry')} title={t('Edit entry')}>
+                                                    <button type="button" className="icon-btn small" onClick={() => openModal(entry)} aria-label={t('Edit entry')} title={t('Edit entry')} disabled={deletingId !== null}>
                                                         <Icon name="edit" size={13} />
                                                     </button>
-                                                    <button type="button" className="icon-btn small danger" onClick={() => remove(entry)} aria-label={t('Delete entry')} title={t('Delete entry')}>
+                                                    <button type="button" className="icon-btn small danger" onClick={() => remove(entry)} aria-label={t('Delete entry')} title={t('Delete entry')} disabled={deletingId !== null}>
                                                         <Icon name="trash" size={13} />
                                                     </button>
                                                 </div>
@@ -527,7 +559,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                     </table>
                 </div>
 
-                <LedgerPagination paginator={entries} />
+                <LedgerPagination paginator={visibleEntries} />
             </section>
 
             {open && (
