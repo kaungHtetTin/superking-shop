@@ -17,12 +17,12 @@ import {
     ArticleOutlined,
     PlayCircle,
     AccountBalanceWallet,
-    Piano,
-    GraphicEq,
-    Headphones,
-    Speaker,
-    LibraryMusic,
-    MusicNote,
+    Build,
+    DirectionsCar,
+    Inventory2,
+    LocalGasStation,
+    OilBarrel,
+    Settings,
     LocalShippingOutlined,
     PaymentsOutlined,
     SupportAgentOutlined,
@@ -81,7 +81,7 @@ const fallbackPromos = [
     },
 ];
 
-const categoryIconCycle = [Piano, GraphicEq, Headphones, Speaker, LibraryMusic, MusicNote];
+const categoryIconCycle = [OilBarrel, DirectionsCar, Settings, Build, LocalGasStation, Inventory2];
 const shoppingBenefits = [
     { icon: LocalShippingOutlined, title: 'Reliable delivery', subtitle: 'Carefully packed and tracked orders' },
     { icon: PaymentsOutlined, title: 'Secure payment', subtitle: 'Trusted payment options at checkout' },
@@ -128,34 +128,6 @@ function SectionHeader({ eyebrow, title, subtitle, action }) {
             </Box>
             {action}
         </Stack>
-    );
-}
-
-function HeroInstrumentArt() {
-    const theme = useTheme();
-    const musicColors = getMusicStoreColors(theme);
-
-    return (
-        <Box
-            sx={{
-                position: 'absolute',
-                inset: 0,
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: 2,
-                p: 3,
-                opacity: 0.98,
-            }}
-        >
-            <Box sx={{ alignSelf: 'end', transform: 'rotate(-8deg)', color: musicColors.amber }}>
-                <Piano sx={{ fontSize: 154, filter: 'drop-shadow(0 20px 24px rgba(0,0,0,0.28))' }} />
-            </Box>
-            <Stack spacing={2} sx={{ justifyContent: 'center', color: 'rgba(255,255,255,0.9)' }}>
-                <GraphicEq sx={{ fontSize: 92, color: musicColors.amber }} />
-                <Headphones sx={{ fontSize: 110, ml: 5, filter: 'drop-shadow(0 18px 20px rgba(0,0,0,0.24))' }} />
-                <MusicNote sx={{ fontSize: 66, color: musicColors.amber, ml: 2 }} />
-            </Stack>
-        </Box>
     );
 }
 
@@ -250,7 +222,7 @@ function ProductSectionEmpty({ title, subtitle }) {
                     color: musicColors.rosin,
                 }}
             >
-                <MusicNote sx={{ fontSize: 34 }} />
+                <OilBarrel sx={{ fontSize: 34 }} />
             </Box>
             <Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: musicColors.ink, mb: 0.5 }}>

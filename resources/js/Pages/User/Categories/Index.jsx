@@ -11,7 +11,7 @@ import {
     Button,
     Pagination,
 } from '@mui/material';
-import { ChevronRight, MusicNote } from '@mui/icons-material';
+import { ChevronRight, OilBarrel } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import BackLink from '@/Components/User/BackLink';
 import Navbar from '@/Components/User/Navbar';
@@ -128,7 +128,7 @@ export default function CategoriesIndex({ categories = [] }) {
                                             '& img': { objectFit: 'cover' },
                                         }}
                                     >
-                                        {v.emoji || <MusicNote fontSize="small" />}
+                                        {v.emoji || <OilBarrel fontSize="small" />}
                                     </Avatar>
                                     <Box sx={{ minWidth: 0, flex: 1 }}>
                                         <Typography
