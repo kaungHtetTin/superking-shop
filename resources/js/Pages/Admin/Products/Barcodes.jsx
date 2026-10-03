@@ -3,7 +3,7 @@ import { Head, router } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
-import { PanelHeading } from '@/Components/Admin/shared';
+import { FilterVisibilityControl, PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
@@ -88,6 +88,8 @@ export default function Barcodes({ products, categories, filters, app_base }) {
         category_id: filters.category_id || '',
         per_page: filters.per_page || 25,
     });
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [visibleFilters, setVisibleFilters] = useState({ q: true, category_id: true, per_page: true });
     const [selected, setSelected] = useState({});
     const [copies, setCopies] = useState({});
 
@@ -95,6 +97,18 @@ export default function Barcodes({ products, categories, filters, app_base }) {
         document.body.classList.add('barcode-print-mode');
         return () => document.body.classList.remove('barcode-print-mode');
     }, []);
+
+    useEffect(() => {
+        if (!filterDrawerOpen) return undefined;
+        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [filterDrawerOpen]);
 
     const selectedProducts = useMemo(() => Object.values(selected), [selected]);
     const printItems = useMemo(() => selectedProducts.flatMap((product) => {
@@ -104,6 +118,7 @@ export default function Barcodes({ products, categories, filters, app_base }) {
 
     const applyFilters = (event) => {
         event.preventDefault();
+        setFilterDrawerOpen(false);
         router.get(routeWithBase('/admin/products/barcodes', app_base), {
             q: filterState.q.trim() || undefined,
             category_id: filterState.category_id || undefined,
@@ -112,7 +127,19 @@ export default function Barcodes({ products, categories, filters, app_base }) {
     };
 
     const resetFilters = () => {
+        setFilterState({ q: '', category_id: '', per_page: 25 });
+        setFilterDrawerOpen(false);
         router.get(routeWithBase('/admin/products/barcodes', app_base));
+    };
+
+    const activeFilterCount = [filterState.q, filterState.category_id].filter(Boolean).length;
+    const renderFilterFields = (autoFocus = false, onlyVisible = false) => {
+        const show = (key) => !onlyVisible || visibleFilters[key] !== false;
+        return <>
+            {show('q') && <label className="form-field finance-report-filter__search"><span>{t('Search products')}</span><span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} value={filterState.q} onChange={(event) => setFilterState({ ...filterState, q: event.target.value })} placeholder={t('Search product, product code, or barcode...')} /></span></label>}
+            {show('category_id') && <label className="form-field finance-report-filter__category"><span>{t('Category')}</span><select value={filterState.category_id} onChange={(event) => setFilterState({ ...filterState, category_id: event.target.value })}><option value="">{t('All categories')}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>}
+            {show('per_page') && <label className="form-field finance-report-filter__select"><span>{t('Rows per page')}</span><select value={filterState.per_page} onChange={(event) => setFilterState({ ...filterState, per_page: Number(event.target.value) })}><option value="10">{t('10 per page')}</option><option value="25">{t('25 per page')}</option><option value="50">{t('50 per page')}</option><option value="100">{t('100 per page')}</option></select></label>}
+        </>;
     };
 
     const toggleProduct = (product) => {
@@ -158,36 +185,18 @@ export default function Barcodes({ products, categories, filters, app_base }) {
                     eyebrow={`${selectedProducts.length} ${t('selected')}`}
                     title={t('Product barcode list')}
                     action={
-                        <div className="inline-actions">
+                        <div className="inline-actions barcode-heading-actions">
                             <button type="button" className="btn secondary" onClick={selectVisible}>{t('Select visible')}</button>
                             <button type="button" className="btn secondary" onClick={() => setSelected({})}>{t('Clear')}</button>
+                            <button type="button" className="btn secondary finance-report-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}><Icon name="filterList" size={15} />{t('Filter')}{activeFilterCount > 0 && <span className="finance-report-filter__count">{activeFilterCount}</span>}</button>
+                            <FilterVisibilityControl filters={[{ key: 'q', label: 'Search products' }, { key: 'category_id', label: 'Category' }, { key: 'per_page', label: 'Rows per page' }]} visible={visibleFilters} onToggle={(key) => setVisibleFilters((current) => ({ ...current, [key]: current[key] === false }))} activeCount={activeFilterCount} />
                         </div>
                     }
                 />
 
-                <form className="filter-toolbar barcode-filter" onSubmit={applyFilters}>
-                    <label className="search-box">
-                        <Icon name="search" size={14} />
-                        <input
-                            value={filterState.q}
-                            onChange={(event) => setFilterState({ ...filterState, q: event.target.value })}
-                            placeholder={t('Search product, product code, or barcode...')}
-                        />
-                    </label>
-                    <select value={filterState.category_id} onChange={(event) => setFilterState({ ...filterState, category_id: event.target.value })}>
-                        <option value="">{t('All categories')}</option>
-                        {categories.map((category) => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                        ))}
-                    </select>
-                    <select value={filterState.per_page} onChange={(event) => setFilterState({ ...filterState, per_page: Number(event.target.value) })}>
-                        <option value="10">{t('10 per page')}</option>
-                        <option value="25">{t('25 per page')}</option>
-                        <option value="50">{t('50 per page')}</option>
-                        <option value="100">{t('100 per page')}</option>
-                    </select>
-                    <button type="submit" className="btn primary">{t('Search')}</button>
-                    <button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button>
+                <form className="finance-report-filter" onSubmit={applyFilters} aria-label={t('Filter barcode products')}>
+                    <div className="finance-report-filter__scroll"><div className="finance-report-filter__fields">{renderFilterFields(false, true)}</div></div>
+                    <div className="inline-actions finance-report-filter__actions"><button type="submit" className="btn primary"><Icon name="search" size={14} />{t('Search')}</button><button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button></div>
                 </form>
 
                 <div className="table-wrap barcode-product-table">
@@ -231,8 +240,10 @@ export default function Barcodes({ products, categories, filters, app_base }) {
                         </tbody>
                     </table>
                 </div>
-                <AdminPagination paginator={products} label={t('products')} />
+                <AdminPagination paginator={products} label={t('products')} queryParams={filterState} preserveState />
             </section>
+
+            {filterDrawerOpen && <div className="modal-backdrop finance-report-filter__backdrop no-print" onMouseDown={() => setFilterDrawerOpen(false)}><form className="drawer glass finance-report-filter__drawer" onSubmit={applyFilters} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="barcode-filter-title"><div className="drawer-header"><div><small className="eyebrow">{t('Barcode printing')}</small><h2 id="barcode-filter-title">{t('Filter products')}</h2></div><button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}><Icon name="close" size={16} /></button></div><div className="finance-report-filter__drawer-body">{renderFilterFields(true)}</div><div className="drawer-actions"><button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button><button type="submit" className="btn primary"><Icon name="search" size={14} />{t('Search')}</button></div></form></div>}
 
             <div className="barcode-print-sheet" aria-hidden={printItems.length === 0}>
                 {printItems.map((item) => <BarcodeLabel key={item.key} product={item.product} />)}

@@ -105,7 +105,7 @@ export default function CartIndex() {
                         <ShoppingCartRounded sx={{ fontSize: 52, color: 'primary.main', mb: '12px' }} />
                         <Typography variant="h6" sx={{ fontWeight: 700, mb: '8px' }}>{t('Your cart is empty')}</Typography>
                         <Typography color="text.secondary" sx={{ mb: '16px', maxWidth: 520, mx: 'auto' }}>
-                            {t('Your cart is empty. Add an instrument, cable, accessory, or studio essential to get started.')}
+                            {t('Your cart is empty. Browse our products and add what you need to get started.')}
                         </Typography>
                         <Button variant="contained" component={Link} href={routeWithBase('/products', app_base)}>
                             {t('Browse products')}

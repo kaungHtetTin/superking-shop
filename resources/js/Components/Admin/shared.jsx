@@ -117,6 +117,46 @@ export function ColumnVisibilityControl({ columns, visible, onToggle }) {
     );
 }
 
+export function FilterVisibilityControl({ filters, visible, onToggle, activeCount = 0 }) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef(null);
+    const t = usePhraseTranslation();
+
+    useEffect(() => {
+        const closeOutside = (event) => {
+            if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+        };
+        const closeOnEscape = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('mousedown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('mousedown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, []);
+
+    return (
+        <div className="filter-visibility-control" ref={wrapRef}>
+            <button type="button" className="btn secondary" aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen((value) => !value)}>
+                <Icon name="filterList" size={15} />
+                {t('Filters')}
+                {activeCount > 0 && <span className="orders-filter__count">{activeCount}</span>}
+            </button>
+            {open && (
+                <div className="filter-visibility-menu glass" role="menu">
+                    <p className="eyebrow">{t('Visible filters')}</p>
+                    {filters.map((filter) => (
+                        <label key={filter.key}>
+                            <input type="checkbox" checked={visible[filter.key] !== false} onChange={() => onToggle(filter.key)} />
+                            <span>{t(filter.label)}</span>
+                        </label>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 const BRAND_PRESETS = ['#087f74', '#2874bc', '#7c3aed', '#e91e63', '#d17d19', '#168255'];
 
 export function ThemeControl({ theme, onThemeChange, brand, onBrandChange, density = 'compact', onDensityChange }) {

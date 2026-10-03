@@ -205,7 +205,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                 <TextField
                     fullWidth
                     size="small"
-                    placeholder={t('Search guitars, keyboards, microphones...')}
+                    placeholder={t('Search engine oils, filters, accessories...')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
 
@@ -426,7 +426,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                                 <TextField
                                     fullWidth
                                     size="small"
-                                    placeholder={t('Search guitars, keyboards, microphones...')}
+                                    placeholder={t('Search engine oils, filters, accessories...')}
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
 
@@ -596,7 +596,7 @@ const Index = ({ products, categories, filters: rawFilters }) => {
                                     {t('Limited-time gear deals')}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                                    {t('Instruments and accessories while stock lasts')}
+                                    {t('Engine oils and vehicle essentials while stock lasts')}
                                 </Typography>
                             </Box>
                         </Stack>

@@ -3,7 +3,7 @@ import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { AdminFlash } from '@/Components/Admin/AdminFlash';
-import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
+import { FilterVisibilityControl, PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
@@ -255,6 +255,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
         status: filters.status ?? '',
         category: filters.category ?? '',
     });
+    const [visibleFilters, setVisibleFilters] = useState({ q: true, location_id: Boolean(filters.location_id), from: Boolean(filters.from), to: Boolean(filters.to), type: true, status: Boolean(filters.status), category: Boolean(filters.category) });
     const form = useForm({ ...emptyEntry });
 
     const categoryOptions = useMemo(() => {
@@ -353,41 +354,41 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
     const exportQuery = new URLSearchParams();
     Object.entries(filterState).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
 
-    const renderFilterFields = (autoFocus = false) => (
+    const renderFilterFields = (autoFocus = false, onlyVisible = false) => (
         <>
-            <label className="form-field finance-report-filter__search">
+            {(!onlyVisible || visibleFilters.q !== false) && <label className="form-field finance-report-filter__search">
                 <span>{t('Search entries')}</span>
                 <span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} type="search" placeholder={t('Title, reference or notes')} value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} /></span>
-            </label>
-            <label className="form-field finance-report-filter__store">
+            </label>}
+            {(!onlyVisible || visibleFilters.location_id !== false) && <label className="form-field finance-report-filter__store">
                 <span>{t('Store')}</span>
                 <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
                     <option value="">{t('All stores')}</option>
                     {options.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                 </select>
-            </label>
-            <label className="form-field finance-report-filter__date"><span>{t('From')}</span><input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>
-            <label className="form-field finance-report-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>
-            <label className="form-field finance-report-filter__select">
+            </label>}
+            {(!onlyVisible || visibleFilters.from !== false) && <label className="form-field finance-report-filter__date"><span>{t('From')}</span><input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>}
+            {(!onlyVisible || visibleFilters.to !== false) && <label className="form-field finance-report-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>}
+            {(!onlyVisible || visibleFilters.type !== false) && <label className="form-field finance-report-filter__select">
                 <span>{t('Type')}</span>
                 <select value={filterState.type} onChange={(event) => setFilterState((current) => ({ ...current, type: event.target.value, category: '' }))}>
                     <option value="">{t('All types')}</option><option value="income">{t('Income')}</option><option value="expense">{t('Expense')}</option><option value="asset">{t('Asset acquisition')}</option>
                 </select>
-            </label>
-            <label className="form-field finance-report-filter__select">
+            </label>}
+            {(!onlyVisible || visibleFilters.status !== false) && <label className="form-field finance-report-filter__select">
                 <span>{t('Status')}</span>
                 <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
                     <option value="">{t('All statuses')}</option>
                     {options.statuses.map((status) => <option key={status} value={status}>{t(status)}</option>)}
                 </select>
-            </label>
-            <label className="form-field finance-report-filter__category">
+            </label>}
+            {(!onlyVisible || visibleFilters.category !== false) && <label className="form-field finance-report-filter__category">
                 <span>{t('Category')}</span>
                 <select value={filterState.category} onChange={(event) => setFilterState((current) => ({ ...current, category: event.target.value }))}>
                     <option value="">{t('All categories')}</option>
                     {categoryOptions.map((category) => <option key={`${category.value}-${category.label}`} value={category.value}>{t(category.label)}</option>)}
                 </select>
-            </label>
+            </label>}
         </>
     );
 
@@ -422,16 +423,17 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                 <PanelHeading
                     eyebrow={t('Period controls')}
                     title={t('Finance filters')}
-                    action={(
+                    action={(<div className="inline-actions filter-heading-actions">
                         <button type="button" className="btn secondary finance-report-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}>
-                            <Icon name="search" size={14} /> {t('Filter')}
+                            <Icon name="filterList" size={15} /> {t('Filter')}
                             {activeFilterCount > 0 && <span className="finance-report-filter__count">{activeFilterCount}</span>}
                         </button>
-                    )}
+                        <FilterVisibilityControl filters={[{ key: 'q', label: 'Search entries' }, { key: 'location_id', label: 'Store' }, { key: 'from', label: 'From date' }, { key: 'to', label: 'To date' }, { key: 'type', label: 'Type' }, { key: 'status', label: 'Status' }, { key: 'category', label: 'Category' }]} visible={visibleFilters} onToggle={(key) => setVisibleFilters((current) => ({ ...current, [key]: current[key] === false }))} activeCount={activeFilterCount} />
+                    </div>)}
                 />
                 <form className="finance-report-filter" onSubmit={submitFilters} aria-label={t('Finance filters')}>
                     <div className="finance-report-filter__scroll">
-                        <div className="finance-report-filter__fields">{renderFilterFields()}</div>
+                        <div className="finance-report-filter__fields">{renderFilterFields(false, true)}</div>
                     </div>
                     <div className="inline-actions finance-report-filter__actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>

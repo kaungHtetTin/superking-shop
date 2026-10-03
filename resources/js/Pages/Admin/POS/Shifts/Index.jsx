@@ -9,7 +9,7 @@ import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import AdminPagination from '@/Components/Admin/AdminPagination';
 import Icon from '@/Components/Admin/icons';
-import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
+import { FilterVisibilityControl, PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
@@ -57,6 +57,7 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
         from: filters.from || '',
         to: filters.to || '',
     });
+    const [visibleFilters, setVisibleFilters] = useState({ q: true, status: true, location_id: Boolean(filters.location_id), from: Boolean(filters.from), to: Boolean(filters.to) });
 
     const rows = shifts?.data || [];
     const selectedSummary = useMemo(() => selectedShift?.calculated_summary || selectedShift || {}, [selectedShift]);
@@ -103,35 +104,35 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
         navigate(empty);
     };
 
-    const renderFilterFields = (autoFocus = false) => (
+    const renderFilterFields = (autoFocus = false, onlyVisible = false) => (
         <>
-            <label className="form-field shift-history__filter-search">
+            {(!onlyVisible || visibleFilters.q !== false) && <label className="form-field shift-history__filter-search">
                 <span>{canViewAllCashiers ? t('Search cashier or register') : t('Search register')}</span>
                 <input autoFocus={autoFocus} type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Name, email or register code')} />
-            </label>
-            <label className="form-field shift-history__filter-status">
+            </label>}
+            {(!onlyVisible || visibleFilters.status !== false) && <label className="form-field shift-history__filter-status">
                 <span>{t('Status')}</span>
                 <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
                     <option value="">{t('All statuses')}</option>
                     <option value="open">{t('Open')}</option>
                     <option value="closed">{t('Closed')}</option>
                 </select>
-            </label>
-            <label className="form-field shift-history__filter-warehouse">
+            </label>}
+            {(!onlyVisible || visibleFilters.location_id !== false) && <label className="form-field shift-history__filter-warehouse">
                 <span>{t('Warehouse')}</span>
                 <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
                     <option value="">{t('All warehouses')}</option>
                     {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                 </select>
-            </label>
-            <label className="form-field shift-history__filter-date">
+            </label>}
+            {(!onlyVisible || visibleFilters.from !== false) && <label className="form-field shift-history__filter-date">
                 <span>{t('From')}</span>
                 <input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} />
-            </label>
-            <label className="form-field shift-history__filter-date">
+            </label>}
+            {(!onlyVisible || visibleFilters.to !== false) && <label className="form-field shift-history__filter-date">
                 <span>{t('To')}</span>
                 <input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} />
-            </label>
+            </label>}
         </>
     );
 
@@ -161,16 +162,17 @@ export default function ShiftHistory({ shifts, locations = [], filters = {}, sta
                 <PanelHeading
                     eyebrow={t('History controls')}
                     title={t('Filter shifts')}
-                    action={(
+                    action={(<div className="inline-actions filter-heading-actions">
                         <button type="button" className="btn secondary shift-history__mobile-filter-trigger" onClick={() => setFilterDrawerOpen(true)}>
-                            <Icon name="search" size={14} /> {t('Filter')}
+                            <Icon name="filterList" size={15} /> {t('Filter')}
                             {activeFilterCount > 0 && <span className="shift-history__filter-count">{activeFilterCount}</span>}
                         </button>
-                    )}
+                        <FilterVisibilityControl filters={[{ key: 'q', label: 'Search' }, { key: 'status', label: 'Status' }, { key: 'location_id', label: 'Warehouse' }, { key: 'from', label: 'From date' }, { key: 'to', label: 'To date' }]} visible={visibleFilters} onToggle={(key) => setVisibleFilters((current) => ({ ...current, [key]: current[key] === false }))} activeCount={activeFilterCount} />
+                    </div>)}
                 />
                 <form className="shift-history__filter-toolbar" onSubmit={submitFilters} aria-label={t('Filter shifts')}>
                     <div className="shift-history__filter-scroll">
-                        <div className="shift-history__filter-fields">{renderFilterFields()}</div>
+                        <div className="shift-history__filter-fields">{renderFilterFields(false, true)}</div>
                     </div>
                     <div className="inline-actions shift-history__filter-actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Filter')}</button>

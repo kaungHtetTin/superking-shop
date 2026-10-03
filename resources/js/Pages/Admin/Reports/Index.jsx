@@ -3,7 +3,7 @@ import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
-import { PanelHeading, StatusBadge } from '@/Components/Admin/shared';
+import { FilterVisibilityControl, PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
@@ -193,6 +193,13 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
         q: filters?.q || '',
         stock_status: filters?.stock_status || '',
     });
+    const [visibleFilters, setVisibleFilters] = useState({
+        q: true,
+        location_id: true,
+        from: Boolean(filters?.from),
+        to: Boolean(filters?.to),
+        stock_status: Boolean(filters?.stock_status),
+    });
     const canExport = ['sales', 'inventory', 'pos'].includes(view);
     const activeFilterCount = [
         filterState.location_id,
@@ -237,28 +244,28 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
         router.get(routeWithBase('/admin/reports', appBase), { view, ...extraFilters }, { preserveState: true, preserveScroll: true, replace: true });
     };
 
-    const renderFilterFields = (autoFocus = false) => (
+    const renderFilterFields = (autoFocus = false, onlyVisible = false) => (
         <>
-            {(showStock || showSearch) && (
+            {(showStock || showSearch) && (!onlyVisible || visibleFilters.q !== false) && (
                 <label className="form-field reports-filter__search">
                     <span>{t('Search products')}</span>
                     <span className="search-box"><Icon name="search" size={15} /><input autoFocus={autoFocus} type="search" value={filterState.q} onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))} placeholder={t('Product name, code, or barcode')} /></span>
                 </label>
             )}
-            <label className="form-field reports-filter__location">
+            {(!onlyVisible || visibleFilters.location_id !== false) && <label className="form-field reports-filter__location">
                 <span>{t('Store / warehouse')}</span>
                 <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
                     <option value="">{t('All accessible')}</option>
                     {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                 </select>
-            </label>
+            </label>}
             {showDates && (
                 <>
-                    <label className="form-field reports-filter__date"><span>{t('From')}</span><input autoFocus={autoFocus} type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>
-                    <label className="form-field reports-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>
+                    {(!onlyVisible || visibleFilters.from !== false) && <label className="form-field reports-filter__date"><span>{t('From')}</span><input autoFocus={autoFocus} type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} /></label>}
+                    {(!onlyVisible || visibleFilters.to !== false) && <label className="form-field reports-filter__date"><span>{t('To')}</span><input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} /></label>}
                 </>
             )}
-            {showStock && (
+            {showStock && (!onlyVisible || visibleFilters.stock_status !== false) && (
                 <label className="form-field reports-filter__stock">
                     <span>{t('Stock status')}</span>
                     <select value={filterState.stock_status} onChange={(event) => setFilterState((current) => ({ ...current, stock_status: event.target.value }))}>
@@ -275,10 +282,10 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
                 <PanelHeading
                     eyebrow={t('Report controls')}
                     title={t('Report filters')}
-                    action={<button type="button" className="btn secondary reports-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}><Icon name="search" size={14} /> {t('Filter')}{activeFilterCount > 0 && <span className="reports-filter__count">{activeFilterCount}</span>}</button>}
+                    action={<div className="inline-actions filter-heading-actions"><button type="button" className="btn secondary reports-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}><Icon name="filterList" size={15} /> {t('Filter')}{activeFilterCount > 0 && <span className="reports-filter__count">{activeFilterCount}</span>}</button><FilterVisibilityControl filters={[...((showStock || showSearch) ? [{ key: 'q', label: 'Search products' }] : []), { key: 'location_id', label: 'Store / warehouse' }, ...(showDates ? [{ key: 'from', label: 'From date' }, { key: 'to', label: 'To date' }] : []), ...(showStock ? [{ key: 'stock_status', label: 'Stock status' }] : [])]} visible={visibleFilters} onToggle={(key) => setVisibleFilters((current) => ({ ...current, [key]: current[key] === false }))} activeCount={activeFilterCount} /></div>}
                 />
                 <form className="reports-filter" onSubmit={submitFilters} aria-label={t('Report filters')}>
-                    <div className="reports-filter__scroll"><div className="reports-filter__fields">{renderFilterFields()}</div></div>
+                    <div className="reports-filter__scroll"><div className="reports-filter__fields">{renderFilterFields(false, true)}</div></div>
                     <div className="inline-actions reports-filter__actions">
                         <button className="btn primary" type="submit"><Icon name="search" size={14} /> {t('Apply')}</button>
                         {canExport && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> CSV</a>}

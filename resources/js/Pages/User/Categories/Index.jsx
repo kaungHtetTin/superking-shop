@@ -69,7 +69,7 @@ export default function CategoriesIndex({ categories = [] }) {
                         Shop by category
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: '8px', maxWidth: 580 }}>
-                        Find instruments, accessories and essentials in one place.
+                        Find engine oils, vehicle care products, and accessories in one place.
                     </Typography>
                     </Box>
                     <Button component={Link} href={routeWithBase('/products', app_base)} variant="outlined">View all products</Button>

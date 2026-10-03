@@ -38,6 +38,7 @@ import {
 import {
     Add as AddIcon,
     AccountBalanceWalletOutlined as ShiftIcon,
+    ArrowBack as ArrowBackIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
     Close as CloseIcon,
@@ -1188,6 +1189,17 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     flexShrink: 0,
                 }}
             >
+                <Button
+                    className="pos-console__back-link"
+                    size="small"
+                    variant="text"
+                    component={Link}
+                    href={routeWithBase(admin_landing_path && admin_landing_path !== '/admin/pos' ? admin_landing_path : '/admin/dashboard', app_base)}
+                    startIcon={<ArrowBackIcon fontSize="small" />}
+                    aria-label={tp('Back')}
+                >
+                    <span className="pos-console__back-label">{tp('Back')}</span>
+                </Button>
                 <Stack className="pos-console__brand" direction="row" spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
                     <CheckoutIcon color="primary" fontSize="small" />
                     <Box sx={{ minWidth: 0 }}>

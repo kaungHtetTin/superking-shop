@@ -3,7 +3,7 @@ import { Head, Link, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
-import { ColumnVisibilityControl, PanelHeading, StatusBadge } from '@/Components/Admin/shared';
+import { ColumnVisibilityControl, FilterVisibilityControl, PanelHeading, StatusBadge } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { orderStatusLabels, paymentLabels } from '@/constants/orderLabels';
 import { usePhraseTranslation } from '@/Utils/i18n';
@@ -57,9 +57,18 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
         to: filters.to ?? '',
     });
     const [visibleColumns, setVisibleColumns] = useState({ items: true, payment: true, fulfillment: true });
+    const [visibleFilters, setVisibleFilters] = useState({
+        q: true,
+        location_id: Boolean(filters.location_id),
+        status: true,
+        payment_status: Boolean(filters.payment_status),
+        from: Boolean(filters.from),
+        to: Boolean(filters.to),
+    });
     const activeTab = filters.tab ?? '';
     const activeFilterCount = Object.values(filterState).filter(Boolean).length;
     const toggleColumn = (key) => setVisibleColumns((current) => ({ ...current, [key]: current[key] === false }));
+    const toggleFilter = (key) => setVisibleFilters((current) => ({ ...current, [key]: current[key] === false }));
     const exportQuery = new URLSearchParams();
     Object.entries({ ...filterState, tab: activeTab }).forEach(([key, value]) => value !== null && value !== undefined && value !== '' && exportQuery.set(key, value));
 
@@ -96,9 +105,9 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
         router.get(routeWithBase('/admin/orders', app_base), {}, { preserveState: true, preserveScroll: true, replace: true });
     };
 
-    const renderFilterFields = (autoFocus = false) => (
+    const renderFilterFields = (autoFocus = false, onlyVisible = false) => (
         <>
-            <label className="form-field orders-filter__search">
+            {(!onlyVisible || visibleFilters.q !== false) && <label className="form-field orders-filter__search">
                 <span>{t('Search orders')}</span>
                 <div className="search-box">
                     <Icon name="search" size={16} />
@@ -110,36 +119,36 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                         onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))}
                     />
                 </div>
-            </label>
-            <label className="form-field orders-filter__store">
+            </label>}
+            {(!onlyVisible || visibleFilters.location_id !== false) && <label className="form-field orders-filter__store">
                 <span>{t('Store')}</span>
                 <select value={filterState.location_id} onChange={(event) => setFilterState((current) => ({ ...current, location_id: event.target.value }))}>
                     <option value="">{t('All stores')}</option>
                     {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
                 </select>
-            </label>
-            <label className="form-field orders-filter__status">
+            </label>}
+            {(!onlyVisible || visibleFilters.status !== false) && <label className="form-field orders-filter__status">
                 <span>{t('Status')}</span>
                 <select value={filterState.status} onChange={(event) => setFilterState((current) => ({ ...current, status: event.target.value }))}>
                     <option value="">{t('All statuses')}</option>
                     {Object.entries(orderStatusLabels).map(([key, value]) => <option key={key} value={key}>{t(value)}</option>)}
                 </select>
-            </label>
-            <label className="form-field orders-filter__payment">
+            </label>}
+            {(!onlyVisible || visibleFilters.payment_status !== false) && <label className="form-field orders-filter__payment">
                 <span>{t('Payment')}</span>
                 <select value={filterState.payment_status} onChange={(event) => setFilterState((current) => ({ ...current, payment_status: event.target.value }))}>
                     <option value="">{t('All payments')}</option>
                     {Object.entries(paymentLabels).map(([key, value]) => <option key={key} value={key}>{t(value)}</option>)}
                 </select>
-            </label>
-            <label className="form-field orders-filter__date">
+            </label>}
+            {(!onlyVisible || visibleFilters.from !== false) && <label className="form-field orders-filter__date">
                 <span>{t('From')}</span>
                 <input type="date" value={filterState.from} onChange={(event) => setFilterState((current) => ({ ...current, from: event.target.value }))} />
-            </label>
-            <label className="form-field orders-filter__date">
+            </label>}
+            {(!onlyVisible || visibleFilters.to !== false) && <label className="form-field orders-filter__date">
                 <span>{t('To')}</span>
                 <input type="date" value={filterState.to} onChange={(event) => setFilterState((current) => ({ ...current, to: event.target.value }))} />
-            </label>
+            </label>}
         </>
     );
 
@@ -167,9 +176,22 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                     action={
                         <div className="inline-actions orders-queue__heading-actions">
                             <button type="button" className="btn secondary orders-filter__mobile-trigger" onClick={() => setFilterDrawerOpen(true)}>
-                                <Icon name="search" size={14} /> {t('Filter')}
+                                <Icon name="filterList" size={15} /> {t('Filter')}
                                 {activeFilterCount > 0 && <span className="orders-filter__count">{activeFilterCount}</span>}
                             </button>
+                            <FilterVisibilityControl
+                                filters={[
+                                    { key: 'q', label: 'Search orders' },
+                                    { key: 'location_id', label: 'Store' },
+                                    { key: 'status', label: 'Status' },
+                                    { key: 'payment_status', label: 'Payment' },
+                                    { key: 'from', label: 'From date' },
+                                    { key: 'to', label: 'To date' },
+                                ]}
+                                visible={visibleFilters}
+                                onToggle={toggleFilter}
+                                activeCount={activeFilterCount}
+                            />
                             <ColumnVisibilityControl
                             columns={[
                                 { key: 'order', label: 'Order', locked: true },
@@ -201,7 +223,7 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
 
                 <form className="orders-filter-toolbar" onSubmit={submitFilters} aria-label={t('Filter orders')}>
                     <div className="orders-filter__scroll">
-                        <div className="orders-filter__fields">{renderFilterFields()}</div>
+                        <div className="orders-filter__fields">{renderFilterFields(false, true)}</div>
                     </div>
                     <div className="inline-actions orders-filter__actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>

@@ -142,7 +142,7 @@ export default function Footer() {
                             </Typography>
                         </Stack>
                         <Typography variant="body2" sx={{ opacity: 0.84, display: 'block', maxWidth: 320 }}>
-                            {t('storefront.footer_text', 'Instruments, accessories, and essentials for practice rooms, studios, and stages.')}
+                            {t('storefront.footer_text', 'Engine oils, vehicle care products, and accessories for every journey.')}
                         </Typography>
                     </Box>
 

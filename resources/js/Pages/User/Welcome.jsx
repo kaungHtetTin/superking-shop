@@ -46,16 +46,16 @@ import {
 import { usePhraseTranslation } from '@/Utils/i18n';
 
 const defaultSections = {
-    categories: { title: 'Shop by sound', subtitle: 'Find the right instrument family for your next session.', is_active: true },
+    categories: { title: 'Shop by category', subtitle: 'Find the right products for your vehicle.', is_active: true },
     flash_sale: { title: null, is_active: true },
     promos: { title: null, is_active: true },
     best_sellers: { title: null, subtitle: null, is_active: true },
-    blogs: { title: 'Player guides', subtitle: 'Care tips, buying advice, and setup ideas from the shop.', is_active: true },
+    blogs: { title: 'Product guides', subtitle: 'Maintenance tips, buying advice, and useful updates from the shop.', is_active: true },
 };
 
 const defaultHero = {
-    title: 'Tune up your next performance',
-    subtitle: 'Shop instruments, accessories, and studio-ready gear selected for players at every level.',
+    title: 'Keep every journey running smoothly',
+    subtitle: 'Shop quality engine oils, lubricants, filters, and vehicle care essentials.',
     button_label: 'Explore the shop',
     link_url: '/products',
     accent_color: null,
@@ -65,16 +65,16 @@ const defaultHero = {
 const fallbackPromos = [
     {
         id: 'editors-picks',
-        title: 'For the rehearsal room',
-        subtitle: 'Strings, picks, sticks, cables, and everyday essentials',
+        title: 'Everyday vehicle care',
+        subtitle: 'Reliable products for maintenance, protection, and performance',
         link_url: '/products',
         accent_color: null,
         image_url: null,
     },
     {
         id: 'new-arrivals',
-        title: 'New on the wall',
-        subtitle: 'Fresh guitars, keyboards, percussion, and recording tools',
+        title: 'New arrivals',
+        subtitle: 'Discover our latest oils, lubricants, filters, and accessories',
         link_url: '/products?sort=newest',
         accent_color: null,
         image_url: null,
@@ -284,7 +284,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
     const productSectionMeta = {
         source: 'new_arrivals',
         title: 'New arrivals on the wall',
-        subtitle: 'Fresh instruments and gear ready for players to discover.',
+        subtitle: 'Fresh vehicle care products ready for you to discover.',
         empty_title: 'No products are ready for the storefront yet',
         empty_subtitle: 'Create active products with available stock to show a polished customer-facing selection here.',
         ...(productSection || {}),
@@ -363,7 +363,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                             }}
                         >
                             <Typography sx={{ ...eyebrowSx, color: musicColors.amber, mb: 1 }}>
-                                {t('Musical instrument store')}
+                                {t('Engine oil & vehicle supplies')}
                             </Typography>
                             <Typography variant="h2" sx={{ fontWeight: 700, fontSize: { xs: '1.65rem', sm: '2rem', md: '2.5rem' }, mb: 1.25, lineHeight: 1.1, maxWidth: 620 }}>
                                 {t(hero.title || defaultHero.title)}
@@ -405,10 +405,10 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                             </Stack>
                             <Stack direction="row" spacing={1} useFlexGap  sx={{ flexWrap: "wrap", ...({ mt: 3 }) }}>
                                 {[
-                                    ['Guitars', 'guitar'],
-                                    ['Keys', 'keyboard'],
-                                    ['Drums', 'drum'],
-                                    ['Audio', 'audio'],
+                                    ['Engine oils', 'engine oil'],
+                                    ['Lubricants', 'lubricant'],
+                                    ['Filters', 'filter'],
+                                    ['Accessories', 'accessory'],
                                 ].map(([label, query]) => (
                                     <Chip
                                         key={label}
@@ -482,7 +482,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                 <Container maxWidth="lg" sx={{ mt: { xs: '24px', md: '32px' } }}>
                     <SectionHeader
                         eyebrow="Departments"
-                        title={sections.categories?.title || 'Shop by sound'}
+                        title={sections.categories?.title || 'Shop by category'}
                         subtitle={sections.categories?.subtitle}
                         action={(
                             <Button
@@ -669,7 +669,7 @@ const Welcome = ({ products = [], productSection = null, categories, flashSalePr
                 <Container maxWidth="lg" sx={{ mt: { xs: '24px', md: '32px' }, mb: { xs: '24px', md: '32px' } }}>
                     <SectionHeader
                         eyebrow="Learn"
-                        title={sections.blogs?.title || 'Player guides'}
+                        title={sections.blogs?.title || 'Product guides'}
                         subtitle={sections.blogs?.subtitle}
                         action={(
                             <Button

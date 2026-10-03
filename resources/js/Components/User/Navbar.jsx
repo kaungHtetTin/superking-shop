@@ -211,7 +211,7 @@ const Navbar = ({ persistentRoot = false }) => {
                                 {appName}
                             </Typography>
                             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 400, fontSize: '0.75rem', display: { xs: 'none', xl: 'block' } }}>
-                                {t('storefront.tagline', 'Instruments, gear & studio essentials')}
+                                {t('storefront.tagline', 'Engine oils & vehicle care essentials')}
                             </Typography>
                         </Box>
                     </Box>
@@ -247,7 +247,7 @@ const Navbar = ({ persistentRoot = false }) => {
                     <Box sx={{ flexGrow: 1 }} />
 
                     <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                        {renderSearch(t('storefront.search_desktop', 'Search instruments, cables, amps...'))}
+                        {renderSearch(t('storefront.search_desktop', 'Search engine oils, filters, accessories...'))}
                     </Box>
 
                     <Box sx={{ display: 'flex', gap: { xs: 0.25, sm: 0.5 }, alignItems: 'center' }}>
@@ -304,7 +304,7 @@ const Navbar = ({ persistentRoot = false }) => {
                     </Box>
                 </Toolbar>
                 <Box sx={{ pb: 2, px: { xs: 0, sm: 1 }, display: { xs: 'block', md: 'none' } }}>
-                    {renderSearch(t('storefront.search_mobile', 'Search guitars, keys, drums...'))}
+                    {renderSearch(t('storefront.search_mobile', 'Search oils, filters, accessories...'))}
                 </Box>
             </Container>
         </AppBar>
