@@ -80,7 +80,7 @@ export default function OrdersShow({ order, paymentStatusLabels = {} }) {
 
                 {flash?.success && (
                     <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
-                        {flash.success}
+                        {t(flash.success)}
                     </Alert>
                 )}
 

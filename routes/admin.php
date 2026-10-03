@@ -186,6 +186,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
         Route::get('/finance-book', [\App\Http\Controllers\Admin\FinanceBookController::class, 'index'])->name('finance-book.index');
         Route::post('/finance-book', [\App\Http\Controllers\Admin\FinanceBookController::class, 'store'])->name('finance-book.store');
         Route::post('/finance-book/counts', [\App\Http\Controllers\Admin\FinanceBookController::class, 'saveCount'])->name('finance-book.counts.store');
+        Route::delete('/finance-book/funds/{fund}', [\App\Http\Controllers\Admin\FinanceBookController::class, 'destroyFund'])->whereNumber('fund')->name('finance-book.funds.destroy');
     });
 
     Route::middleware('admin.permission:manage_finance')->group(function () {

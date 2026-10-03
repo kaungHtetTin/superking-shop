@@ -1296,12 +1296,12 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                                 {tp('Open a cash shift before making a sale.')}
                             </Alert>
                         )}
-                        {flash?.success && <Alert severity="success">{flash.success}</Alert>}
-                        {flash?.error && <Alert severity="error">{flash.error}</Alert>}
-                        {message && <Alert severity="success" onClose={() => setMessage('')}>{message}</Alert>}
+                        {flash?.success && <Alert severity="success">{tp(flash.success)}</Alert>}
+                        {flash?.error && <Alert severity="error">{tp(flash.error)}</Alert>}
+                        {message && <Alert severity="success" onClose={() => setMessage('')}>{tp(message)}</Alert>}
                         {visiblePageErrors.map(([key, value]) => (
                             <Alert severity="error" key={key}>
-                                {Array.isArray(value) ? value.join(' ') : value}
+                                {tp(Array.isArray(value) ? value.join(' ') : value)}
                             </Alert>
                         ))}
                     </Stack>

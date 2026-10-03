@@ -67,6 +67,7 @@ function AdminChrome({ children, mainClassName = '' }) {
     const { url, props } = usePage();
     const { app_base, app_url, app_settings, admin_landing_path, pos_enabled, orders_pending_payment_count, chat_unread_count, is_super_admin } = props;
     const t = useTranslation();
+    const tp = usePhraseTranslation();
     const authUser = props.auth?.user;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
@@ -620,14 +621,14 @@ function AdminChrome({ children, mainClassName = '' }) {
                     {globalNotice && (
                         <div className={`admin-global-notice ${globalNotice.type}`} role="status" aria-live="polite">
                             <span className="admin-global-notice-icon"><Icon name="check" size={14} /></span>
-                            <strong>{globalNotice.message}</strong>
+                            <strong>{tp(globalNotice.message)}</strong>
                             <button type="button" aria-label={t('Close')} onClick={() => setGlobalNotice(null)}>
                                 <Icon name="close" size={13} />
                             </button>
                         </div>
                     )}
 
-                    {props.flash?.error && <div className="flash error" role="alert">{t(props.flash.error)}</div>}
+                    {props.flash?.error && <div className="flash error" role="alert">{tp(props.flash.error)}</div>}
 
                     {children}
                 </main>

@@ -77,4 +77,49 @@ class FinanceBookController extends Controller
         });
         return back()->with('success', 'Actual cash balance saved.');
     }
+
+    public function destroyFund(Request $request, int $fund, AuditLogService $audit)
+    {
+        $fundRecord = DB::table('finance_book_funds')->where('id', $fund)->first();
+        abort_unless($fundRecord, 404);
+        $location = Location::findOrFail($fundRecord->location_id);
+        abort_unless($request->user()->canAccessLocation($location), 403);
+
+        $hasApprovedExpenses = FinancialEntry::query()->external()
+            ->where('location_id', $location->id)
+            ->whereDate('entry_date', $fundRecord->entry_date)
+            ->where('type', 'expense')
+            ->where('status', 'approved')
+            ->where('category', '!=', FinancialEntry::CATEGORY_REFUND_PAYABLE)
+            ->exists();
+
+        if ($hasApprovedExpenses) {
+            if ($request->header('X-SPA') === 'true') {
+                return response()->json([
+                    'errors' => ['fund' => 'Delete this branch\'s approved expenses for the selected date first.'],
+                ], 409);
+            }
+
+            return back()->with('error', 'Delete this branch\'s approved expenses for the selected date first.');
+        }
+
+        DB::transaction(function () use ($fundRecord, $location, $request, $audit) {
+            DB::table('finance_book_funds')->where('id', $fundRecord->id)->delete();
+            $audit->record('finance.book.deleted', $location, [
+                'entry_date' => $fundRecord->entry_date,
+                'fund_id' => $fundRecord->id,
+                'amount' => $fundRecord->amount,
+            ], $request);
+        });
+
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json([
+                'success' => true,
+                'message' => 'Funding record deleted.',
+                'fund_id' => $fundRecord->id,
+            ]);
+        }
+
+        return back()->with('success', 'Funding record deleted.');
+    }
 }

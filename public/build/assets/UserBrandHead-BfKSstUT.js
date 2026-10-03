@@ -1,0 +1,1 @@
+import{u as r,a as i,j as e,H as m}from"./app-ILDzPBii.js";import{P as c}from"./PwaHeadTags-B2ZMNCxA.js";function l({title:t}){const{app_settings:n}=r().props,o=i(),s=n?.app_name||"Harmony House",a=o(t),p=a?`${a} | ${s}`:s;return e.jsx(m,{title:p,children:e.jsx(c,{})})}export{l as U};
