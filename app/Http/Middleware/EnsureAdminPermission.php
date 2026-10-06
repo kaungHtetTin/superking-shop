@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AdminLandingPage;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -17,6 +18,10 @@ class EnsureAdminPermission
             && $user->hasAdminPermission($permission)
         ) {
             return $next($request);
+        }
+
+        if ($user && $request->isMethod('GET') && $request->routeIs('admin.dashboard') && $request->header('X-SPA') === 'true') {
+            return redirect(AdminLandingPage::path($user));
         }
 
         if ($request->expectsJson() || $request->wantsJson()) {

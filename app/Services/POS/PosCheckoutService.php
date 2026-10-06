@@ -152,13 +152,6 @@ class PosCheckoutService
 
             $discount = $this->discountAmount($payload, $subtotal, $cashier);
             $final = round(max(0, $subtotal - $discount), 2);
-            // Match the cost snapshots written to order items, including free stock.
-            $accountingCost = round(array_sum(array_map(fn ($item) =>
-                round((float) $item['unit']->product->original_price * (float) $item['unit']->conversion_factor, 2) * $item['quantity']
-                + round((float) $item['unit']->product->original_price * $item['focBaseQuantity'], 2), $items)), 2);
-            if ($final < $accountingCost) {
-                throw ValidationException::withMessages(['items' => 'Sale total after discounts is below accounting cost, including free items. Reduce the discount or free quantity, or review selling prices.']);
-            }
             $tenderType = $payload['tender_type'] ?? 'cash';
             if (! in_array($tenderType, ['cash', 'mmqr', 'credit'], true)) {
                 throw ValidationException::withMessages(['tender_type' => 'Choose Cash, MMQR (Pay), or Credit.']);
@@ -236,8 +229,8 @@ class PosCheckoutService
                     'unit_name' => $unit->name,
                     'price_type' => $item['priceType'],
                     'unit_price' => $item['unitPrice'],
-                    'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 2),
-                    'foc_cost_price' => round((float) $unit->product->original_price * $item['focBaseQuantity'], 2),
+                    'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 6),
+                    'foc_cost_price' => round((float) $unit->product->original_price * $item['focBaseQuantity'], 6),
                     'total_price' => $item['lineTotal'],
                     'promotion_snapshot' => $item['saleItem'] ? [
                         'type' => 'flash_sale',

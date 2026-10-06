@@ -70,6 +70,8 @@ class ProfileController extends Controller
      */
     public function destroy(Request $request): RedirectResponse|JsonResponse
     {
+        abort_unless($request->routeIs('admin.profile.destroy') && $request->user()?->isSuperAdmin(), 403);
+
         $request->validate([
             'password' => ['required', 'current-password'],
         ]);

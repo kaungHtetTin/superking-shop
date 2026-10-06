@@ -211,7 +211,7 @@ class ProductUnitArchitectureTest extends TestCase
     {
         [$product, , $box] = $this->productWithUnits();
         $location = $this->location();
-        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $cashier = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
         $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 36);
         $sale = FlashSale::create(['name' => 'Box promotion', 'starts_at' => now()->subMinute(), 'ends_at' => now()->addHour(), 'is_active' => true]);
@@ -361,7 +361,7 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame('retail', $order->items->sole()->price_type);
     }
 
-    public function test_pos_rejects_loss_after_discount_and_free_stock_without_posting(): void
+    public function test_pos_allows_loss_after_discount_and_large_free_quantity_with_available_stock(): void
     {
         [$product, $piece] = $this->productWithUnits();
         $product->update(['original_price' => 10]);
@@ -370,19 +370,15 @@ class ProductUnitArchitectureTest extends TestCase
         $cashier = User::factory()->create(['role' => 'super_admin']);
         $shift = $this->shift($location, $cashier);
         app(InventoryService::class)->receive($location, $product, 25, idempotencyKey: 'loss-opening');
-        foreach ([[11, 0], [1, 1]] as [$discount, $free]) {
-            try {
-                app(PosCheckoutService::class)->checkout(['location_id' => $location->id, 'shift_id' => $shift->id,
-                    'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => $free, 'foc_product_unit_id' => $piece->id]],
-                    'discount_type' => 'amount', 'discount_value' => $discount, 'tender_type' => 'cash', 'amount_tendered' => 20], $cashier);
-                $this->fail('Loss-making sale was accepted.');
-            } catch (ValidationException $exception) {
-                $this->assertStringContainsString('below accounting cost', $exception->errors()['items'][0]);
-            }
+        foreach ([[11, 0], [1, 20]] as [$discount, $free]) {
+            $order = app(PosCheckoutService::class)->checkout(['location_id' => $location->id, 'shift_id' => $shift->id,
+                'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail', 'foc_quantity' => $free, 'foc_product_unit_id' => $piece->id]],
+                'discount_type' => 'amount', 'discount_value' => $discount, 'tender_type' => 'cash', 'amount_tendered' => 20], $cashier);
+            $this->assertEquals(20 - $discount, $order->final_amount);
+            $this->assertEquals($free, $order->items->sole()->foc_quantity);
         }
-        $this->assertDatabaseCount('orders', 0);
-        $this->assertDatabaseCount('financial_entries', 0);
-        $this->assertEquals(25, InventoryBalance::where('product_id', $product->id)->where('location_id', $location->id)->value('on_hand_qty'));
+        $this->assertDatabaseCount('orders', 2);
+        $this->assertEquals(3, InventoryBalance::where('product_id', $product->id)->where('location_id', $location->id)->value('on_hand_qty'));
     }
 
     public function test_pos_accepts_a_walk_in_cash_sale_without_a_customer_account(): void

@@ -144,7 +144,7 @@ function ContactRows({ type, values, errors, onChange, onAdd, onRemove, t }) {
 }
 
 export default function SettingsEdit({ settings, initialSection = 'general', mustVerifyEmail = false, status = null, pricing, pricingAction, pricingRule, canManageSettings = false }) {
-    const { app_base, flash } = usePage().props;
+    const { app_base, flash, is_super_admin } = usePage().props;
     const t = usePhraseTranslation();
     const [activeSection, setActiveSection] = useState(!canManageSettings ? 'prices' : status === 'password-updated' ? 'security' : status === 'profile-updated' ? 'profile' : initialSection);
     const applicationSections = ['general', 'branding', 'contacts', 'receipts'];
@@ -246,7 +246,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                             { id: 'profile', label: 'Edit profile', description: 'Personal information', icon: 'user' },
                             { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
                             { id: 'danger', label: 'Account deletion', description: 'Delete account', icon: 'trash' },
-                        ].filter((section) => canManageSettings || section.id === 'prices').map((section) => (
+                        ].filter((section) => (canManageSettings || section.id === 'prices') && (section.id !== 'danger' || is_super_admin)).map((section) => (
                             <button
                                 key={section.id}
                                 type="button"
@@ -392,7 +392,7 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
                             <p className="settings-section-description">{t('Use a strong, unique password to protect your administrator account.')}</p>
                             <UpdatePasswordForm showHeading={false} />
                         </div>}
-                        {activeSection === 'danger' && <div className="settings-section-content profile-settings-content">
+                        {is_super_admin && activeSection === 'danger' && <div className="settings-section-content profile-settings-content">
                             <PanelHeading eyebrow={t('Account actions')} title={t('Delete account')} />
                             <p className="settings-section-description">{t('Permanently remove this account and its access. This action cannot be undone.')}</p>
                             <DeleteUserForm showHeading={false} />

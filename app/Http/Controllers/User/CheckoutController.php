@@ -120,7 +120,7 @@ class CheckoutController extends Controller
                 }
 
                 $totals = $this->calculateTotals($validated, $user, config('shop'), $couponService, $loyaltyService, $flashSalePricing);
-                $accountingCost = round(array_sum(array_map(fn ($item) => round((float) $item['unit']->product->original_price * (float) $item['unit']->conversion_factor, 2) * $item['quantity'], $itemPayloads)), 2);
+                $accountingCost = round(array_sum(array_map(fn ($item) => round((float) $item['unit']->product->original_price * (float) $item['unit']->conversion_factor, 6) * $item['quantity'], $itemPayloads)), 2);
                 if (round($totals['final'] - $totals['shipping'], 2) < $accountingCost) {
                     throw ValidationException::withMessages(['lines' => 'The current prices and discounts cannot be applied to this order. Please remove discounts or contact the store.']);
                 }
@@ -167,7 +167,7 @@ class CheckoutController extends Controller
                         'unit_name' => $unit->name,
                         'price_type' => 'retail',
                         'unit_price' => $row['unit_price'],
-                        'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 2),
+                        'cost_price' => round((float) $unit->product->original_price * (float) $unit->conversion_factor, 6),
                         'total_price' => $row['total_price'],
                         'is_preorder' => $row['is_preorder'],
                         'promotion_snapshot' => $saleItem ? ['flash_sale_item_id' => $saleItem->id, 'flash_sale_id' => $saleItem->flash_sale_id] : null,

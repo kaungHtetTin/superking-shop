@@ -1,0 +1,1 @@
+import{j as t}from"./app-80ppsIeY.js";import o from"./Form-Cx1e8EUw.js";import"./AdminFlash-J5a4Bk8r.js";import"./formatErrorMessage-BapYbJEK.js";import"./unitLabel-t07TvaF6.js";function s({productOptions:r}){return t.jsx(o,{productOptions:r,mode:"create"})}export{s as default};

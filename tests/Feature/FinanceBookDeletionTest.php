@@ -49,6 +49,41 @@ class FinanceBookDeletionTest extends TestCase
         $this->assertDatabaseHas('finance_book_counts', ['location_id' => $location->id, 'entry_date' => '2026-10-03']);
     }
 
+    public function test_stock_adjustment_losses_do_not_reduce_finance_book_funds(): void
+    {
+        [$admin, $location] = $this->financeBookData();
+        FinancialEntry::create([
+            'recorded_by' => $admin->id,
+            'location_id' => $location->id,
+            'type' => 'expense',
+            'category' => FinancialEntry::CATEGORY_STOCK_ADJUSTMENT,
+            'title' => 'Inventory adjustment ADJ-TEST',
+            'amount' => 3000,
+            'entry_date' => '2026-10-03',
+            'status' => 'approved',
+        ]);
+        FinancialEntry::create([
+            'recorded_by' => $admin->id,
+            'location_id' => $location->id,
+            'type' => 'expense',
+            'category' => 'utilities',
+            'title' => 'Electricity',
+            'amount' => 500,
+            'entry_date' => '2026-10-03',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($admin)->getJson("/admin/finance-book?date=2026-10-03&location_id={$location->id}")
+            ->assertOk();
+        $book = collect($response->json('props.books.data'))->firstWhere('id', $location->id);
+        $this->assertSame(500, $book['expenses']);
+        $this->assertSame(9500, $book['balance']);
+
+        FinancialEntry::where('location_id', $location->id)->where('category', 'utilities')->delete();
+        $fundId = DB::table('finance_book_funds')->where('location_id', $location->id)->value('id');
+        $this->actingAs($admin)->delete("/admin/finance-book/funds/{$fundId}")->assertSessionHas('success');
+    }
+
     private function financeBookData(): array
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);

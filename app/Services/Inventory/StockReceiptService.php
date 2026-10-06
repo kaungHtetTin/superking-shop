@@ -9,6 +9,8 @@ use App\Models\Product;
 use App\Models\Location;
 use App\Models\ProductUnit;
 use App\Models\StockReceipt;
+use App\Models\StockReceiptCorrection;
+use App\Models\StockReceiptItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -75,7 +77,7 @@ class StockReceiptService
                 // The application carries one cost per product across warehouses.
                 // Weight the incoming cost so a purchase does not reprice old stock.
                 $appliedCost = round(($quantityBefore * $previousCost + (float) $item->unit_cost * (float) $item->received_quantity)
-                    / max($quantityBefore + (float) $item->base_quantity, 0.000001), 2);
+                    / max($quantityBefore + (float) $item->base_quantity, 0.000001), 6);
                 $movement = $this->inventoryService->receive($locked->location, $item->product, (float) $item->base_quantity, $actor, "receipt:{$locked->id}:item:{$item->id}", $locked, $item->notes, $item->unit, ((float) $item->received_quantity + (float) $item->free_quantity));
                 $item->update(['movement_id' => $movement->id, 'previous_base_cost' => $previousCost, 'applied_base_cost' => $appliedCost]);
                 $product->update(['original_price' => $appliedCost]);
@@ -109,6 +111,9 @@ class StockReceiptService
                 throw ValidationException::withMessages(['receipt' => 'Only draft or posted receipts can be deleted.']);
             }
             if ($locked->status === 'posted') {
+                if ($locked->corrections()->exists()) {
+                    throw ValidationException::withMessages(['receipt' => 'This receipt has correction history and cannot be deleted.']);
+                }
                 foreach ($locked->items->sortBy('product_id') as $item) {
                     $product = Product::query()->lockForUpdate()->findOrFail($item->product_id);
                     if ($item->previous_base_cost === null || $item->applied_base_cost === null || ! $item->movement_id) {
@@ -133,6 +138,98 @@ class StockReceiptService
                 $summary['price_changes'] = array_merge($summary['price_changes'], $result['price_changes']);
             }
             return $summary;
+        }, 3);
+    }
+
+    /** Correct a posted receipt only while its stock and cost have no dependent activity. */
+    public function correctPostedItem(StockReceipt $receipt, StockReceiptItem $item, array $values, User $actor): StockReceiptCorrection
+    {
+        return DB::transaction(function () use ($receipt, $item, $values, $actor) {
+            $pricing = app(\App\Services\AutomaticPricingService::class);
+            $pricing->lock();
+            $locked = StockReceipt::query()->lockForUpdate()->with('location')->findOrFail($receipt->id);
+            if ($locked->status !== 'posted') {
+                throw ValidationException::withMessages(['receipt' => 'Only posted receipts can be corrected.']);
+            }
+            $line = StockReceiptItem::query()->where('stock_receipt_id', $locked->id)->lockForUpdate()->findOrFail($item->id);
+            $product = Product::query()->lockForUpdate()->findOrFail($line->product_id);
+            $unit = ProductUnit::query()->findOrFail($line->product_unit_id);
+            if (! $line->movement_id || $line->previous_base_cost === null || $line->applied_base_cost === null || $line->unit_cost === null) {
+                throw ValidationException::withMessages(['receipt' => 'This legacy receipt has no complete cost snapshot and needs manual reconciliation.']);
+            }
+            $ownCorrectionMovements = $locked->corrections()->where('stock_receipt_item_id', $line->id)->whereNotNull('movement_id')->pluck('movement_id');
+            if (InventoryMovement::query()->where('product_id', $product->id)->where('id', '>', $line->movement_id)
+                ->when($ownCorrectionMovements->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $ownCorrectionMovements))
+                ->where('quantity_delta', '!=', 0)->exists()
+                || abs((float) $product->original_price - (float) $line->applied_base_cost) > 0.009) {
+                throw ValidationException::withMessages(['receipt' => 'Later stock or cost changes depend on this receipt. Reconcile those records before correcting it.']);
+            }
+
+            $paid = round((float) $values['received_quantity'], 4);
+            $free = round((float) $values['free_quantity'], 4);
+            $cost = round((float) $values['unit_cost'], 2);
+            if ($paid < 0 || $free < 0 || $paid + $free <= 0 || $cost < 0) {
+                throw ValidationException::withMessages(['items' => 'Enter a positive total quantity and a non-negative unit cost.']);
+            }
+            $oldPaid = (float) $line->received_quantity;
+            $oldFree = (float) $line->free_quantity;
+            $oldCost = (float) $line->unit_cost;
+            $oldBase = (float) $line->base_quantity;
+            $newBase = $unit->toBaseQuantity($paid + $free);
+            $delta = round($newBase - $oldBase, 4);
+            $amountDelta = round($paid * $cost - $oldPaid * $oldCost, 2);
+            if (abs($delta) < 0.00005 && abs($amountDelta) < 0.005 && abs($paid - $oldPaid) < 0.00005 && abs($free - $oldFree) < 0.00005) {
+                throw ValidationException::withMessages(['items' => 'Change quantity or cost before saving a correction.']);
+            }
+
+            $reason = $values['reason'];
+            if ($reason === 'supplier_bonus' && (abs($paid - $oldPaid) >= 0.00005 || abs($amountDelta) >= 0.005 || $free <= $oldFree)) {
+                throw ValidationException::withMessages(['reason' => 'Supplier bonus must add free quantity without changing paid quantity or purchase amount.']);
+            }
+            if ($reason === 'purchase_error' && abs($amountDelta) < 0.005) {
+                throw ValidationException::withMessages(['reason' => 'A purchase-cost correction must change the paid purchase amount. Use supplier bonus for free items.']);
+            }
+            $quantityBeforeReceipt = (float) InventoryBalance::query()->where('product_id', $product->id)->sum('on_hand_qty') - $oldBase;
+            if ($quantityBeforeReceipt < -0.00005) {
+                throw ValidationException::withMessages(['receipt' => 'Current stock cannot be reconciled with this receipt.']);
+            }
+            $appliedCost = round(($quantityBeforeReceipt * (float) $line->previous_base_cost + $paid * $cost)
+                / max($quantityBeforeReceipt + $newBase, 0.000001), 6);
+
+            $correction = StockReceiptCorrection::create([
+                'stock_receipt_id' => $locked->id,
+                'stock_receipt_item_id' => $line->id,
+                'created_by' => $actor->id,
+                'reason' => $reason,
+                'notes' => trim($values['notes']),
+                'old_received_quantity' => $oldPaid,
+                'new_received_quantity' => $paid,
+                'old_free_quantity' => $oldFree,
+                'new_free_quantity' => $free,
+                'old_unit_cost' => $oldCost,
+                'new_unit_cost' => $cost,
+                'old_applied_base_cost' => $line->applied_base_cost,
+                'new_applied_base_cost' => $appliedCost,
+                'purchase_amount_delta' => $amountDelta,
+            ]);
+            if (abs($delta) >= 0.00005) {
+                $movement = $this->inventoryService->adjust($locked->location, $product, $delta, 'receipt_correction', $actor,
+                    "receipt-correction:{$correction->id}", $correction, $correction->notes, $unit, round($delta / max((float) $unit->conversion_factor, 0.000001), 4));
+                $correction->update(['movement_id' => $movement->id]);
+            }
+            $line->update([
+                'received_quantity' => $paid,
+                'free_quantity' => $free,
+                'base_quantity' => $newBase,
+                'unit_cost' => $cost,
+                'applied_base_cost' => $appliedCost,
+            ]);
+            $product->update(['original_price' => $appliedCost]);
+            $locked->load('items');
+            $this->recordInventoryAsset($locked, $actor);
+            $pricing->refreshProduct($product->fresh(), 'purchase_correction', $actor->id, 'receipt-correction:'.$correction->id);
+
+            return $correction->fresh();
         }, 3);
     }
 
@@ -182,12 +279,15 @@ class StockReceiptService
     {
         $amount = $receipt->items->sum(fn ($item) => $item->unit_cost === null ? 0 : (float) $item->unit_cost * (float) $item->received_quantity);
         if ($amount <= 0) {
+            FinancialEntry::query()->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->where('reference', $receipt->receipt_number)->delete();
             return;
         }
-        FinancialEntry::updateOrCreate(
-            ['category' => FinancialEntry::CATEGORY_STOCK_RECEIPT, 'reference' => $receipt->receipt_number],
-            ['type' => FinancialEntry::TYPE_ASSET, 'recorded_by' => $actor->id, 'location_id' => $receipt->location_id, 'title' => "Inventory purchase {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]
-        );
+        $entry = FinancialEntry::firstOrNew(['category' => FinancialEntry::CATEGORY_STOCK_RECEIPT, 'reference' => $receipt->receipt_number]);
+        if (! $entry->exists) {
+            $entry->recorded_by = $actor->id;
+        }
+        $entry->fill(['type' => FinancialEntry::TYPE_ASSET, 'location_id' => $receipt->location_id, 'title' => "Inventory purchase {$receipt->receipt_number}", 'amount' => round($amount, 2), 'entry_date' => $receipt->received_at?->toDateString() ?? now()->toDateString(), 'payment_method' => null, 'status' => 'approved', 'notes' => trim(implode("\n", array_filter([$receipt->supplier_reference ? "Supplier/reference: {$receipt->supplier_reference}" : null, $receipt->notes]))) ?: null]);
+        $entry->save();
     }
 
     private function number(): string

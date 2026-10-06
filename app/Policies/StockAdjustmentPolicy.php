@@ -9,7 +9,7 @@ class StockAdjustmentPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAdminPermission('inventory.adjust.create');
+        return $user->hasAdminPermission('inventory.adjust.create') || $user->hasAdminPermission('inventory.adjust.approve');
     }
 
     public function view(User $user, StockAdjustment $adjustment): bool

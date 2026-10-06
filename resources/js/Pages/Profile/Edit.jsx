@@ -20,7 +20,7 @@ import { AdminFlash } from '@/Components/Admin/AdminFlash';
 export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) {
     const theme = useTheme();
     const { url, props } = usePage();
-    const { app_base, app_url } = props;
+    const { app_base, app_url, is_super_admin } = props;
     const t = usePhraseTranslation();
     const isAdminContext = typeof url === 'string' && url.includes('/admin');
     const [adminSection, setAdminSection] = useState(status === 'password-updated' ? 'security' : 'general');
@@ -50,7 +50,7 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
                             { id: 'general', label: 'General', description: 'Personal information', icon: 'user' },
                             { id: 'security', label: 'Security', description: 'Password and access', icon: 'lock' },
                             { id: 'danger', label: 'Account actions', description: 'Delete account', icon: 'trash' },
-                        ].map((section) => (
+                        ].filter((section) => section.id !== 'danger' || is_super_admin).map((section) => (
                             <button key={section.id} type="button" className={adminSection === section.id ? 'active' : ''} onClick={() => setAdminSection(section.id)} aria-current={adminSection === section.id ? 'page' : undefined}>
                                 <span className="settings-nav-icon"><Icon name={section.icon} size={15} /></span>
                                 <span><strong>{t(section.label)}</strong><small>{t(section.description)}</small></span>
@@ -73,7 +73,7 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
                             <p className="settings-section-description">{t('Use a strong, unique password to protect your administrator account.')}</p>
                             <UpdatePasswordForm showHeading={false} />
                         </div>}
-                        {adminSection === 'danger' && <div className="settings-section-content profile-settings-content">
+                        {is_super_admin && adminSection === 'danger' && <div className="settings-section-content profile-settings-content">
                             <PanelHeading eyebrow={t('Account actions')} title={t('Delete account')} />
                             <p className="settings-section-description">{t('Permanently remove this account and its access. This action cannot be undone.')}</p>
                             <DeleteUserForm showHeading={false} />
@@ -91,9 +91,6 @@ export default function Edit({ auth, mustVerifyEmail, status, profileSuccess }) 
                     </Paper>
                     <Paper variant="outlined" sx={{ p: { xs: '18px', sm: '24px' }, borderRadius: 3 }}>
                         <LogoutForm />
-                    </Paper>
-                    <Paper variant="outlined" sx={{ p: { xs: '18px', sm: '24px' }, borderRadius: 3, borderColor: 'rgba(211,47,47,.28)', bgcolor: 'rgba(211,47,47,.035)' }}>
-                        <DeleteUserForm className="max-w-xl" />
                     </Paper>
                 </Stack>
             )}

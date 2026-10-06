@@ -185,6 +185,96 @@ class InventoryFinancialConsistencyTest extends TestCase
         $service->post($receipt, $actor);
     }
 
+    public function test_purchase_receipt_correction_updates_purchase_total_and_keeps_audit_history(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockReceiptService::class);
+        $receipt = $service->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 10, 'unit_cost' => 2200]], $actor);
+        $service->post($receipt, $actor);
+        $item = $receipt->fresh('items')->items->sole();
+        $correction = $service->correctPostedItem($receipt, $item, [
+            'reason' => 'purchase_error', 'received_quantity' => 11, 'free_quantity' => 0,
+            'unit_cost' => 2200, 'notes' => 'Supplier invoice shows 11 paid units.',
+        ], $actor);
+
+        $this->assertEquals(2200, $correction->purchase_amount_delta);
+        $this->assertEquals(21, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(24200, $this->summary($actor)['stock_purchases']);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+        $this->assertDatabaseHas('stock_receipt_corrections', ['id' => $correction->id, 'old_received_quantity' => 10, 'new_received_quantity' => 11]);
+    }
+
+    public function test_supplier_bonus_adds_free_stock_without_increasing_purchase_amount(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockReceiptService::class);
+        $receipt = $service->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 10, 'unit_cost' => 2200]], $actor);
+        $service->post($receipt, $actor);
+        $item = $receipt->fresh('items')->items->sole();
+        $correction = $service->correctPostedItem($receipt, $item, [
+            'reason' => 'supplier_bonus', 'received_quantity' => 10, 'free_quantity' => 1,
+            'unit_cost' => 2200, 'notes' => 'Supplier invoice charges for 10 and includes one free.',
+        ], $actor);
+
+        $this->assertEquals(0, $correction->purchase_amount_delta);
+        $this->assertEquals(21, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(22000, $this->summary($actor)['stock_purchases']);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+    }
+
+    public function test_overentered_purchase_can_be_reduced_without_becoming_a_stock_loss(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockReceiptService::class);
+        $receipt = $service->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 11, 'unit_cost' => 2200]], $actor);
+        $service->post($receipt, $actor);
+        $correction = $service->correctPostedItem($receipt, $receipt->fresh('items')->items->sole(), [
+            'reason' => 'purchase_error', 'received_quantity' => 10, 'free_quantity' => 0,
+            'unit_cost' => 2200, 'notes' => 'Invoice and delivery note both show 10 units.',
+        ], $actor);
+
+        $this->assertEquals(-2200, $correction->purchase_amount_delta);
+        $this->assertEquals(20, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(22000, $this->summary($actor)['stock_purchases']);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+        $this->assertDatabaseMissing('financial_entries', ['category' => FinancialEntry::CATEGORY_STOCK_ADJUSTMENT]);
+    }
+
+    public function test_receipt_correction_rejects_later_stock_activity(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockReceiptService::class);
+        $receipt = $service->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 10, 'unit_cost' => 20]], $actor);
+        $service->post($receipt, $actor);
+        app(InventoryService::class)->completeSale($location, $product, 1);
+
+        $this->expectException(ValidationException::class);
+        $service->correctPostedItem($receipt, $receipt->fresh('items')->items->sole(), [
+            'reason' => 'purchase_error', 'received_quantity' => 11, 'free_quantity' => 0,
+            'unit_cost' => 20, 'notes' => 'Invoice correction.',
+        ], $actor);
+    }
+
+    public function test_posted_receipt_correction_route_requires_reason_and_is_authorized(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockReceiptService::class);
+        $receipt = $service->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 10, 'unit_cost' => 20]], $actor);
+        $service->post($receipt, $actor);
+
+        $this->actingAs($actor)->post("/admin/inventory/receipts/{$receipt->id}/corrections", [
+            'item_id' => $receipt->fresh('items')->items->sole()->id,
+            'reason' => 'purchase_error',
+            'received_quantity' => 11,
+            'free_quantity' => 0,
+            'unit_cost' => 20,
+            'notes' => 'Invoice shows one additional paid unit.',
+        ])->assertRedirect();
+
+        $this->assertEquals(220, $this->summary($actor)['stock_purchases']);
+        $this->assertDatabaseCount('stock_receipt_corrections', 1);
+    }
+
     public function test_adjustment_losses_and_gains_post_at_fixed_historical_cost(): void
     {
         [$actor, $location, $product, $unit] = $this->fixture();
@@ -195,8 +285,255 @@ class InventoryFinancialConsistencyTest extends TestCase
         $product->update(['original_price' => 50]);
         $inventory = app(OperationsReportService::class)->inventory($actor);
         $this->assertEquals(20, $inventory['adjustments']->first()->loss_value);
-        $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9]], 'physical_count', $actor);
-        $this->assertEquals(30, $this->summary($actor)['net_profit']);
+        $gain = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9]], 'physical_count', $actor);
+        $this->assertEquals(50, $gain->items->sole()->value_delta);
+        $this->assertDatabaseHas('financial_entries', [
+            'reference' => $gain->adjustment_number.':'.$gain->items->sole()->id,
+            'type' => FinancialEntry::TYPE_ASSET,
+            'category' => FinancialEntry::CATEGORY_STOCK_ADJUSTMENT,
+            'amount' => 50,
+        ]);
+        $this->assertEquals(-20, $this->summary($actor)['net_profit']);
+        $this->assertEquals(0, $this->summary($actor)['stock_purchases']);
+    }
+
+    public function test_documented_data_correction_changes_quantity_without_finance_entry(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $adjustment = app(StockAdjustmentService::class)->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 11]],
+            'data_correction', $actor, 'Correct duplicate opening count DOC-1');
+
+        $this->assertEquals(11, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertDatabaseMissing('financial_entries', ['reference' => $adjustment->adjustment_number.':'.$adjustment->items->sole()->id]);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+    }
+
+    public function test_same_day_undo_then_new_adjustment_preserves_reversal_and_finance_effect(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        $original = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9, 'notes' => 'Count']], 'physical_count', $actor);
+        $item = $original->items->sole();
+        $service->undoPosted($original, $item->id, 'Original count and reason were entered incorrectly', $actor);
+        $replacement = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 8,
+            'notes' => 'Two damaged pieces confirmed']], 'damage', $actor);
+
+        $this->assertSame('reversed', $original->fresh()->status);
+        $this->assertEquals($original->id, $original->reversal->reversal_of_id);
+        $this->assertEquals(-2, $replacement->items->sole()->quantity_delta);
+        $this->assertEquals(8, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertDatabaseHas('financial_entries', ['reference' => $original->adjustment_number.':'.$item->id, 'status' => 'void']);
+        $this->assertEquals(-20, $this->summary($actor)['net_profit']);
+        $adjustments = app(OperationsReportService::class)->inventory($actor)['adjustments'];
+        $this->assertNull($adjustments->firstWhere('reason_code', 'physical_count'));
+        $this->assertEquals(20, $adjustments->firstWhere('reason_code', 'damage')->loss_value);
+    }
+
+    public function test_undo_refuses_later_stock_activity_without_mutating_original(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        $original = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9, 'notes' => 'Count']], 'physical_count', $actor);
+        app(InventoryService::class)->completeSale($location, $product, 1);
+        try {
+            $service->undoPosted($original, $original->items->sole()->id, 'Original counting sheet confirms eight', $actor);
+            $this->fail('Later stock activity must block automatic correction.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('correction', $exception->errors());
+        }
+        $this->assertSame('posted', $original->fresh()->status);
+        $this->assertEquals(8, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertDatabaseMissing('stock_adjustments', ['reversal_of_id' => $original->id]);
+    }
+
+    public function test_undo_refuses_a_mismatched_finance_entry_without_changing_stock(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        $original = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9,
+            'notes' => 'One damaged piece']], 'damage', $actor);
+        FinancialEntry::query()->where('reference', $original->adjustment_number.':'.$original->items->sole()->id)
+            ->update(['amount' => 999]);
+
+        try {
+            $service->undoPosted($original, $original->items->sole()->id, 'Original count was entered incorrectly', $actor);
+            $this->fail('Undo must not separate stock from a mismatched finance entry.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('correction', $exception->errors());
+        }
+
+        $this->assertEquals(9, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertSame('posted', $original->fresh()->status);
+        $this->assertDatabaseMissing('stock_adjustments', ['reversal_of_id' => $original->id]);
+    }
+
+    public function test_undo_cannot_be_posted_twice(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        $original = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9,
+            'notes' => 'One damaged piece']], 'damage', $actor);
+        $service->undoPosted($original, $original->items->sole()->id, 'Original count was entered incorrectly', $actor);
+
+        try {
+            $service->undoPosted($original, $original->items->sole()->id, 'Second undo attempt must be rejected', $actor);
+            $this->fail('Undo must not happen twice.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('correction', $exception->errors());
+        }
+        $this->assertEquals(10, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(1, $original->fresh()->reversal()->count());
+    }
+
+    public function test_wrong_plus_two_data_correction_becomes_one_damaged_unit_and_one_cost_expense(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        $original = $service->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 12]],
+            'data_correction', $actor, 'Opening count entry DOC-2 was wrong');
+        $this->assertEquals(12, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+
+        $service->undoPosted($original, $original->items->sole()->id, 'Correct source count shows one damaged piece', $actor);
+        $replacement = $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 9,
+            'notes' => 'One damaged piece confirmed']], 'damage', $actor);
+
+        $this->assertEquals(9, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(-1, $replacement->items->sole()->quantity_delta);
+        $this->assertEquals(10, $replacement->items->sole()->base_cost);
+        $this->assertEquals(-10, $this->summary($actor)['net_profit']);
+        $this->assertDatabaseHas('financial_entries', [
+            'reference' => $replacement->adjustment_number.':'.$replacement->items->sole()->id,
+            'type' => 'expense', 'amount' => 10, 'status' => 'approved',
+        ]);
+    }
+
+    public function test_adjustment_form_accepts_counted_total_for_one_damaged_unit(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $this->actingAs($actor)->post('/admin/inventory/adjustments', [
+            'location_id' => $location->id, 'reason_code' => 'damage', 'notes' => 'One unit broken during handling',
+            'items' => [['product_unit_id' => $unit->id, 'counted_quantity' => 9]],
+        ])->assertRedirect();
+        $this->assertEquals(9, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(-10, $this->summary($actor)['net_profit']);
+    }
+
+    public function test_adjustment_api_requires_counted_total_not_a_hidden_signed_change(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $this->actingAs($actor)->post('/admin/inventory/adjustments', [
+            'location_id' => $location->id, 'reason_code' => 'damage', 'notes' => 'One unit broken during handling',
+            'items' => [['product_unit_id' => $unit->id, 'quantity_change' => -1]],
+        ])->assertSessionHasErrors('items.0.counted_quantity');
+        $this->assertEquals(10, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+    }
+
+    public function test_undo_mistaken_plus_two_restores_eleven_and_voids_finance_effect(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        app(InventoryService::class)->receive($location, $product, 1);
+        $original = app(StockAdjustmentService::class)->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 13]], 'physical_count', $actor);
+        $this->assertEquals(13, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+
+        $this->actingAs($actor)->post('/admin/inventory/adjustments/'.$original->id.'/undo', [
+            'item_id' => $original->items->sole()->id,
+            'explanation' => 'The original count sheet shows eleven pieces',
+        ])->assertRedirect();
+
+        $this->assertEquals(11, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertSame('reversed', $original->fresh()->status);
+        $this->assertDatabaseHas('financial_entries', [
+            'reference' => $original->adjustment_number.':'.$original->items->sole()->id,
+            'status' => 'void',
+        ]);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+        $this->assertEquals(1, $original->fresh()->reversal()->count());
+    }
+
+    public function test_undo_then_new_damage_adjustment_finishes_at_nine(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        app(InventoryService::class)->receive($location, $product, 1);
+        $original = app(StockAdjustmentService::class)->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 13]],
+            'data_correction', $actor, 'The original count was entered as thirteen');
+
+        $this->actingAs($actor)->post('/admin/inventory/adjustments/'.$original->id.'/undo', [
+            'item_id' => $original->items->sole()->id,
+            'explanation' => 'Count sheet shows two damaged pieces from eleven',
+        ])->assertRedirect();
+        $this->assertEquals(11, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->actingAs($actor)->post('/admin/inventory/adjustments', [
+            'location_id' => $location->id, 'reason_code' => 'damage',
+            'notes' => 'Count sheet shows two damaged pieces from eleven',
+            'items' => [['product_unit_id' => $unit->id, 'counted_quantity' => 9]],
+        ])->assertRedirect();
+
+        $this->assertEquals(9, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(-20, $this->summary($actor)['net_profit']);
+        $this->assertDatabaseHas('financial_entries', [
+            'type' => 'expense', 'category' => FinancialEntry::CATEGORY_STOCK_ADJUSTMENT,
+            'amount' => 20, 'status' => 'approved',
+        ]);
+    }
+
+    public function test_undo_then_new_documented_data_correction_removes_wrong_finance_effect(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $original = app(StockAdjustmentService::class)->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 12]], 'physical_count', $actor);
+
+        $this->actingAs($actor)->post('/admin/inventory/adjustments/'.$original->id.'/undo', [
+            'item_id' => $original->items->sole()->id,
+            'explanation' => 'Opening import source document confirms eleven',
+        ])->assertRedirect();
+        $this->actingAs($actor)->post('/admin/inventory/adjustments', [
+            'location_id' => $location->id, 'reason_code' => 'data_correction',
+            'notes' => 'Opening import source document confirms eleven',
+            'items' => [['product_unit_id' => $unit->id, 'counted_quantity' => 11]],
+        ])->assertRedirect();
+
+        $this->assertEquals(11, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertDatabaseHas('financial_entries', [
+            'reference' => $original->adjustment_number.':'.$original->items->sole()->id,
+            'status' => 'void',
+        ]);
+        $this->assertEquals(0, $this->summary($actor)['net_profit']);
+    }
+
+    public function test_write_off_reduces_stock_and_profit_but_not_purchase_total_or_cash_funds(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        app(StockAdjustmentService::class)->createPosted($location,
+            [['product_unit_id' => $unit->id, 'counted_quantity' => 9, 'notes' => 'Expired unit written off.']],
+            'write_off', $actor);
+
+        $this->assertEquals(9, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
+        $this->assertEquals(-10, $this->summary($actor)['net_profit']);
+        $this->assertEquals(0, $this->summary($actor)['stock_purchases']);
+    }
+
+    public function test_damage_cannot_increase_stock_and_corrections_need_a_source_note(): void
+    {
+        [$actor, $location, $product, $unit] = $this->fixture();
+        $service = app(StockAdjustmentService::class);
+        try {
+            $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 11]], 'damage', $actor);
+            $this->fail('Damage must not increase stock.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('reason_code', $exception->errors());
+        }
+        try {
+            $service->createPosted($location, [['product_unit_id' => $unit->id, 'counted_quantity' => 11]], 'data_correction', $actor);
+            $this->fail('An undocumented correction must not post.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('notes', $exception->errors());
+        }
+        $this->assertEquals(10, InventoryBalance::whereBelongsTo($location)->whereBelongsTo($product)->value('on_hand_qty'));
     }
 
     public function test_generated_financial_entries_cannot_be_changed_or_deleted_manually(): void
@@ -260,7 +597,7 @@ class InventoryFinancialConsistencyTest extends TestCase
         $service->post($receipt, $actor);
         $this->assertEquals(12, $product->fresh()->original_price);
         app(OrderManagementService::class)->cancelOrder($order, $actor);
-        $this->assertEquals(11.67, $product->fresh()->original_price);
+        $this->assertSame('11.666667', $product->fresh()->original_price);
     }
 
     public function test_historical_adjustments_are_flagged_instead_of_valued_at_todays_cost(): void

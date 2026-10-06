@@ -8,10 +8,13 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 import { routeWithBase } from '@/Utils/url';
 import { formatCompoundQuantity, formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
-export default function AdjustmentsIndex({ adjustments, locations = [], reasons = [], statuses = [], filters = {} }) {
+export default function AdjustmentsIndex({ adjustments, locations = [], reasons = [], statuses = [], filters = {}, canUndo = false }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [undoTarget, setUndoTarget] = useState(null);
+    const [undoExplanation, setUndoExplanation] = useState('');
+    const [undoErrors, setUndoErrors] = useState({});
     const [filterState, setFilterState] = useState({ q: filters.q || '', location_id: filters.location_id || '', reason_code: filters.reason_code || '', status: filters.status || '', from: filters.from || '', to: filters.to || '' });
     const [visibleFilters, setVisibleFilters] = useState({ q: true, location_id: true, reason_code: true, status: Boolean(filters.status), from: Boolean(filters.from), to: Boolean(filters.to) });
     const activeFilterCount = Object.values(filterState).filter(Boolean).length;
@@ -21,6 +24,7 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
             item,
         }))
     );
+    const originalStock = Number(undoTarget?.item?.system_quantity || 0);
 
     const submitFilters = (event) => {
         event.preventDefault();
@@ -34,9 +38,30 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
         router.get(routeWithBase('/admin/inventory/adjustments', app_base), {}, { preserveState: true, preserveScroll: true, replace: true });
     };
 
+    const openUndo = (adjustment, item) => {
+        setUndoTarget({ adjustment, item });
+        setUndoExplanation('');
+        setUndoErrors({});
+    };
+
+    const submitUndo = (event) => {
+        event.preventDefault();
+        if (!undoTarget) return;
+        router.post(routeWithBase(`/admin/inventory/adjustments/${undoTarget.adjustment.id}/undo`, app_base), {
+            item_id: undoTarget.item.id, explanation: undoExplanation,
+        }, {
+            onSuccess: () => { setUndoTarget(null); setUndoErrors({}); },
+            onError: (errors) => setUndoErrors(errors),
+        });
+    };
+
     useEffect(() => {
-        if (!filterDrawerOpen) return undefined;
-        const closeOnEscape = (event) => event.key === 'Escape' && setFilterDrawerOpen(false);
+        if (!filterDrawerOpen && !undoTarget) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key !== 'Escape') return;
+            setFilterDrawerOpen(false);
+            setUndoTarget(null);
+        };
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', closeOnEscape);
@@ -44,7 +69,7 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
             document.body.style.overflow = previousOverflow;
             document.removeEventListener('keydown', closeOnEscape);
         };
-    }, [filterDrawerOpen]);
+    }, [filterDrawerOpen, undoTarget]);
 
     const renderFilterFields = (autoFocus = false, onlyVisible = false) => {
         const show = (key) => !onlyVisible || visibleFilters[key] !== false;
@@ -79,18 +104,20 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
                                 <th>{t('Variance')}</th>
                                 <th>{t('Reason')}</th>
                                 <th>{t('Status')}</th>
+                                {canUndo && <th className="adjustments-correction__table-action">{t('Undo')}</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan="8" className="empty-table-cell">{t('No adjustments yet.')}</td>
+                                    <td colSpan={canUndo ? 9 : 8} className="empty-table-cell">{t('No adjustments yet.')}</td>
                                 </tr>
                             ) : rows.map(({ adjustment, item }) => (
                                 <tr key={`${adjustment.id}-${item.id}`}>
                                     <td>
                                         <strong>{adjustment.adjustment_number}</strong>
                                         <small className="table-subline">{new Date(adjustment.created_at).toLocaleString()}</small>
+                                        {canUndo && adjustment.status === 'posted' && !adjustment.reversal_of_id && adjustment.items.length === 1 && <button type="button" className="btn secondary adjustments-correction__mobile-trigger" onClick={() => openUndo(adjustment, item)}>{t('Undo')}</button>}
                                     </td>
                                     <td>{adjustment.location.name}</td>
                                     <td>
@@ -102,8 +129,24 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
                                     <td className={item.quantity_delta < 0 ? 'quantity-negative' : item.quantity_delta > 0 ? 'quantity-positive' : ''}>
                                         {formatCompoundQuantity(item.quantity_delta, item.product.units, { signed: true })}
                                     </td>
-                                    <td>{adjustment.reason_code.replaceAll('_', ' ')}</td>
+                                    <td>
+                                        {t(reasons.find((reason) => reason.value === adjustment.reason_code)?.label || adjustment.reason_code.replaceAll('_', ' '))}
+                                        <small className="table-subline">{t(adjustment.status === 'reversed'
+                                            ? 'Undone · finance effect voided'
+                                            : adjustment.reversal_of_id
+                                                ? 'Undo movement · no finance entry'
+                                                : adjustment.reason_code === 'data_correction'
+                                                    ? 'Quantity correction · no finance entry'
+                                                    : item.value_delta == null
+                                                        ? 'Cost not recorded'
+                                                        : Number(item.value_delta) < 0
+                                                            ? 'Inventory loss expense · noncash'
+                                                            : Number(item.value_delta) > 0
+                                                                ? 'Inventory asset increase · noncash'
+                                                                : 'No monetary change')}</small>
+                                    </td>
                                     <td><StatusBadge status={adjustment.status} label={t(adjustment.status)} /></td>
+                                    {canUndo && <td className="adjustments-correction__table-action">{adjustment.status === 'posted' && !adjustment.reversal_of_id && adjustment.items.length === 1 && <button type="button" className="btn secondary" onClick={() => openUndo(adjustment, item)}>{t('Undo')}</button>}</td>}
                                 </tr>
                             ))}
                         </tbody>
@@ -112,6 +155,33 @@ export default function AdjustmentsIndex({ adjustments, locations = [], reasons 
                 <AdminPagination paginator={adjustments} label={t('adjustments')} queryParams={filterState} preserveState />
             </section>
             {filterDrawerOpen && <div className="modal-backdrop finance-report-filter__backdrop" onMouseDown={() => setFilterDrawerOpen(false)}><form className="drawer glass finance-report-filter__drawer" onSubmit={submitFilters} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="adjustments-filter-title"><div className="drawer-header"><div><small className="eyebrow">{t('Counts & corrections')}</small><h2 id="adjustments-filter-title">{t('Filter adjustments')}</h2></div><button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}><Icon name="close" size={16} /></button></div><div className="finance-report-filter__drawer-body">{renderFilterFields(true)}</div><div className="drawer-actions"><button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button><button type="submit" className="btn primary"><Icon name="search" size={14} />{t('Apply')}</button></div></form></div>}
+            {undoTarget && (
+                <div className="modal-backdrop finance-report-filter__backdrop adjustments-correction__backdrop" onMouseDown={() => setUndoTarget(null)}>
+                    <form className="drawer glass finance-report-filter__drawer adjustments-correction__drawer" onSubmit={submitUndo} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="adjustment-undo-title">
+                        <div className="drawer-header">
+                            <div><small className="eyebrow">{undoTarget.adjustment.adjustment_number}</small><h2 id="adjustment-undo-title">{t('Undo adjustment')}</h2></div>
+                            <button type="button" className="icon-btn" onClick={() => setUndoTarget(null)} aria-label={t('Close')}><Icon name="close" size={16} /></button>
+                        </div>
+                        <div className="finance-report-filter__drawer-body adjustments-correction__body">
+                            <p className="adjustments-correction__hint">{t('The original record remains in history. Same-day Undo restores stock and voids its finance effect when no later product activity exists.')}</p>
+                            <div className="adjustments-correction__summary">
+                                <span><small>{t('Stock before original adjustment')}</small><strong>{originalStock.toLocaleString()} {t('base units')}</strong></span>
+                                <span><small>{t('Stock after mistaken adjustment')}</small><strong>{Number(undoTarget.item.base_counted_quantity).toLocaleString()} {t('base units')}</strong></span>
+                            </div>
+                            <p className="adjustments-correction__impact" role="status"><b>{t('Stock after undo')}: {originalStock.toLocaleString()} {t('base units')}</b>{t('The original finance entry is voided. To record the correct damage or count, create a new adjustment from Inventory overview.')}</p>
+                            <label className="form-field">
+                                <span>{t('Reason for undo')}</span>
+                                <textarea minLength={10} maxLength={2000} value={undoExplanation} onChange={(event) => setUndoExplanation(event.target.value)} required />
+                            </label>
+                            {Object.values(undoErrors).map((message, index) => <p key={index} className="text-danger" role="alert">{message}</p>)}
+                        </div>
+                        <div className="drawer-actions">
+                            <button type="button" className="btn secondary" onClick={() => setUndoTarget(null)}>{t('Cancel')}</button>
+                            <button type="submit" className="btn danger">{t('Undo adjustment')}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </AdminLayout>
     );
 }

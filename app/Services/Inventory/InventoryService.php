@@ -90,7 +90,7 @@ class InventoryService
             $movement = $this->mutate($location, $product, 'sale_return', $quantity, 0, $actor, $idempotencyKey, $reference, 'sale_return', null, $unit, $unitQuantity);
             if (! $existing && $baseCost !== null) {
                 $lockedProduct->update(['original_price' => round(($quantityBefore * (float) $lockedProduct->original_price + $quantity * $baseCost)
-                    / max($quantityBefore + $quantity, 0.000001), 2)]);
+                    / max($quantityBefore + $quantity, 0.000001), 6)]);
             }
             return $movement;
         }, 3);

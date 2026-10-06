@@ -35,6 +35,7 @@ export default function AdjustmentCreate({ locations, reasons, selectedUnit, sel
     const imagePath = selectedUnit?.image_path;
     const varianceTone = variance < 0 ? 'negative' : variance > 0 ? 'positive' : 'neutral';
     const varianceLabel = variance < 0 ? 'Stock decrease' : variance > 0 ? 'Stock increase' : 'No change';
+    const noteRequired = variance < 0 || ['data_correction', 'other'].includes(form.data.reason_code);
 
     const setLocation = (locationId) => {
         const nextSystemQuantity = toDisplayUnitQuantity(selectedUnit?.balances?.[locationId], activeUnit?.conversion_factor);
@@ -160,10 +161,10 @@ export default function AdjustmentCreate({ locations, reasons, selectedUnit, sel
                         <input
                             value={form.data.notes}
                             onChange={(event) => form.setData('notes', event.target.value)}
-                            placeholder={t(variance < 0 ? 'Required for stock loss' : 'Optional note')}
-                            required={variance < 0}
+                            placeholder={t(noteRequired ? 'Required note' : 'Optional note')}
+                            required={noteRequired}
                         />
-                        <small>{variance < 0 ? t('Explain why recorded stock is being reduced.') : t('Add context for this adjustment if needed.')}</small>
+                        <small>{noteRequired ? t('Please fill in the note above. It is required for this adjustment.') : t('Add context for this adjustment if needed.')}</small>
                     </label>
                 </div>
 

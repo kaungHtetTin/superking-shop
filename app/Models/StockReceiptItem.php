@@ -22,8 +22,8 @@ class StockReceiptItem extends Model
         'conversion_factor' => 'decimal:6',
         'unit_cost' => 'decimal:2',
         'free_quantity' => 'decimal:4',
-        'previous_base_cost' => 'decimal:2',
-        'applied_base_cost' => 'decimal:2',
+        'previous_base_cost' => 'decimal:6',
+        'applied_base_cost' => 'decimal:6',
     ];
 
     public function receipt(): BelongsTo

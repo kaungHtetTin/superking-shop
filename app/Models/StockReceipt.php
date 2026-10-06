@@ -30,6 +30,11 @@ class StockReceipt extends Model
         return $this->hasMany(StockReceiptItem::class);
     }
 
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(StockReceiptCorrection::class);
+    }
+
     public function inventoryImport(): BelongsTo
     {
         return $this->belongsTo(InventoryImport::class);

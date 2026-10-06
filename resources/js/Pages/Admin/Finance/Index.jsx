@@ -443,7 +443,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                 <MetricCard label="Order revenue" value={money(summary.order_revenue)} icon="receipt" />
                 <MetricCard label="Cost of goods" value={money(summary.cost_of_goods)} icon="box" tone="danger" />
                 <MetricCard label="Inventory purchases" value={money(summary.stock_purchases)} icon="receipt" />
-                <MetricCard label="Other income & stock gains" value={money(summary.manual_income)} icon="wallet" />
+                <MetricCard label="Other income" value={money(summary.manual_income)} icon="wallet" />
                 <MetricCard label="Operating expenses" value={money(summary.expenses)} icon="card" tone="danger" />
                 <MetricCard label="Net profit" value={money(summary.net_profit)} icon="chart" tone={summary.net_profit < 0 ? 'danger' : 'success'} />
                 <MetricCard label="Paid orders" value={summary.paid_orders} icon="check" />
@@ -534,7 +534,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                                             </small>
                                         </td>
                                         <td>{entry.location?.name || t('Unassigned')}</td>
-                                        <td><StatusBadge status={entry.type === 'income' ? 'success' : entry.type === 'asset' ? 'info' : 'warning'} label={t(entry.type === 'asset' ? 'Asset acquisition' : entry.type)} /></td>
+                                        <td><StatusBadge status={entry.type === 'income' ? 'success' : entry.type === 'asset' ? 'info' : 'warning'} label={t(entry.category === 'stock_adjustment' && entry.type === 'asset' ? 'Stock count surplus' : entry.category === 'stock_receipt' ? 'Inventory purchase' : entry.type === 'asset' ? 'Asset acquisition' : entry.type)} /></td>
                                         <td className="money-cell"><strong>{money(entry.amount)}</strong></td>
                                         <td><StatusBadge status={entry.status} label={t(entry.status)} /></td>
                                         <td>{entry.recorder?.name || t('System')}</td>

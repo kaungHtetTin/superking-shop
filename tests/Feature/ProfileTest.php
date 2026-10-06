@@ -63,13 +63,13 @@ class ProfileTest extends TestCase
         $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
-    public function test_user_can_delete_their_account(): void
+    public function test_only_super_admin_can_delete_their_account(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
 
         $response = $this
             ->actingAs($user)
-            ->delete('/profile', [
+            ->delete('/admin/profile', [
                 'password' => 'password',
             ]);
 
@@ -83,11 +83,11 @@ class ProfileTest extends TestCase
 
     public function test_spa_account_deletion_returns_a_logout_redirect(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
 
         $this->actingAs($user)
             ->withHeader('X-SPA', 'true')
-            ->deleteJson('/profile', ['password' => 'password'])
+            ->deleteJson('/admin/profile', ['password' => 'password'])
             ->assertOk()
             ->assertJsonPath('redirect', url('/'));
 
@@ -95,14 +95,14 @@ class ProfileTest extends TestCase
         $this->assertSoftDeleted($user);
     }
 
-    public function test_correct_password_must_be_provided_to_delete_account(): void
+    public function test_correct_password_must_be_provided_to_delete_super_admin_account(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
 
         $response = $this
             ->actingAs($user)
             ->from('/profile')
-            ->delete('/profile', [
+            ->delete('/admin/profile', [
                 'password' => 'wrong-password',
             ]);
 
@@ -110,6 +110,25 @@ class ProfileTest extends TestCase
             ->assertSessionHasErrors('password')
             ->assertRedirect('/profile');
 
+        $this->assertNotNull($user->fresh());
+    }
+
+    public function test_other_roles_cannot_delete_accounts_from_either_profile_route(): void
+    {
+        foreach (['customer', 'staff', 'manager'] as $role) {
+            $user = User::factory()->create(['role' => $role, 'status' => 'active']);
+
+            $this->actingAs($user)->deleteJson('/profile', ['password' => 'password'])->assertForbidden();
+            $this->actingAs($user)->deleteJson('/admin/profile', ['password' => 'password'])->assertForbidden();
+            $this->assertNotNull($user->fresh());
+        }
+    }
+
+    public function test_super_admin_cannot_use_storefront_profile_route_to_delete_account(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+
+        $this->actingAs($user)->deleteJson('/profile', ['password' => 'password'])->assertForbidden();
         $this->assertNotNull($user->fresh());
     }
 }

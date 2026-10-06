@@ -27,6 +27,11 @@ class StockReceiptPolicy
         return $this->view($user, $receipt) && $receipt->status === 'draft';
     }
 
+    public function correct(User $user, StockReceipt $receipt): bool
+    {
+        return $this->view($user, $receipt) && $receipt->status === 'posted';
+    }
+
     public function delete(User $user, StockReceipt $receipt): bool
     {
         return $this->view($user, $receipt) && in_array($receipt->status, ['draft', 'posted'], true);

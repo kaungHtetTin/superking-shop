@@ -295,6 +295,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.store');
     Route::get('/inventory/receipts/{receipt}', [StockReceiptController::class, 'show'])
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.show');
+    Route::post('/inventory/receipts/{receipt}/corrections', [StockReceiptController::class, 'correct'])
+        ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.correct');
     Route::get('/inventory/receipts/{receipt}/edit', [StockReceiptController::class, 'edit'])
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.edit');
     Route::put('/inventory/receipts/{receipt}', [StockReceiptController::class, 'update'])
@@ -303,11 +305,13 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.destroy');
 
     Route::get('/inventory/adjustments', [StockAdjustmentController::class, 'index'])
-        ->middleware('admin.permission:inventory.adjust.create')->name('inventory.adjustments.index');
+        ->middleware('admin.any_permission:inventory.adjust.create,inventory.adjust.approve')->name('inventory.adjustments.index');
     Route::get('/inventory/adjustments/create', [StockAdjustmentController::class, 'create'])
         ->middleware('admin.permission:inventory.adjust.create')->name('inventory.adjustments.create');
     Route::post('/inventory/adjustments', [StockAdjustmentController::class, 'store'])
         ->middleware('admin.permission:inventory.adjust.create')->name('inventory.adjustments.store');
+    Route::post('/inventory/adjustments/{adjustment}/undo', [StockAdjustmentController::class, 'undo'])
+        ->middleware('admin.permission:inventory.adjust.approve')->name('inventory.adjustments.undo');
 
     Route::get('/inventory/transfers', [StockTransferController::class, 'index'])->name('inventory.transfers.index');
     Route::get('/inventory/transfers/create', [StockTransferController::class, 'create'])

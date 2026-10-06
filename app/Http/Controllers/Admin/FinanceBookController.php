@@ -28,7 +28,7 @@ class FinanceBookController extends Controller
         $expenses = FinancialEntry::query()->external()->whereIn('location_id', $ids)
             ->whereDate('entry_date', $date)
             ->where('type', 'expense')->where('status', 'approved')
-            ->where('category', '!=', FinancialEntry::CATEGORY_REFUND_PAYABLE)
+            ->whereNotIn('category', [FinancialEntry::CATEGORY_REFUND_PAYABLE, FinancialEntry::CATEGORY_STOCK_ADJUSTMENT])
             ->selectRaw('location_id, SUM(amount) total')->groupBy('location_id')->pluck('total', 'location_id');
 
         return Spa::render('Admin/FinanceBook/Index', [
@@ -90,7 +90,7 @@ class FinanceBookController extends Controller
             ->whereDate('entry_date', $fundRecord->entry_date)
             ->where('type', 'expense')
             ->where('status', 'approved')
-            ->where('category', '!=', FinancialEntry::CATEGORY_REFUND_PAYABLE)
+            ->whereNotIn('category', [FinancialEntry::CATEGORY_REFUND_PAYABLE, FinancialEntry::CATEGORY_STOCK_ADJUSTMENT])
             ->exists();
 
         if ($hasApprovedExpenses) {

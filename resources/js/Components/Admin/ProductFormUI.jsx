@@ -50,7 +50,7 @@ export default function ProductFormUI({
         setData({
             ...data,
             units: nextUnits,
-            price_types: data.price_types.map((type) => ({ ...type, prices: [...type.prices, 0], is_manual: [...(type.is_manual || type.prices.map(() => true)), product.id ? true : pricingRules.find(rule => rule.code === type.name)?.pricing_mode !== 'automatic'] })),
+            price_types: data.price_types.map((type) => ({ ...type, prices: [...type.prices, 0], is_manual: [...(type.is_manual || type.prices.map(() => true)), true] })),
         });
     };
 
@@ -111,9 +111,9 @@ export default function ProductFormUI({
                             {errors.barcode && <small className="field-error">{formatErrorMessage(errors.barcode)}</small>}
                         </label>
                         <label className="form-field">
-                            <span>{t('Original price / base-unit cost')}</span>
-                            <input type="number" min="0" step="0.01" value={data.original_price} readOnly={!!product.id} onChange={(event) => setData('original_price', event.target.value)} required />
-                            <small>{t(product.id ? 'Accounting cost is managed by inventory operations, not selling-price edits.' : 'Opening accounting cost for inventory valuation and profit calculations.')}</small>
+                            <span>{t(product.id ? 'Current accounting cost / base unit' : 'Opening accounting cost / base unit')}</span>
+                            <input type="number" min="0" step="0.01" value={product.id ? Number(data.original_price || 0).toFixed(2) : data.original_price} readOnly={!!product.id} onChange={(event) => setData('original_price', event.target.value)} required />
+                            <small>{t(product.id ? 'Calculated from inventory purchases. To correct a buying price, correct its purchase receipt; changing a selling price does not change this cost.' : 'Starting inventory cost. Future buying prices belong on purchase receipts, not here.')}</small>
                             {errors.original_price && <small className="field-error">{formatErrorMessage(errors.original_price)}</small>}
                         </label>
                         <label className="form-field">
@@ -121,7 +121,7 @@ export default function ProductFormUI({
                             <input type="number" min="0" step="0.0001" value={data.min_quantity} onChange={(event) => setData('min_quantity', event.target.value)} required />
                             <small>{t('Low-stock threshold, always stored in the base unit.')}</small>
                         </label>
-                        <label className="form-field"><span>Opening cost for automatic pricing</span><input type="number" min="0" step="0.000001" value={data.pricing_base_cost ?? data.original_price} onChange={event => setData('pricing_base_cost', event.target.value)} /><small>Used when no posted purchase exists. Current buying cost: {buyingCost || 0} per base unit.</small></label>
+                        <label className="form-field"><span>{t('Pricing cost before first purchase')}</span><input type="number" min="0" step="0.000001" value={data.pricing_base_cost ?? data.original_price} onChange={event => setData('pricing_base_cost', event.target.value)} /><small>{t('Only used for automatic selling prices when there is no posted purchase. Manual selling prices do not use this field.')} {t('Current automatic-pricing cost')}: {buyingCost || 0} {t('per base unit')}.</small></label>
                         <label className="form-field full-span product-description-field">
                             <span>{t('Description')}</span>
                             <textarea rows={5} value={data.description} onChange={(event) => setData('description', event.target.value)} />
@@ -161,7 +161,7 @@ export default function ProductFormUI({
                     {errors.units && <div className="flash error">{formatErrorMessage(errors.units)}</div>}
                     <div className="product-price-matrix">
                         <div className="unit-prices__heading">
-                            <div><strong>{t('Selling price types')}</strong><small>{t('Define each type once, then enter its amount for every unit.')}</small>{(is_super_admin || auth?.user?.permissions?.includes('settings.manage')) && <Link className="product-price-matrix__rules-link" href={routeWithBase('/admin/settings/prices', app_base)}>Manage rules in Settings → Prices</Link>}</div>
+                            <div><strong>{t('Selling price types')}</strong><small>{t('Set Manual to choose the selling price yourself. Automatic prices can change when a new purchase is posted. Past sales keep their recorded prices and costs.')}</small>{(is_super_admin || auth?.user?.permissions?.includes('settings.manage')) && <Link className="product-price-matrix__rules-link" href={routeWithBase('/admin/settings/prices', app_base)}>Manage rules in Settings → Prices</Link>}</div>
                             <button type="button" className="btn secondary" onClick={addPriceType}><Icon name="plus" size={13} />{t('Add price type')}</button>
                         </div>
                         <div className="product-price-matrix__scroll">

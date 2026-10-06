@@ -85,7 +85,8 @@ class OperationsReportService
             ->join('stock_adjustments as adjustments', 'adjustments.id', '=', 'items.stock_adjustment_id')
             ->join('products', 'products.id', '=', 'items.product_id')
             ->whereIn('adjustments.location_id', $locationIds)
-            ->whereIn('adjustments.status', ['posted', 'reversed'])
+            ->where('adjustments.status', 'posted')
+            ->whereNull('adjustments.reversal_of_id')
             ->groupBy('adjustments.reason_code')
             ->orderByDesc(DB::raw('SUM(ABS(items.quantity_delta))'))
             ->get([
@@ -94,7 +95,7 @@ class OperationsReportService
                 DB::raw('SUM(items.quantity_delta) as net_quantity'),
                 DB::raw('SUM(ABS(items.quantity_delta)) as absolute_quantity'),
                 DB::raw('SUM(CASE WHEN items.value_delta IS NULL AND items.quantity_delta <> 0 THEN 1 ELSE 0 END) as unvalued_lines'),
-                DB::raw('SUM(CASE WHEN items.quantity_delta < 0 THEN ABS(items.value_delta) ELSE 0 END) as loss_value'),
+                DB::raw("SUM(CASE WHEN adjustments.reason_code <> 'data_correction' AND items.quantity_delta < 0 THEN ABS(items.value_delta) ELSE 0 END) as loss_value"),
             ]);
 
         $transfers = DB::table('stock_transfers as transfers')

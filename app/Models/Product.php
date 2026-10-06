@@ -42,7 +42,7 @@ class Product extends Model
         'metadata' => 'json',
         'rating' => 'decimal:2',
         'min_quantity' => 'decimal:4',
-        'original_price' => 'decimal:2',
+        'original_price' => 'decimal:6',
     ];
 
     protected static function booted(): void

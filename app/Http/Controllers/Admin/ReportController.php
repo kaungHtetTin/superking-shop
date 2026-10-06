@@ -60,7 +60,8 @@ class ReportController extends Controller
             ->when($to, fn ($query) => $query->where('orders.created_at', '<=', $to))
             ->selectRaw('COALESCE(SUM((order_items.cost_price * order_items.quantity) + order_items.foc_cost_price), 0) as total_cost')
             ->value('total_cost');
-        $grossProfit = round($paidRevenue - $costOfGoods, 2);
+        $costOfGoods = round($costOfGoods);
+        $grossProfit = round($paidRevenue - $costOfGoods);
         $financeEntries = FinancialEntry::query()->external()
             ->where('status', 'approved')
             ->when($requestedLocationId, fn ($query) => $query->where('location_id', $requestedLocationId))
@@ -325,13 +326,13 @@ class ReportController extends Controller
                 'units_per_order' => $paidOrderCount > 0 ? round($unitsSold / $paidOrderCount, 2) : 0,
                 'repeat_customer_rate' => $paidCustomerCount > 0 ? round(($repeatCustomerCount / $paidCustomerCount) * 100, 1) : 0,
                 'discount_rate' => $grossSales > 0 ? round(($discounts / $grossSales) * 100, 1) : 0,
-                'cost_of_goods' => round($costOfGoods, 2),
+                'cost_of_goods' => $costOfGoods,
                 'gross_profit' => $grossProfit,
                 'gross_margin' => $paidRevenue > 0 ? round(($grossProfit / $paidRevenue) * 100, 1) : 0,
                 'manual_income' => $manualIncome,
                 'expenses' => $expenses,
                 'stock_purchases' => $stockPurchases,
-                'net_profit' => round($paidRevenue + $manualIncome - $costOfGoods - $expenses, 2),
+                'net_profit' => round($paidRevenue + $manualIncome - $costOfGoods - $expenses),
             ],
             'topProducts' => $topProducts,
             'salesByDay' => $salesByDay,

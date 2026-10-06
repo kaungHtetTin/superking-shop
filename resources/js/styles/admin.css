@@ -7591,6 +7591,36 @@
   margin: 0 auto;
 }
 
+.adjustment-accounting-guide {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-soft);
+}
+
+.adjustment-accounting-guide strong {
+  color: var(--color-text);
+}
+
+.adjustment-accounting-guide p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.adjustment-accounting-guide ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.adjustment-accounting-guide li + li {
+  margin-top: 3px;
+}
+
 .adjustment-product-card {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -11519,6 +11549,131 @@
   flex: 1;
 }
 
+/* Adjustment undo uses the same drawer controls as filters, with a
+   compact sheet on portrait phones and a scrollable side panel elsewhere. */
+.app-root .adjustments-correction__drawer {
+  width: min(440px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+}
+
+.app-root .adjustments-correction__mobile-trigger {
+  display: none;
+}
+
+.app-root .adjustments-correction__drawer .drawer-header,
+.app-root .adjustments-correction__drawer .drawer-actions {
+  flex: 0 0 auto;
+}
+
+.app-root .adjustments-correction__drawer .drawer-header > div {
+  min-width: 0;
+}
+
+.app-root .adjustments-correction__drawer .drawer-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.app-root .adjustments-correction__body {
+  gap: 14px;
+  overscroll-behavior: contain;
+}
+
+.app-root .adjustments-correction__body > p {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.app-root .adjustments-correction__hint {
+  color: var(--color-muted);
+}
+
+.app-root .adjustments-correction__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-root .adjustments-correction__summary > span {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-soft);
+}
+
+.app-root .adjustments-correction__summary small {
+  color: var(--color-muted);
+  line-height: 1.3;
+}
+
+.app-root .adjustments-correction__summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-root .adjustments-correction__impact {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-soft);
+}
+
+.app-root .adjustments-correction__drawer .drawer-actions {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .app-root .adjustments-correction__backdrop {
+    place-items: end stretch;
+  }
+
+  .app-root .adjustments-correction__drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 12px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .app-root .adjustments-correction__body {
+    flex: 0 1 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-root .adjustments-correction__mobile-trigger {
+    display: inline-flex;
+    width: auto;
+    min-height: 36px;
+    margin-top: 8px;
+  }
+
+  .app-root .adjustments-correction__table-action {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-root .adjustments-correction__summary {
+    gap: 6px;
+  }
+
+  .app-root .adjustments-correction__summary > span {
+    padding: 9px;
+  }
+}
+
 /* Report navigation and filters ---------------------------------- */
 .app-root .report-tabs {
   gap: 2px;
@@ -12352,6 +12507,93 @@
   display: block;
 }
 
+.app-root .receipt-correction-trigger {
+  min-height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.app-root .receipt-correction-history {
+  display: grid;
+  gap: 9px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.app-root .receipt-correction-history-item {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.app-root .receipt-correction-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-root .receipt-correction-history-heading > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-root .receipt-correction-history-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 12px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.app-root .receipt-correction-history-values strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-root .receipt-correction-history-item p {
+  margin: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.app-root .receipt-correction-history-item > small {
+  color: var(--color-muted);
+}
+
+.app-root .receipt-correction-help {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.app-root .receipt-correction-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.app-root .receipt-correction-preview strong {
+  color: var(--color-text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .app-root .table-primary-link {
   color: var(--color-text);
   font-weight: 750;
@@ -12392,6 +12634,10 @@
 
   .app-root .record-detail-lines-heading > small {
     text-align: left;
+  }
+
+  .app-root .receipt-correction-history-values {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app-root .record-detail-facts,

@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Category, FinancialEntry, Location, PricingRule, Product, User};
+use App\Models\{Category, FinancialEntry, Location, Order, PricingRule, Product, User};
 use App\Services\AutomaticPricingService;
 use App\Services\Inventory\StockReceiptService;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -91,6 +92,41 @@ class AutomaticPricingTest extends TestCase
         $this->assertSame('555.00', $price->fresh()->price);
     }
 
+    public function test_new_buying_price_does_not_change_manual_selling_price_or_past_sale_cost(): void
+    {
+        [$actor, $product, $unit, $price, , $location] = $this->fixture(true, '200');
+        $price->update(['price' => 500]);
+        $receipts = app(StockReceiptService::class);
+        $first = $receipts->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 2, 'unit_cost' => 200]], $actor);
+        $receipts->post($first, $actor);
+
+        $firstSaleCost = $product->fresh()->original_price;
+        $order = Order::create(['order_number' => 'PRICE-'.uniqid(), 'receipt_number' => 'PR-'.uniqid(), 'sales_channel' => 'pos', 'location_id' => $location->id, 'served_by' => $actor->id, 'total_amount' => 500, 'final_amount' => 500, 'discount_amount' => 0, 'shipping_fee' => 0, 'status' => 'delivered', 'payment_status' => 'paid', 'paid_amount' => 500, 'receiver_name' => 'Walk-in']);
+        $saleItem = $order->items()->create(['product_id' => $product->id, 'product_unit_id' => $unit->id, 'quantity' => 1, 'base_quantity' => 1, 'conversion_factor' => 1, 'unit_name' => 'Piece', 'unit_price' => 500, 'cost_price' => $firstSaleCost, 'total_price' => 500]);
+        app(InventoryService::class)->completeSale($location, $product, 1, reference: $order);
+        $second = $receipts->createDraft($location, [['product_unit_id' => $unit->id, 'received_quantity' => 2, 'unit_cost' => 300]], $actor);
+        $receipts->post($second, $actor);
+
+        $this->assertSame('200.000000', $firstSaleCost);
+        $this->assertSame('200.000000', $saleItem->fresh()->cost_price);
+        $this->assertSame('500.00', $saleItem->fresh()->unit_price);
+        $this->assertSame('266.666667', $product->fresh()->original_price);
+        $this->assertSame('500.00', $price->fresh()->price);
+        $this->assertTrue($price->fresh()->is_manual);
+        $price->update(['price' => 600]);
+        $this->assertSame('600.00', $price->fresh()->price);
+        $this->assertSame('266.666667', $product->fresh()->original_price);
+        $this->assertSame('200.000000', $saleItem->fresh()->cost_price);
+        $this->assertSame('500.00', $saleItem->fresh()->unit_price);
+
+        $lastOrder = Order::create(['order_number' => 'PRICE-'.uniqid(), 'receipt_number' => 'PR-'.uniqid(), 'sales_channel' => 'pos', 'location_id' => $location->id, 'served_by' => $actor->id, 'total_amount' => 1800, 'final_amount' => 1800, 'discount_amount' => 0, 'shipping_fee' => 0, 'status' => 'delivered', 'payment_status' => 'paid', 'paid_amount' => 1800, 'receiver_name' => 'Walk-in']);
+        $lastOrder->items()->create(['product_id' => $product->id, 'product_unit_id' => $unit->id, 'quantity' => 3, 'base_quantity' => 3, 'conversion_factor' => 1, 'unit_name' => 'Piece', 'unit_price' => 600, 'cost_price' => $product->fresh()->original_price, 'total_price' => 1800]);
+        app(InventoryService::class)->completeSale($location, $product, 3, reference: $lastOrder);
+        $summary = $this->actingAs($actor)->getJson('/admin/finance')->assertOk()->json('props.summary');
+        $this->assertEquals(1000, $summary['cost_of_goods']);
+        $this->assertEquals(1300, $summary['net_profit']);
+    }
+
     public function test_missing_cost_retains_saved_price_and_blocks_new_zero_auto_row(): void
     {
         [, $product, $unit, $price] = $this->fixture(false, '0');
@@ -147,7 +183,7 @@ class AutomaticPricingTest extends TestCase
         $service->delete($receipt,$actor);
         $this->assertNull($product->fresh()->pricing_source_receipt_id);
         $this->assertSame('1000.000000',$product->fresh()->pricing_buying_cost);
-        $this->assertSame('1000.00',$product->fresh()->original_price);
+        $this->assertSame('1000.000000',$product->fresh()->original_price);
     }
 
     public function test_below_cost_purchase_requires_acknowledgment_and_rolls_back_inventory(): void
@@ -213,7 +249,7 @@ class AutomaticPricingTest extends TestCase
         $payload['price_types'][0]['prices']=[888];
         $payload['pricing_version']=$product->pricing_version;
         $this->patchJson('/admin/products/'.$product->id, array_merge($payload, ['original_price' => 123]))->assertStatus(422)->assertJsonValidationErrors('original_price');
-        $this->assertSame('950.00', $product->fresh()->original_price);
+        $this->assertSame('950.000000', $product->fresh()->original_price);
         $this->patchJson('/admin/products/'.$product->id,$payload)->assertRedirect();
         $this->assertSame('888.00',$price->fresh()->price);
         $this->assertTrue($price->fresh()->is_manual);

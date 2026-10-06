@@ -136,6 +136,8 @@ class StockReceiptController extends Controller
             'items.product:id,name,product_code,sku,barcode,original_price,pricing_base_cost,pricing_buying_cost',
             'items.product.units:id,product_id,name,code,conversion_factor,is_base,is_default_selling,is_active',
             'items.unit:id,product_id,name,code,conversion_factor',
+            'corrections.actor:id,name',
+            'corrections.item.product:id,name,product_code',
         ]);
 
         return Spa::render('Admin/Inventory/Receipts/Show', [
@@ -171,6 +173,25 @@ class StockReceiptController extends Controller
         }
 
         return redirect()->route('admin.inventory.receipts.show', $posted)->with('success', 'Receipt posted. '.($posted->pricing_summary['changed_row_count'] ?? 0).' prices updated; '.($posted->pricing_summary['skipped_cost_count'] ?? 0).' rows need cost.');
+    }
+
+    public function correct(Request $request, StockReceipt $receipt, StockReceiptService $service, AuditLogService $audit)
+    {
+        $this->authorize('correct', $receipt);
+        abort_unless($request->user()->canAccessLocation($receipt->location), 403);
+        $validated = $request->validate([
+            'item_id' => ['required', 'integer', 'exists:stock_receipt_items,id'],
+            'reason' => ['required', Rule::in(['purchase_error', 'supplier_bonus'])],
+            'received_quantity' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            'free_quantity' => ['required', 'numeric', 'min:0', 'max:9999999999'],
+            'unit_cost' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+            'notes' => ['required', 'string', 'max:2000'],
+        ]);
+        $item = $receipt->items()->findOrFail($validated['item_id']);
+        $correction = $service->correctPostedItem($receipt, $item, $validated, $request->user());
+        $audit->record('inventory.receipt.corrected', $receipt, ['correction_id' => $correction->id, 'reason' => $correction->reason, 'purchase_amount_delta' => $correction->purchase_amount_delta], $request);
+
+        return redirect()->route('admin.inventory.receipts.show', $receipt)->with('success', 'Receipt corrected. Original and corrected values remain in the audit history.');
     }
 
     public function edit(Request $request, StockReceipt $receipt)

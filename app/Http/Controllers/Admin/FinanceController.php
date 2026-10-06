@@ -50,6 +50,7 @@ class FinanceController extends Controller
         $approvedExpenses = (clone $approvedEntries)->where('type', 'expense')->whereNotIn('category', [FinancialEntry::CATEGORY_STOCK_RECEIPT, FinancialEntry::CATEGORY_REFUND_PAYABLE])->sum('amount');
         $stockPurchases = (clone $approvedEntries)->where('category', FinancialEntry::CATEGORY_STOCK_RECEIPT)->sum('amount');
         $paidRevenue = (clone $paidOrders)->sum('final_amount');
+        // Sum the precise item snapshots first; display whole MMK only after aggregation.
         $costOfGoods = (float) OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
@@ -62,6 +63,7 @@ class FinanceController extends Controller
             ->whereBetween('orders.created_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->selectRaw('COALESCE(SUM((order_items.cost_price * order_items.quantity) + order_items.foc_cost_price), 0) as total_cost')
             ->value('total_cost');
+        $costOfGoods = round($costOfGoods);
 
         $summary = [
             'from' => $from->toDateString(),
@@ -81,7 +83,7 @@ class FinanceController extends Controller
             'manual_income' => (float) $approvedManualIncome,
             'expenses' => (float) $approvedExpenses,
             'stock_purchases' => (float) $stockPurchases,
-            'net_profit' => round((float) $paidRevenue + (float) $approvedManualIncome - $costOfGoods - (float) $approvedExpenses, 2),
+            'net_profit' => round((float) $paidRevenue + (float) $approvedManualIncome - $costOfGoods - (float) $approvedExpenses),
             'pending_income' => (float) FinancialEntry::query()->external()
                 ->where('type', 'income')
                 ->where('category', '!=', FinancialEntry::CATEGORY_POS_SALE)
@@ -379,14 +381,14 @@ class FinanceController extends Controller
             $day = $cursor->toDateString();
             $income = (float) ($dailyOrders[$day] ?? 0) + (float) ($entryMap[$day]['income'] ?? 0);
             $operatingExpenses = (float) ($entryMap[$day]['expense'] ?? 0);
-            $costOfGoods = (float) ($dailyCosts[$day] ?? 0);
+            $costOfGoods = round((float) ($dailyCosts[$day] ?? 0));
             $expenses = $operatingExpenses + $costOfGoods;
 
             $days[] = [
                 'day' => $day,
                 'income' => round($income, 2),
-                'expenses' => round($expenses, 2),
-                'net' => round($income - $expenses, 2),
+                'expenses' => round($expenses),
+                'net' => round($income - $expenses),
             ];
 
             $cursor->addDay();

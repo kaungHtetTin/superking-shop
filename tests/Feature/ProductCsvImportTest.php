@@ -123,7 +123,7 @@ class ProductCsvImportTest extends TestCase
         fclose($stream);
 
         $this->assertSame(['name', 'parent_category', 'category', 'sku', 'barcode', 'base_unit_name', 'base_unit_code', 'cost_price', 'retail_price', 'min_quantity', 'status', 'description'], $headers);
-        $this->assertSame(['Export Coffee', 'Drinks', 'Beverages', 'EXPORT-COFFEE-001', '8850099', 'Piece', 'pc', '800.00', '1000.00', '5.0000', 'active', ''], $row);
+        $this->assertSame(['Export Coffee', 'Drinks', 'Beverages', 'EXPORT-COFFEE-001', '8850099', 'Piece', 'pc', '800.000000', '1000.00', '5.0000', 'active', ''], $row);
     }
 
     public function test_import_creates_and_assigns_parent_and_child_categories(): void

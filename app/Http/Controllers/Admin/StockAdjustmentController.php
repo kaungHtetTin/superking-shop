@@ -50,6 +50,7 @@ class StockAdjustmentController extends Controller
             'locations' => Location::query()->whereIn('id', $locationIds)->orderBy('name')->get(['id', 'code', 'name']),
             'reasons' => collect(StockAdjustment::REASONS)->map(fn ($label, $value) => compact('value', 'label'))->values(),
             'statuses' => StockAdjustment::STATUSES,
+            'canUndo' => $request->user()->hasAdminPermission('inventory.adjust.approve'),
             'filters' => $request->only(['q', 'location_id', 'reason_code', 'status', 'from', 'to']),
         ]);
     }
@@ -76,7 +77,7 @@ class StockAdjustmentController extends Controller
 
         $unit = ProductUnit::query()
             ->with([
-                'product:id,name,product_code,barcode',
+                'product:id,name,product_code,barcode,original_price',
                 'product.units' => fn ($query) => $query
                     ->where('is_active', true)
                     ->orderByDesc('conversion_factor')
@@ -92,6 +93,7 @@ class StockAdjustmentController extends Controller
 
         return Spa::render('Admin/Inventory/Adjustments/Create', [
             'locations' => $locations,
+            'canReceive' => $request->user()->hasAdminPermission('inventory.receive'),
             'reasons' => collect(StockAdjustment::REASONS)->map(fn ($label, $value) => compact('value', 'label'))->values(),
             'selectedUnit' => [
                 'id' => $unit->id,
@@ -99,6 +101,7 @@ class StockAdjustmentController extends Controller
                 'product_code' => $unit->product->product_code,
                 'barcode' => $unit->product->barcode,
                 'product_name' => $unit->product->name,
+                'accounting_cost' => (float) $unit->product->original_price,
                 'unit_name' => $unit->name,
                 'unit_code' => $unit->code,
                 'conversion_factor' => (float) $unit->conversion_factor,
@@ -130,5 +133,20 @@ class StockAdjustmentController extends Controller
         $adjustment = $service->createPosted($location, $validated['items'], $validated['reason_code'], $request->user(), $validated['notes'] ?? null);
         $audit->record('inventory.adjustment.created', $adjustment, ['location_id' => $location->id], $request);
         return redirect()->route('admin.inventory.adjustments.index')->with('success', 'Stock quantity updated.');
+    }
+
+    public function undo(Request $request, StockAdjustment $adjustment, StockAdjustmentService $service, AuditLogService $audit)
+    {
+        $this->authorize('approve', $adjustment);
+        $validated = $request->validate([
+            'item_id' => ['required', 'integer', Rule::exists('stock_adjustment_items', 'id')->where('stock_adjustment_id', $adjustment->id)],
+            'explanation' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+        $service->undoPosted($adjustment, (int) $validated['item_id'], trim($validated['explanation']), $request->user());
+        $audit->record('inventory.adjustment.undone', $adjustment, [
+            'explanation' => $validated['explanation'],
+        ], $request);
+        $destination = $request->user()->hasAdminPermission('inventory.view') ? 'admin.inventory.index' : 'admin.inventory.adjustments.index';
+        return redirect()->route($destination)->with('success', 'Adjustment undone. Stock and finance were restored; create the correct adjustment from Inventory overview.');
     }
 }

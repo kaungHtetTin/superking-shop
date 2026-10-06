@@ -44,7 +44,6 @@ class FinancialEntry extends Model
 
     public const INCOME_CATEGORIES = [
         self::CATEGORY_POS_SALE => 'POS sales',
-        self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory gains',
         'other_income' => 'Other income',
         'service_fee' => 'Service fee',
         'adjustment' => 'Adjustment',
@@ -67,6 +66,7 @@ class FinancialEntry extends Model
 
     public const ASSET_CATEGORIES = [
         self::CATEGORY_STOCK_RECEIPT => 'Inventory purchases',
+        self::CATEGORY_STOCK_ADJUSTMENT => 'Inventory count surplus',
     ];
 
     protected $fillable = [

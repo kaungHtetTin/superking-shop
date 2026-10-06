@@ -23,7 +23,7 @@ export default function Create({ categories, app_base, pricingRules = [] }) {
     const { data, setData, post, processing, errors } = useForm({
         category_id: '', sku: '', barcode: '', name: '', description: '', min_quantity: 0, original_price: 0,
         status: 'active', is_featured: false, metadata: null, mainImageAttachmentId: null,
-        imageAttachmentIds: [], units: [initialUnit()], price_types: pricingRules.filter(rule => rule.code === 'retail' || rule.pricing_mode === 'automatic').map(rule => ({ name: rule.code, prices: [0], is_manual: [rule.pricing_mode !== 'automatic'] })), images: [],
+        imageAttachmentIds: [], units: [initialUnit()], price_types: pricingRules.filter(rule => rule.code === 'retail' || rule.pricing_mode === 'automatic').map(rule => ({ name: rule.code, prices: [0], is_manual: [true] })), images: [],
     });
 
     const handleImages = (event) => {
