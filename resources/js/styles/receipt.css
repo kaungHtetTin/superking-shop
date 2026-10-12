@@ -50,9 +50,22 @@
 @media (max-width: 1100px) { .receipt-settings-layout { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { .receipt-options label { min-height: 40px; } }
 @media print {
+    body.pos-receipt-print-mode .app-root,
+    body.pos-receipt-print-mode .admin-main,
+    body.pos-receipt-print-mode .admin-content { display: block !important; min-height: 0 !important; height: auto !important; overflow: visible !important; background: #fff !important; }
+    body.pos-receipt-print-mode .admin-content { flex: none !important; }
     body.pos-receipt-print-mode .pos-receipt-page > :not(.pos-receipt-paper) { display: none !important; }
     body.pos-receipt-print-mode .admin-content { padding: 0 !important; max-width: none !important; }
-    body.pos-receipt-print-mode .pos-receipt-paper { margin: 0; border: 0; box-shadow: none; color: #000; background: #fff; }
+    body.pos-receipt-print-mode .pos-receipt-paper { margin: 0; border: 0; box-shadow: none; color: #000; background: #fff; font-family: 'Receipt Padauk', 'Noto Sans Myanmar', sans-serif; font-size: 12px; line-height: 1.5; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    body.pos-receipt-print-mode .pos-receipt-paper:is([data-paper='A4'], [data-paper='A5']) { font-size: 14px; }
+    body.pos-receipt-print-mode .pos-receipt-paper * { color: #000 !important; opacity: 1 !important; text-shadow: none !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper span,
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items th,
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items td { font-size: 12px !important; line-height: 1.5 !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items span { font-size: 11px !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper h2 { font-size: 18px; line-height: 1.45; }
+    body.pos-receipt-print-mode .pos-receipt-paper header,
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-thermal-item { break-inside: avoid; }
     body.pos-receipt-print-mode .pos-receipt-paper tr { break-inside: avoid; }
     body.pos-receipt-print-mode .receipt-line-items { overflow: visible; padding-bottom: 0; }
     body.pos-receipt-print-mode .receipt-a4-items { min-width: 0; width: 100%; }

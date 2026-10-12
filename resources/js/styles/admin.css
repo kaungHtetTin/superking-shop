@@ -8667,7 +8667,17 @@
   body.barcode-print-mode .barcode-label {
     border: 0;
     break-inside: avoid;
+    color: #000 !important;
+    font-family: 'Receipt Padauk', 'Noto Sans Myanmar', sans-serif;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
+
+  body.barcode-print-mode .barcode-label strong,
+  body.barcode-print-mode .barcode-label span,
+  body.barcode-print-mode .barcode-label small,
+  body.barcode-print-mode .barcode-label b { color: #000 !important; opacity: 1 !important; }
+  body.barcode-print-mode .barcode-svg { fill: #000 !important; }
 
   .pos-receipt-paper {
     width: 100%;

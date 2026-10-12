@@ -82,6 +82,8 @@ function BarcodeLabel({ product }) {
 
 export default function Barcodes({ products, categories, filters, app_base }) {
     const t = usePhraseTranslation();
+    const regularFont = routeWithBase('/fonts/Padauk-Regular.ttf', app_base);
+    const boldFont = routeWithBase('/fonts/Padauk-Bold.ttf', app_base);
     const productRows = products.data || [];
     const [filterState, setFilterState] = useState({
         q: filters.q || '',
@@ -97,6 +99,15 @@ export default function Barcodes({ products, categories, filters, app_base }) {
         document.body.classList.add('barcode-print-mode');
         return () => document.body.classList.remove('barcode-print-mode');
     }, []);
+
+    const printLabels = async () => {
+        await Promise.all([
+            document.fonts?.load('400 12px "Receipt Padauk"', 'မြန်မာစာ').catch(() => {}),
+            document.fonts?.load('700 12px "Receipt Padauk"', 'မြန်မာစာ').catch(() => {}),
+            document.fonts?.ready,
+        ].filter(Boolean));
+        window.print();
+    };
 
     useEffect(() => {
         if (!filterDrawerOpen) return undefined;
@@ -172,13 +183,15 @@ export default function Barcodes({ products, categories, filters, app_base }) {
             eyebrow={t('Catalog')}
             contentClassName="barcode-print-page"
             action={
-                <button type="button" className="btn primary no-print" onClick={() => window.print()} disabled={printItems.length === 0}>
+                <button type="button" className="btn primary no-print" onClick={printLabels} disabled={printItems.length === 0}>
                     <Icon name="download" size={14} />
                     {t('Print labels')}
                 </button>
             }
         >
             <Head title={t('Barcode Printing')} />
+            <style>{`@font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(regularFont)}) format('truetype'); font-style: normal; font-weight: 400; font-display: block; }
+                @font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(boldFont)}) format('truetype'); font-style: normal; font-weight: 700; font-display: block; }`}</style>
 
             <section className="panel glass no-print barcode-list-panel">
                 <PanelHeading
