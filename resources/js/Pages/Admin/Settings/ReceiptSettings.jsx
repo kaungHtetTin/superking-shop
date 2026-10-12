@@ -10,7 +10,8 @@ const sampleOrder = {
         { id: 1, product: { name: 'Sample product', code: 'PRD-001' }, unit_name: 'Piece', quantity: 2, unit_price: 3000, total_price: 6000, foc_quantity: 1, foc_unit: { name: 'Piece' } },
         { id: 2, product: { name: 'Sample accessory', code: 'PRD-002' }, unit_name: 'Box', quantity: 1, unit_price: 4000, total_price: 4000 },
     ],
-    total_amount: 10000, discount_amount: 0, final_amount: 10000, payment_method: 'cash',
+    total_amount: 10000, discount_amount: 500, final_amount: 9500, payment_method: 'cash',
+    pos_tender_summary: { tender_type: 'cash', amount_tendered: 10000, change_due: 500 },
 };
 
 export default function ReceiptSettings({ form, settings, logoUrl }) {
@@ -19,7 +20,7 @@ export default function ReceiptSettings({ form, settings, logoUrl }) {
     const set = (key, value) => form.setData('receipt', { ...receipt, [key]: value });
     return <div className="settings-section-content">
         <PanelHeading eyebrow={t('Receipts')} title={t('POS receipt settings')} />
-        <p className="settings-section-description">{t('Customize POS receipts. Order vouchers are not affected. The logo comes from Branding.')}</p>
+        <p className="settings-section-description">{t('Choose A5 or 80 mm for printed receipts and vouchers. The logo comes from Branding.')}</p>
         <div className="receipt-settings-layout">
             <div className="stack-sm">
                 <div className="settings-compact-grid">
@@ -37,7 +38,7 @@ export default function ReceiptSettings({ form, settings, logoUrl }) {
                 </label>)}
                 <label className="form-field"><span>{t('Paper size')}</span>
                     <select value={receipt.paper_size} onChange={(e) => set('paper_size', e.target.value)}>
-                        <option value="58mm">58 mm</option><option value="80mm">80 mm</option><option value="A4">A4</option><option value="A5">A5</option>
+                        <option value="A5">A5</option><option value="80mm">80 mm</option>
                     </select>
                     <small>{t('Select the matching paper in your printer dialog. Thermal printing uses the printer’s paper length.')}</small>
                     {form.errors['receipt.paper_size'] && <small className="field-error">{form.errors['receipt.paper_size']}</small>}
@@ -53,7 +54,9 @@ export default function ReceiptSettings({ form, settings, logoUrl }) {
             <aside className="receipt-settings-preview" aria-label={t('Receipt preview')}>
                 <p className="eyebrow">{t('Live preview')} · {receipt.paper_size}</p>
                 <small>{t('Sample data only. Save settings to apply changes.')}</small>
-                <ReceiptPaper order={sampleOrder} settings={{ ...settings, app_name: form.data.app_name, logo_url: logoUrl, receipt }} />
+                <div className="receipt-preview-stage">
+                    <ReceiptPaper key={receipt.paper_size} order={sampleOrder} settings={{ ...settings, app_name: form.data.app_name, logo_url: logoUrl, receipt }} />
+                </div>
             </aside>
         </div>
     </div>;

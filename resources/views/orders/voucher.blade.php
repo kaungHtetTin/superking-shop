@@ -2,6 +2,7 @@
     $appName = $settings['app_name'] ?? config('app.name', 'LaLaPick');
     $contacts = $settings['contacts'] ?? [];
     $currencyLabel = 'MMK';
+    $paperSize = ($settings['receipt']['paper_size'] ?? 'A5') === '80mm' ? '80mm' : 'A5';
     $checkoutDiscount = max(0, (float) ($order->discount_amount ?? 0) - (float) ($order->admin_discount_amount ?? 0));
     $adminDiscount = (float) ($order->admin_discount_amount ?? 0);
     $formatMoney = fn ($value) => trim(rtrim(rtrim(number_format((float) $value, 2), '0'), '.').' '.$currencyLabel);
@@ -25,15 +26,15 @@
             src: url('{{ asset('fonts/Padauk-Bold.ttf') }}') format('truetype');
             font-weight: 700;
         }
-        @page { size: A5; margin: 8mm; }
+        @page { size: {{ $paperSize === 'A5' ? 'A5' : '80mm 297mm' }}; margin: {{ $paperSize === 'A5' ? '8mm' : '0' }}; }
         * { box-sizing: border-box; }
         body {
             margin: 0;
             background: #fff;
             color: #000;
             font-family: 'Voucher Padauk', Arial, sans-serif;
-            font-size: 16px;
-            line-height: 1.45;
+            font-size: 12px;
+            line-height: 1.3;
         }
         .sheet {
             width: 148mm;
@@ -67,54 +68,60 @@
             width: 100%;
             table-layout: fixed;
             border-bottom: 1px solid #000;
-            padding-bottom: 10px;
+            padding-bottom: 4px;
         }
         .brand {
             display: table-cell;
+            width: 42%;
             vertical-align: top;
         }
+        .shop-contacts { display: table-cell; width: 58%; vertical-align: top; overflow-wrap: anywhere; }
         .brand img {
-            width: 38px;
-            height: 38px;
+            width: 70px;
+            height: 70px;
             object-fit: contain;
-            border-radius: 6px;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 10px;
+            border-radius: 0;
+            display: block;
+            margin-bottom: 4px;
         }
         .brand-mark {
-            width: 38px;
-            height: 38px;
-            border-radius: 6px;
+            width: 70px;
+            height: 70px;
+            border-radius: 0;
             background: #fff;
             border: 1px solid #000;
             color: #000;
             display: inline-block;
             vertical-align: middle;
             margin-right: 10px;
-            line-height: 38px;
+            line-height: 70px;
             text-align: center;
             font-weight: 900;
-            font-size: 16px;
+            font-size: 24px;
         }
-        .brand > div:last-child { display: inline-block; vertical-align: middle; }
+        .brand > div:last-child { display: block; }
         h1, h2, h3, p { margin: 0; }
         h1 { font-size: 18px; font-weight: 900; }
-        h2 { font-size: 22px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
-        h3 { font-size: 16px; text-transform: uppercase; letter-spacing: .08em; color: #000; margin-bottom: 5px; }
+        h2 { font-size: 18px; text-align: right; letter-spacing: .04em; text-transform: uppercase; }
+        h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #000; margin-bottom: 2px; }
         .muted { color: #000; }
-        .invoice-meta { width: 42%; text-align: right; display: table-cell; vertical-align: top; }
+        .invoice-meta { width: 100%; text-align: left; display: block; }
         .invoice-meta > * { display: block; }
+        .invoice-meta h2 { text-align: left; font-size: 12px; }
+        .invoice-meta { margin-bottom: 2px; }
+        .invoice-meta .status { padding: 0; }
+        .payment-line { margin-top: 1px; display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 0; align-items: baseline; }
+        .payment-line > * { margin: 0; }
         .grid {
             display: table;
             width: 100%;
             table-layout: fixed;
-            margin-top: 8px;
+            margin-top: 4px;
         }
         .box {
             border: 0;
             border-radius: 0;
-            padding: 8px 0;
+            padding: 3px 0;
             min-height: 0;
         }
         .grid > .box { display: table-cell; width: 50%; vertical-align: top; }
@@ -123,7 +130,7 @@
         .detail-row {
             display: table;
             width: 100%;
-            padding: 2px 0;
+            padding: 1px 0;
         }
         .detail-row > span,
         .detail-row > strong { display: table-cell; width: 50%; }
@@ -131,41 +138,44 @@
         .items {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
+            margin-top: 4px;
         }
         .items th {
             text-align: left;
             background: #fff;
             color: #000;
-            font-size: 14px;
+            font-size: 10px;
             letter-spacing: .07em;
             text-transform: uppercase;
-            border-top: 0;
-            border-bottom: 1px solid #000;
-            padding: 4px;
+            border: 1px solid #000;
+            padding: 2px;
         }
         .items td {
-            border-bottom: 0;
-            padding: 4px;
+            border: 1px solid #000;
+            padding: 2px;
             vertical-align: top;
         }
-        .items .num { text-align: right; white-space: nowrap; font-weight: 700; }
+        .items .num { text-align: right; overflow-wrap: anywhere; font-weight: 700; }
         .totals {
-            width: 100%;
+            width: 55%;
             float: none;
             margin-left: auto;
-            margin-top: 6px;
-            border-top: 1px solid #000;
+            margin-top: 3px;
+            border: 1px solid #000;
             border-radius: 0;
-            padding: 7px 0;
+            padding: 0;
         }
         .total-final {
-            margin-top: 5px;
-            padding-top: 6px;
-            border-top: 1px solid #000;
-            font-size: 18px;
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+            font-size: 14px;
             font-weight: 900;
         }
+        .totals .detail-row { padding: 0; border-bottom: 1px solid #000; }
+        .totals .detail-row:last-child { border-bottom: 0; }
+        .totals .detail-row > span { width: 40%; padding: 2px; }
+        .totals .detail-row > strong { width: 60%; padding: 2px; border-left: 1px solid #000; white-space: normal; overflow-wrap: anywhere; }
         .footer {
             clear: both;
             margin-top: 6px;
@@ -206,21 +216,22 @@
             .top-actions { margin-top: 12px; }
             .top-actions button,
             .top-actions a { width: calc(50% - 6px); min-height: 44px; text-align: center; margin-left: 0; }
-            .header,
-            .header > .brand,
-            .header > .invoice-meta { display: block; width: 100%; }
+            .header { display: table; width: 100%; }
+            .header > .brand { display: table-cell; width: 42%; }
+            .header > .shop-contacts { display: table-cell; width: 58%; }
             .invoice-meta { text-align: left; }
             h2 { text-align: left; }
-            .grid,
-            .grid > .box { display: block; width: 100%; }
-            .grid > .box:first-child { border-right: 0; margin-bottom: 10px; }
-            .grid > .box:last-child { padding-left: 0; }
+            .grid { display: table; width: 100%; }
+            .grid > .box { display: table-cell; width: 50%; }
+            .grid > .box:first-child { border-right: 0; padding-right: 5px; }
+            .grid > .box:last-child { padding-left: 5px; }
             .items { font-size: 16px; }
             .items thead { display: none; }
             .items, .items tbody, .items tr, .items td { display: block; width: 100%; }
             .items tr { border-bottom: 1px solid #000; padding: 8px 0; }
             .items tr:last-child { border-bottom: 0; }
             .items td { padding: 3px 0; }
+            .items td { border: 0; }
             .items .num { text-align: left; white-space: normal; }
             .items .num::before { content: attr(data-label) ': '; font-weight: 700; }
             .totals { width: 100%; float: none; }
@@ -230,13 +241,55 @@
             .qr img { margin-left: 0; }
         }
         @media print {
-            body { background: #fff; color: #000; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            body { background: #fff; color: #000; font-size: 12px; line-height: 1.25; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
             .sheet { margin: 0; border: 0; width: auto; min-height: auto; padding: 0; }
             .sheet, .sheet * { color: #000 !important; opacity: 1 !important; text-shadow: none !important; }
             .sheet img { filter: grayscale(1) contrast(1.5); }
+            .header { padding-bottom: 3px; }
+            .brand img { width: 52px; height: 52px; margin-bottom: 2px; }
+            .grid { margin-top: 3px; }
+            .grid > .box { padding-top: 2px; padding-bottom: 2px; }
+            h3 { font-size: 12px; margin-bottom: 1px; }
+            .invoice-meta { margin-bottom: 2px; }
+            .invoice-meta h2 { font-size: 12px; }
+            .detail-row { padding: 1px 0; }
+            .items { margin-top: 3px; }
+            .items th { font-size: 10px; }
+            .items th, .items td { padding: 2px; overflow-wrap: anywhere; }
+            .items .num { white-space: normal; }
+            .totals { margin-top: 3px; }
+            .totals .detail-row > span, .totals .detail-row > strong { padding: 2px; }
+            .total-final { font-size: 14px; }
             .header, .grid, .items tr, .totals, .footer { break-inside: avoid; }
             .no-print { display: none !important; }
         }
+        @if($paperSize === '80mm')
+        .sheet { width: 80mm; min-height: 0; padding: 4mm; }
+        .header { display: block; text-align: center; padding-bottom: 3px; border-bottom-style: dashed; }
+        .brand, .shop-contacts { display: block; width: 100%; text-align: center; }
+        .brand img, .brand-mark { width: 42px; height: 42px; margin: 0 auto 2px; }
+        .brand-mark { line-height: 42px; }
+        .grid { margin-top: 3px; }
+        .grid > .box:first-child { padding-right: 4px; }
+        .grid > .box:last-child { padding-left: 4px; }
+        .payment-line { gap: 0 5px; }
+        .items { table-layout: fixed; }
+        .items th, .items td { font-size: 9px; padding: 2px 1px; }
+        .items th:nth-child(1) { width: 39%; }
+        .items th:nth-child(2) { width: 10%; }
+        .items th:nth-child(3) { width: 24%; }
+        .items th:nth-child(4) { width: 27%; }
+        .totals { width: 100%; }
+        @media print {
+            .sheet { width: 72mm; max-width: 72mm; padding: 0; }
+            .header { display: block; border-bottom-style: dashed; }
+            .brand, .shop-contacts { display: block; width: 100%; }
+            .grid { display: table; }
+            .grid > .box { display: table-cell; width: 50%; }
+            .items th, .items td { font-size: 9px; }
+            .totals { width: 100%; }
+        }
+        @endif
     @if(!empty($pdf))
         @font-face {
             font-family: 'Padauk';
@@ -255,8 +308,8 @@
         body {
             background: #fff;
             font-family: 'Padauk', 'DejaVu Sans', sans-serif;
-            font-size: 16px;
-            line-height: 1.45;
+            font-size: 12px;
+            line-height: 1.25;
         }
         .no-print { display: none !important; }
         .sheet {
@@ -266,21 +319,25 @@
             padding: 0;
             border: 0;
         }
-        .header { display: table; width: 100%; padding-top: 0; padding-bottom: 8px; }
-        .header > .brand { display: table-cell; width: 62%; }
-        .header > .invoice-meta { display: table-cell; width: 38%; }
-        .brand img { width: 38px; height: auto; max-height: 30px; border-radius: 0; }
-        .brand-mark { width: 30px; height: 30px; line-height: 30px; font-size: 13px; }
+        .header { display: table; width: 100%; padding-top: 0; padding-bottom: 3px; }
+        .header > .brand { display: table-cell; width: 42%; }
+        .header > .shop-contacts { display: table-cell; width: 58%; }
+        .brand img { width: 70px; height: auto; max-height: 70px; border-radius: 0; }
+        .brand-mark { width: 70px; height: 70px; line-height: 70px; font-size: 24px; }
         h1 { font-size: 18px; line-height: 1.3; }
-        h2 { font-size: 22px; }
-        h3 { font-size: 16px; }
+        h2 { font-size: 18px; }
+        h3 { font-size: 12px; margin-bottom: 1px; }
         .status { padding: 1px 6px; }
         .grid { display: table; width: 100%; }
         .grid > .box { display: table-cell; width: 50%; }
-        .box { min-height: 48px; padding: 7px; }
-        .items { margin-top: 10px; }
-        .items th, .items td { padding: 5px; }
-        .totals { width: 100%; float: none; }
+        .box { min-height: 0; padding: 2px; }
+        .items { margin-top: 3px; }
+        .items th, .items td { padding: 2px; }
+        .items th { font-size: 10px; }
+        .items .num { white-space: normal; }
+        .totals { width: 55%; float: none; }
+        .totals .detail-row > span, .totals .detail-row > strong { padding: 2px; }
+        .total-final { font-size: 14px; }
         .footer { width: 100%; }
         .footer .footer-copy { margin-right: 92px; padding-top: 0; }
         .footer .qr { width: 82px; float: right; }
@@ -290,7 +347,7 @@
 <body>
     @if(empty($public))
         <div class="top-actions no-print">
-            <button type="button" onclick="printVoucher()">Print A5</button>
+            <button type="button" onclick="printVoucher()">Print {{ $paperSize === 'A5' ? 'A5' : '80 mm' }}</button>
             <a class="primary" href="{{ route('admin.orders.voucher.pdf', $order) }}">Download PDF</a>
         </div>
     @endif
@@ -305,23 +362,19 @@
                 @endif
                 <div>
                     <h1>{{ $appName }}</h1>
-                    <p class="muted">
-                        @foreach(($contacts['phone'] ?? []) as $phone)
-                            {{ $phone }}@if(!$loop->last), @endif
-                        @endforeach
-                    </p>
-                    <p class="muted">
-                        @foreach(($contacts['email'] ?? []) as $email)
-                            {{ $email }}@if(!$loop->last), @endif
-                        @endforeach
-                    </p>
                 </div>
             </div>
-            <div class="invoice-meta">
-                <h2>Invoice</h2>
-                <strong>{{ $order->order_number }}</strong>
-                <span>{{ optional($order->created_at)->format('M d, Y h:i A') }}</span>
-                <span class="status">{{ str_replace('_', ' ', $order->payment_status) }}</span>
+            <div class="shop-contacts">
+                <p>
+                    @foreach(($contacts['phone'] ?? []) as $phone)
+                        {{ $phone }}@if(!$loop->last), @endif
+                    @endforeach
+                </p>
+                <p>
+                    @foreach(($contacts['email'] ?? []) as $email)
+                        {{ $email }}@if(!$loop->last), @endif
+                    @endforeach
+                </p>
             </div>
         </header>
 
@@ -331,20 +384,28 @@
                 <strong>{{ $order->receiver_name ?: $order->user?->name }}</strong>
                 <p>{{ $order->receiver_phone ?: $order->user?->phone }}</p>
                 <p class="muted">{{ $order->user?->email }}</p>
-                <p style="margin-top: 4px;">{{ $order->shipping_address }}</p>
+                <p>{{ $order->shipping_address }}</p>
             </div>
             <div class="box">
-                <h3>Payment</h3>
+                <div class="invoice-meta">
+                    <h2>Invoice</h2>
+                    <strong>{{ $order->order_number }}</strong>
+                    <span>{{ optional($order->created_at)->format('M d, Y h:i A') }}</span>
+                </div>
+            </div>
+        </section>
+        <div class="payment-line">
+            <strong>Payment:</strong>
                 @if($paymentAccount)
                     <strong>{{ $paymentAccount['banking_service'] ?? 'Manual transfer' }}</strong>
-                    <p>{{ $paymentAccount['account_name'] ?? '' }}</p>
-                    <p>{{ $paymentAccount['account_no'] ?? '' }}</p>
+                    @if(!empty($paymentAccount['account_name'])) <span>{{ $paymentAccount['account_name'] }}</span> @endif
+                    @if(!empty($paymentAccount['account_no'])) <span>{{ $paymentAccount['account_no'] }}</span> @endif
                 @else
                     <strong>{{ $order->payment_method ?: 'Manual transfer' }}</strong>
                 @endif
-                <p class="muted" style="margin-top: 4px;">Order status: {{ str_replace('_', ' ', $order->status) }}</p>
-            </div>
-        </section>
+            <span>Payment status: {{ str_replace('_', ' ', $order->payment_status) }}</span>
+            <span>Order status: {{ str_replace('_', ' ', $order->status) }}</span>
+        </div>
 
         <table class="items">
             <thead>
@@ -427,17 +488,6 @@
             </section>
         @endif
 
-        <footer class="footer">
-            <div class="qr">
-                <img src="{{ $qrUrl }}" alt="Invoice QR code">
-                Invoice link
-            </div>
-            <div class="footer-copy">
-                <h3>Thank you</h3>
-                <p class="muted">Scan the QR code to open the public invoice link.</p>
-                <p style="word-break: break-all; font-size: 14px;">{{ $publicUrl }}</p>
-            </div>
-        </footer>
         </div>
     </main>
     <script>

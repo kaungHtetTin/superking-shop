@@ -10,7 +10,7 @@ class AppSettingsService
 {
     public const RECEIPT_DEFAULTS = [
         'shop_name' => '', 'address' => '', 'phone' => '',
-        'footer' => 'Thank you for shopping with us!', 'paper_size' => '80mm',
+        'footer' => 'Thank you for shopping with us!', 'paper_size' => 'A5',
         'show_logo' => true, 'show_customer' => true, 'show_cashier' => true,
         'show_foc' => true, 'auto_print' => false,
     ];

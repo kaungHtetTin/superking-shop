@@ -70,7 +70,8 @@ class OrderVoucherService
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($this->renderHtml($order, pdf: true), 'UTF-8');
-        $dompdf->setPaper('A5', 'portrait');
+        $paperSize = app(AppSettingsService::class)->all()['receipt']['paper_size'] ?? 'A5';
+        $dompdf->setPaper($paperSize === '80mm' ? [0, 0, 226.77, 841.89] : 'A5', 'portrait');
         $dompdf->render();
 
         return $dompdf->output();

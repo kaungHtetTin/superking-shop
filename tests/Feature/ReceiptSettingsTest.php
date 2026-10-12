@@ -28,7 +28,7 @@ class ReceiptSettingsTest extends TestCase
     {
         $this->actingAs($this->admin())->getJson('/admin/settings?section=receipts')
             ->assertOk()->assertJsonPath('props.initialSection', 'receipts')
-            ->assertJsonPath('props.settings.receipt.paper_size', '80mm')
+            ->assertJsonPath('props.settings.receipt.paper_size', 'A5')
             ->assertJsonPath('props.settings.receipt.auto_print', false);
     }
 
@@ -36,7 +36,7 @@ class ReceiptSettingsTest extends TestCase
     {
         $this->actingAs($this->admin())->from('/admin/settings?section=receipts')
             ->post('/admin/settings', $this->payload([
-                'shop_name' => ' Counter Shop ', 'address' => "Street 1\nYangon", 'paper_size' => '58mm',
+                'shop_name' => ' Counter Shop ', 'address' => "Street 1\nYangon", 'paper_size' => '80mm',
                 'show_logo' => '0', 'show_customer' => '0', 'auto_print' => '1', 'footer' => '',
             ]))->assertSessionHasNoErrors()->assertRedirect('/admin/settings?section=receipts');
 
@@ -48,7 +48,7 @@ class ReceiptSettingsTest extends TestCase
         $this->assertSame('', $receipt['footer']);
         $this->assertDatabaseHas('settings', ['key' => 'receipt', 'group' => 'receipt']);
         $this->getJson('/admin/pos')->assertOk()
-            ->assertJsonPath('props.app_settings.receipt.paper_size', '58mm')
+            ->assertJsonPath('props.app_settings.receipt.paper_size', '80mm')
             ->assertJsonPath('props.app_settings.receipt.auto_print', true);
     }
 
@@ -66,6 +66,14 @@ class ReceiptSettingsTest extends TestCase
             ->assertSessionHasNoErrors()->assertRedirect();
         $this->getJson('/admin/settings?section=receipts')->assertOk()
             ->assertJsonPath('props.settings.receipt.paper_size', 'A5');
+    }
+
+    public function test_old_paper_sizes_cannot_be_selected_for_new_settings(): void
+    {
+        foreach (['58mm', 'A4'] as $paperSize) {
+            $this->actingAs($this->admin())->postJson('/admin/settings', $this->payload(['paper_size' => $paperSize]))
+                ->assertUnprocessable()->assertJsonValidationErrors(['receipt.paper_size']);
+        }
     }
 
     public function test_general_save_without_receipt_payload_preserves_receipt_settings(): void

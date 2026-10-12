@@ -47,7 +47,7 @@ class SettingController extends Controller
             'receipt.address' => ['nullable', 'string', 'max:300'],
             'receipt.phone' => ['nullable', 'string', 'max:80'],
             'receipt.footer' => ['nullable', 'string', 'max:300'],
-            'receipt.paper_size' => ['required_with:receipt', 'in:58mm,80mm,A4,A5'],
+            'receipt.paper_size' => ['required_with:receipt', 'in:80mm,A5'],
             'receipt.show_logo' => ['required_with:receipt', 'boolean'],
             'receipt.show_customer' => ['required_with:receipt', 'boolean'],
             'receipt.show_cashier' => ['required_with:receipt', 'boolean'],

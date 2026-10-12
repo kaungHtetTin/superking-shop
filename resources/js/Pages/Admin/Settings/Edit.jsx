@@ -158,7 +158,13 @@ export default function SettingsEdit({ settings, initialSection = 'general', mus
         remove_logo: false,
         remove_favicon: false,
         contacts: ensureContacts(settings.contacts),
-        receipt: { ...receiptDefaults, ...settings.receipt },
+        receipt: {
+            ...receiptDefaults,
+            ...settings.receipt,
+            paper_size: settings.receipt?.paper_size === 'A4' ? 'A5' :
+                settings.receipt?.paper_size === '58mm' ? '80mm' :
+                    settings.receipt?.paper_size || receiptDefaults.paper_size,
+        },
     }), [settings]);
     const form = useForm(initialData);
     const hasChanges = serializeEditorData(form.data) !== serializeEditorData(initialData);

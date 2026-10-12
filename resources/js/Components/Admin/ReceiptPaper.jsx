@@ -4,7 +4,7 @@ const formatMoney = (value) => `${Number(value || 0).toLocaleString(undefined, {
 
 export const receiptDefaults = {
     shop_name: '', address: '', phone: '', footer: 'Thank you for shopping with us!',
-    paper_size: '80mm', show_logo: true, show_customer: true, show_cashier: true,
+    paper_size: 'A5', show_logo: true, show_customer: true, show_cashier: true,
     show_foc: true, auto_print: false,
 };
 
@@ -12,6 +12,9 @@ export default function ReceiptPaper({ order, settings = {} }) {
     const t = usePhraseTranslation();
     const receipt = { ...receiptDefaults, ...settings.receipt };
     const isSheet = ['A4', 'A5'].includes(receipt.paper_size);
+    const isA5 = receipt.paper_size === 'A5';
+    const is80mm = receipt.paper_size === '80mm';
+    const isOrderPaper = isA5 || is80mm;
     const tender = order.pos_tender_summary?.tender_type || order.payment_method;
     const cashPayment = order.payments?.find((payment) => payment.tender_type === 'cash');
     const payment = order.payments?.[0];
@@ -20,21 +23,49 @@ export default function ReceiptPaper({ order, settings = {} }) {
     const paymentReference = payment?.payment_details?.reference;
     const flashDiscount = order.items.reduce((sum, item) => sum + Number(item.promotion_snapshot?.discount_amount || 0), 0);
     const subtotalBeforeFlash = Number(order.total_amount || 0) + flashDiscount;
+    const shopName = receipt.shop_name || settings.app_name || 'LaLaPick';
+    const locationName = [order.location?.name, order.register?.code].filter(Boolean).join(' / ') || t('Warehouse sale');
+    const receiptDate = new Date(order.created_at).toLocaleString();
     return <section className="pos-receipt-paper" data-paper={receipt.paper_size}>
         <header>
-            {isSheet && <p className="receipt-document-title">{t('Sales receipt')}</p>}
-            {receipt.show_logo && settings.logo_url && <img className="receipt-logo" src={settings.logo_url} alt="" />}
-            <h2>{receipt.shop_name || settings.app_name || 'LaLaPick'}</h2>
-            {receipt.address && <p className="receipt-multiline">{receipt.address}</p>}
-            {receipt.phone && <p>{receipt.phone}</p>}
-            <p>{[order.location?.name, order.register?.code].filter(Boolean).join(' / ') || t('Warehouse sale')}</p>
-            <strong>{order.receipt_number}</strong>
-            <span>{new Date(order.created_at).toLocaleString()}</span>
-            {receipt.show_customer && <span>{t('Customer')}: {order.user?.name || t('Walk-in customer')}</span>}
+            {isOrderPaper ? <>
+                <div className="receipt-a5-brand">
+                    <div className="receipt-a5-identity">
+                        {receipt.show_logo && settings.logo_url && <img className="receipt-logo" src={settings.logo_url} alt="" />}
+                        <h2>{shopName}</h2>
+                    </div>
+                    <div className="receipt-a5-contacts">
+                        {receipt.address && <p className="receipt-multiline">{receipt.address}</p>}
+                        {receipt.phone && <p>{receipt.phone}</p>}
+                    </div>
+                </div>
+                <div className="receipt-a5-details">
+                    <div>
+                        <strong>{t('Customer')}</strong>
+                        {receipt.show_customer && <span>{order.user?.name || t('Walk-in customer')}</span>}
+                        <span>{locationName}</span>
+                    </div>
+                    <div>
+                        <strong>{t('Sales receipt')}</strong>
+                        <span>{order.receipt_number}</span>
+                        <span>{receiptDate}</span>
+                    </div>
+                </div>
+                <div className="receipt-order-payment"><strong>{t('Tender')}:</strong> <span>{tender === 'mmqr' ? 'MMQR (Pay)' : t(tender || 'cash')}</span></div>
+            </> : <>
+                {isSheet && <p className="receipt-document-title">{t('Sales receipt')}</p>}
+                {receipt.show_logo && settings.logo_url && <img className="receipt-logo" src={settings.logo_url} alt="" />}
+                <h2>{shopName}</h2>
+                {receipt.address && <p className="receipt-multiline">{receipt.address}</p>}
+                {receipt.phone && <p>{receipt.phone}</p>}
+                <p>{locationName}</p>
+                <div className="receipt-meta-line"><strong>{order.receipt_number}</strong><span>{receiptDate}</span></div>
+                {receipt.show_customer && <span>{t('Customer')}: {order.user?.name || t('Walk-in customer')}</span>}
+            </>}
         </header>
-        {isSheet ? <div className="receipt-line-items" role="region" aria-label={t('Receipt line items')}>
+        {isOrderPaper || isSheet ? <div className="receipt-line-items" role="region" aria-label={t('Receipt line items')}>
             <table className="receipt-a4-items">
-                <colgroup><col style={{ width: '43%' }} /><col style={{ width: '11%' }} /><col style={{ width: '22%' }} /><col style={{ width: '24%' }} /></colgroup>
+                <colgroup><col style={{ width: is80mm ? '39%' : isA5 ? '40%' : '43%' }} /><col style={{ width: is80mm ? '10%' : isA5 ? '9%' : '11%' }} /><col style={{ width: is80mm ? '24%' : isA5 ? '24%' : '22%' }} /><col style={{ width: is80mm ? '27%' : isA5 ? '27%' : '24%' }} /></colgroup>
                 <thead><tr>{['Item description', 'Qty', 'Unit price', 'Amount'].map((label) => <th scope="col" key={label}>{t(label)}</th>)}</tr></thead>
                 <tbody>{order.items.map((item, index) => <tr key={item.id}>
                     <td><strong>{index + 1}. {item.product?.name || t('Product')}</strong>
@@ -88,10 +119,10 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 <span>{t('Due date')}</span><strong>{order.credit_due_date || '-'}</strong>
             </>}
         </div>
-        <footer>
+        {(!isA5 || order.order_notes || receipt.show_cashier) && <footer>
             {order.order_notes && <p className="receipt-multiline">{t('Note')}: {order.order_notes}</p>}
-            {receipt.show_cashier && <span>{t('Served by')} {order.server?.name || t('Staff')}</span>}
-            {receipt.footer && <p className="receipt-multiline">{receipt.footer}</p>}
-        </footer>
+            {receipt.show_cashier && !is80mm && <span>{t('Served by')} {order.server?.name || t('Staff')}</span>}
+            {!isA5 && receipt.footer && <p className="receipt-multiline">{receipt.footer}</p>}
+        </footer>}
     </section>;
 }

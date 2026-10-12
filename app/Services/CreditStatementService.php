@@ -35,8 +35,9 @@ class CreditStatementService
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml(view('credit.statement', $data)->render());
-        $dompdf->setPaper('A4');
+        $paperSize = app(AppSettingsService::class)->all()['receipt']['paper_size'] ?? 'A5';
+        $dompdf->loadHtml(view('credit.statement', $data + ['paperSize' => $paperSize])->render());
+        $dompdf->setPaper($paperSize === '80mm' ? [0, 0, 226.77, 841.89] : 'A5');
         $dompdf->render();
         return $dompdf->output();
     }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Head, router } from '@/spa/router';
+import { Head, router, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import AdminPagination from '@/Components/Admin/AdminPagination';
@@ -81,6 +81,8 @@ function BarcodeLabel({ product }) {
 
 export default function Barcodes({ products, categories, filters, app_base }) {
     const t = usePhraseTranslation();
+    const { app_settings = {} } = usePage().props;
+    const printPaper = app_settings.receipt?.paper_size === '80mm' ? '80mm' : 'A5';
     const regularFont = routeWithBase('/fonts/Padauk-Regular.ttf', app_base);
     const boldFont = routeWithBase('/fonts/Padauk-Bold.ttf', app_base);
     const productRows = products.data || [];
@@ -191,6 +193,7 @@ export default function Barcodes({ products, categories, filters, app_base }) {
             <Head title={t('Barcode Printing')} />
             <style>{`@font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(regularFont)}) format('truetype'); font-style: normal; font-weight: 400; font-display: block; }
                 @font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(boldFont)}) format('truetype'); font-style: normal; font-weight: 700; font-display: block; }`}</style>
+            <style>{`@media print { @page { size: ${printPaper === 'A5' ? 'A5' : '80mm 297mm'}; margin: ${printPaper === 'A5' ? '5mm' : '0'}; } body.barcode-print-mode .barcode-print-sheet { width: ${printPaper === 'A5' ? '100mm' : '50mm'}; grid-template-columns: repeat(${printPaper === 'A5' ? '2' : '1'}, 50mm); } }`}</style>
 
             <section className="panel glass no-print barcode-list-panel">
                 <PanelHeading
