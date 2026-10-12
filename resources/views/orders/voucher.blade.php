@@ -283,7 +283,7 @@
         .items th:nth-child(4) { width: 27%; }
         .totals { width: 100%; }
         @media print {
-            .sheet { width: 72mm; max-width: 72mm; padding: 0; }
+            .sheet { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 0; }
             .header { display: grid; border-bottom-style: dashed; }
             .brand, .shop-contacts { width: 100%; }
             .grid { display: table; }

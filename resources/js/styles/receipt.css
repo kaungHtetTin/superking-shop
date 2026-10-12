@@ -168,11 +168,15 @@
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='A5'] footer { margin-top: 3px; padding-top: 0; }
 }
 @media print {
-    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] { width: 72mm; max-width: 72mm; padding: 0; font-size: 11px; line-height: 1.25; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 0; font-size: 11px; line-height: 1.25; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] header { display: block; padding: 0 0 3px; border-bottom: 1px dashed #000; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] h2 { font-size: 13px; line-height: 1.3; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-logo { max-height: 40px; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-80-meta span { font-size: 10px !important; line-height: 1.25 !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a5-details strong,
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a5-details span,
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-order-payment strong,
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-order-payment span { font-size: 11px !important; line-height: 1.3 !important; font-weight: 700; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-80-items table { border: 0; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-80-items th,
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-80-items td { border: 0 !important; border-bottom: 1px dashed #000 !important; padding: 2px 1px; font-size: 9px !important; line-height: 1.2 !important; }
@@ -223,7 +227,7 @@
 .pos-receipt-paper:is([data-paper='A5'], [data-paper='80mm']) .receipt-line-items { margin: 2px 0; }
 @media print {
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='A5'] .receipt-shop-name { font-size: 12px; line-height: 1.15; }
-    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-shop-name { font-size: 9px; line-height: 1.15; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-shop-name { font-size: 10px; line-height: 1.2; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='A5'] .receipt-a5-brand { grid-template-columns: minmax(0, 34%) minmax(0, 66%); gap: 4px; }
     body.pos-receipt-print-mode .pos-receipt-paper:is([data-paper='A5'], [data-paper='80mm']) .receipt-a5-contacts p { margin: 0; font-size: 10px; line-height: 1.17; white-space: pre-line; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a5-contacts p { font-size: 9px; line-height: 1.15; }
@@ -236,10 +240,10 @@
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items th,
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items td { border: 1px solid #000 !important; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items th,
-    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items td { font-size: 9px !important; padding: 2px 1px; line-height: 1.2 !important; }
-    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items span { font-size: 8px !important; line-height: 1.2 !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items td { font-size: 10px !important; padding: 2px 1px; line-height: 1.25 !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-a4-items span { font-size: 9px !important; line-height: 1.2 !important; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-totals { width: 100%; grid-template-columns: 40% 60%; gap: 0; border: 1px solid #000; padding: 0; }
-    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-totals > * { min-width: 0; padding: 2px; border-bottom: 1px solid #000; }
+    body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-totals > * { min-width: 0; padding: 2px; border-bottom: 1px solid #000; font-size: 11px !important; line-height: 1.3 !important; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-totals > :nth-child(2n) { border-left: 1px solid #000; overflow-wrap: anywhere; }
     body.pos-receipt-print-mode .pos-receipt-paper[data-paper='80mm'] .receipt-totals > :nth-last-child(-n+2) { border-bottom: 0; }
 }
