@@ -6,7 +6,6 @@ import AdminPagination from '@/Components/Admin/AdminPagination';
 import { FilterVisibilityControl, PanelHeading } from '@/Components/Admin/shared';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
-import { formatMoney } from '@/Utils/pricing';
 
 const code128Patterns = [
     '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213',
@@ -22,7 +21,7 @@ const code128Patterns = [
     '114131', '311141', '411131', '211412', '211214', '211232', '2331112',
 ];
 
-const money = formatMoney;
+const money = (value) => `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} MMK`;
 
 function code128Values(value) {
     const text = String(value || '');

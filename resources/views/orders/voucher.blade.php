@@ -1,7 +1,7 @@
 @php
     $appName = $settings['app_name'] ?? config('app.name', 'LaLaPick');
     $contacts = $settings['contacts'] ?? [];
-    $currencyLabel = trim($settings['currency_label'] ?? 'MMK');
+    $currencyLabel = 'MMK';
     $checkoutDiscount = max(0, (float) ($order->discount_amount ?? 0) - (float) ($order->admin_discount_amount ?? 0));
     $adminDiscount = (float) ($order->admin_discount_amount ?? 0);
     $formatMoney = fn ($value) => trim(rtrim(rtrim(number_format((float) $value, 2), '0'), '.').' '.$currencyLabel);
@@ -99,7 +99,7 @@
         }
         .brand > div:last-child { display: inline-block; vertical-align: middle; }
         h1, h2, h3, p { margin: 0; }
-        h1 { font-size: 24px; font-weight: 900; }
+        h1 { font-size: 18px; font-weight: 900; }
         h2 { font-size: 22px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
         h3 { font-size: 16px; text-transform: uppercase; letter-spacing: .08em; color: #000; margin-bottom: 5px; }
         .muted { color: #000; }
@@ -199,7 +199,7 @@
             text-transform: capitalize;
         }
         @media screen and (max-width: 640px) {
-            body { font-size: 12px; background: #fff; }
+            body { font-size: 16px; background: #fff; }
             .sheet,
             .top-actions { width: calc(100% - 24px); margin-left: 12px; margin-right: 12px; }
             .sheet { min-height: 0; padding: 18px; margin-top: 12px; overflow: hidden; }
@@ -215,9 +215,14 @@
             .grid > .box { display: block; width: 100%; }
             .grid > .box:first-child { border-right: 0; margin-bottom: 10px; }
             .grid > .box:last-child { padding-left: 0; }
-            .items { font-size: 10px; }
-            .items th,
-            .items td { padding: 5px 3px; }
+            .items { font-size: 16px; }
+            .items thead { display: none; }
+            .items, .items tbody, .items tr, .items td { display: block; width: 100%; }
+            .items tr { border-bottom: 1px solid #000; padding: 8px 0; }
+            .items tr:last-child { border-bottom: 0; }
+            .items td { padding: 3px 0; }
+            .items .num { text-align: left; white-space: normal; }
+            .items .num::before { content: attr(data-label) ': '; font-weight: 700; }
             .totals { width: 100%; float: none; }
             .footer .footer-copy { margin-right: 0; padding-top: 8px; }
             .footer .qr { width: 100%; float: none; }
@@ -266,7 +271,7 @@
         .header > .invoice-meta { display: table-cell; width: 38%; }
         .brand img { width: 38px; height: auto; max-height: 30px; border-radius: 0; }
         .brand-mark { width: 30px; height: 30px; line-height: 30px; font-size: 13px; }
-        h1 { font-size: 24px; line-height: 1.3; }
+        h1 { font-size: 18px; line-height: 1.3; }
         h2 { font-size: 22px; }
         h3 { font-size: 16px; }
         .status { padding: 1px 6px; }
@@ -361,9 +366,9 @@
                                 @if($item->foc_quantity > 0) - FOC: {{ $item->foc_quantity }} {{ $item->focUnit?->name }} @endif
                             </div>
                         </td>
-                        <td class="num">{{ $item->quantity }}</td>
-                        <td class="num">{{ $formatMoney($item->unit_price) }}</td>
-                        <td class="num">{{ $formatMoney($item->total_price) }}</td>
+                        <td class="num" data-label="Qty">{{ $item->quantity }}</td>
+                        <td class="num" data-label="Unit price">{{ $formatMoney($item->unit_price) }}</td>
+                        <td class="num" data-label="Amount">{{ $formatMoney($item->total_price) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -430,7 +435,7 @@
             <div class="footer-copy">
                 <h3>Thank you</h3>
                 <p class="muted">Scan the QR code to open the public invoice link.</p>
-                <p style="word-break: break-all; font-size: 12px;">{{ $publicUrl }}</p>
+                <p style="word-break: break-all; font-size: 14px;">{{ $publicUrl }}</p>
             </div>
         </footer>
         </div>

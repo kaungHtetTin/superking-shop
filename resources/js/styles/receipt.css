@@ -79,7 +79,7 @@
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items td { font-size: 17px !important; line-height: 1.5 !important; }
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items span { font-size: 16px !important; }
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items td:nth-child(n+2) { font-weight: 700; }
-    body.pos-receipt-print-mode .pos-receipt-paper h2 { font-size: 28px; line-height: 1.4; }
+    body.pos-receipt-print-mode .pos-receipt-paper h2 { font-size: 18px; line-height: 1.4; }
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-document-title { font-size: 17px; }
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-item-heading strong { font-size: 18px; }
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items th,

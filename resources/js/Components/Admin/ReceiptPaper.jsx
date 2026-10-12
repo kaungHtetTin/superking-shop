@@ -1,5 +1,6 @@
 import { usePhraseTranslation } from '@/Utils/i18n';
-import { formatMoney } from '@/Utils/pricing';
+
+const formatMoney = (value) => `${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} MMK`;
 
 export const receiptDefaults = {
     shop_name: '', address: '', phone: '', footer: 'Thank you for shopping with us!',

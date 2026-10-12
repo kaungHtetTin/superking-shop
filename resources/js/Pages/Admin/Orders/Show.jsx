@@ -174,15 +174,15 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                             />
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            <a href={voucherLinks.print} target="_blank" rel="noopener noreferrer" className="btn secondary" style={{ minHeight: 32, fontSize: 11 }}>
+                            <a href={voucherLinks.print} target="_blank" rel="noopener noreferrer" className="btn secondary" style={{ minHeight: 38, fontSize: 13 }}>
                                 <Icon name="receipt" size={13} />
                                 {t('Print voucher')}
                             </a>
-                            <a href={voucherLinks.pdf} className="btn primary" style={{ minHeight: 32, fontSize: 11 }}>
+                            <a href={voucherLinks.pdf} className="btn primary" style={{ minHeight: 38, fontSize: 13 }}>
                                 <Icon name="external" size={13} />
                                 PDF
                             </a>
-                            <button type="button" className="btn secondary" style={{ minHeight: 32, fontSize: 11 }} onClick={copyPublicLink}>
+                            <button type="button" className="btn secondary" style={{ minHeight: 38, fontSize: 13 }} onClick={copyPublicLink}>
                                 <Icon name="external" size={13} />
                                 {linkCopied ? t('Copied') : t('Public link')}
                             </button>
