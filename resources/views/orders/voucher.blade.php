@@ -34,6 +34,7 @@
             color: #000;
             font-family: 'Voucher Padauk', Arial, sans-serif;
             font-size: 12px;
+            font-weight: 700;
             line-height: 1.3;
         }
         .sheet {
@@ -64,25 +65,26 @@
         }
         .top-actions .primary { background: {{ $settings['theme_color'] ?? '#087f74' }}; border-color: {{ $settings['theme_color'] ?? '#087f74' }}; color: #fff; }
         .header {
-            display: table;
+            display: grid;
+            grid-template-columns: minmax(0, 34%) minmax(0, 66%);
+            gap: 0 4px;
             width: 100%;
-            table-layout: fixed;
             border-bottom: 1px solid #000;
             padding-bottom: 4px;
         }
         .brand {
-            display: table-cell;
-            width: 42%;
+            min-width: 0;
             vertical-align: top;
         }
-        .shop-contacts { display: table-cell; width: 58%; vertical-align: top; overflow-wrap: anywhere; }
+        .shop-contacts { min-width: 0; text-align: right; vertical-align: top; overflow-wrap: anywhere; }
+        .shop-title { display: block; width: max-content; max-width: none; font-size: 12px; line-height: 1.15; letter-spacing: -.02em; white-space: nowrap; overflow-wrap: normal; }
         .brand img {
             width: 70px;
             height: 70px;
             object-fit: contain;
             border-radius: 0;
             display: block;
-            margin-bottom: 4px;
+            margin-bottom: 0;
         }
         .brand-mark {
             width: 70px;
@@ -216,9 +218,8 @@
             .top-actions { margin-top: 12px; }
             .top-actions button,
             .top-actions a { width: calc(50% - 6px); min-height: 44px; text-align: center; margin-left: 0; }
-            .header { display: table; width: 100%; }
-            .header > .brand { display: table-cell; width: 42%; }
-            .header > .shop-contacts { display: table-cell; width: 58%; }
+            .header { display: grid; width: 100%; }
+            .header > .brand, .header > .shop-contacts { width: auto; }
             .invoice-meta { text-align: left; }
             h2 { text-align: left; }
             .grid { display: table; width: 100%; }
@@ -265,8 +266,9 @@
         }
         @if($paperSize === '80mm')
         .sheet { width: 80mm; min-height: 0; padding: 4mm; }
-        .header { display: block; text-align: center; padding-bottom: 3px; border-bottom-style: dashed; }
-        .brand, .shop-contacts { display: block; width: 100%; text-align: center; }
+        .header { grid-template-columns: 1fr; text-align: center; padding-bottom: 3px; border-bottom-style: dashed; }
+        .brand, .shop-contacts { width: 100%; text-align: center; }
+        .shop-title { margin: 0 auto; font-size: 9px; text-align: center; }
         .brand img, .brand-mark { width: 42px; height: 42px; margin: 0 auto 2px; }
         .brand-mark { line-height: 42px; }
         .grid { margin-top: 3px; }
@@ -282,8 +284,8 @@
         .totals { width: 100%; }
         @media print {
             .sheet { width: 72mm; max-width: 72mm; padding: 0; }
-            .header { display: block; border-bottom-style: dashed; }
-            .brand, .shop-contacts { display: block; width: 100%; }
+            .header { display: grid; border-bottom-style: dashed; }
+            .brand, .shop-contacts { width: 100%; }
             .grid { display: table; }
             .grid > .box { display: table-cell; width: 50%; }
             .items th, .items td { font-size: 9px; }
@@ -309,6 +311,7 @@
             background: #fff;
             font-family: 'Padauk', 'DejaVu Sans', sans-serif;
             font-size: 12px;
+            font-weight: 700;
             line-height: 1.25;
         }
         .no-print { display: none !important; }
@@ -319,9 +322,10 @@
             padding: 0;
             border: 0;
         }
-        .header { display: table; width: 100%; padding-top: 0; padding-bottom: 3px; }
-        .header > .brand { display: table-cell; width: 42%; }
-        .header > .shop-contacts { display: table-cell; width: 58%; }
+        .header { display: block; width: 100%; padding-top: 0; padding-bottom: 3px; }
+        .header > .brand { display: inline-block; width: 34%; }
+        .header > .shop-contacts { display: inline-block; width: 66%; }
+        .header > .shop-title { display: block; width: 100%; }
         .brand img { width: 70px; height: auto; max-height: 70px; border-radius: 0; }
         .brand-mark { width: 70px; height: 70px; line-height: 70px; font-size: 24px; }
         h1 { font-size: 18px; line-height: 1.3; }
@@ -360,9 +364,7 @@
                 @else
                     <div class="brand-mark">{{ strtoupper(substr($appName, 0, 1)) }}</div>
                 @endif
-                <div>
-                    <h1>{{ $appName }}</h1>
-                </div>
+                <h1 class="shop-title">{{ $appName }}</h1>
             </div>
             <div class="shop-contacts">
                 <p>

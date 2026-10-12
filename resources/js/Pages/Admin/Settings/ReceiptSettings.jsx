@@ -44,7 +44,7 @@ export default function ReceiptSettings({ form, settings, logoUrl }) {
                     {form.errors['receipt.paper_size'] && <small className="field-error">{form.errors['receipt.paper_size']}</small>}
                 </label>
                 <fieldset className="receipt-options"><legend>{t('Receipt options')}</legend>
-                    {Object.entries({ show_logo: 'Show brand logo', show_customer: 'Show customer', show_cashier: 'Show cashier', show_foc: 'Show FOC details', auto_print: 'Print automatically after completing a sale' }).map(([key, label]) =>
+                    {Object.entries({ show_logo: 'Show brand logo', show_customer: 'Show customer', show_foc: 'Show FOC details', auto_print: 'Print automatically after completing a sale' }).map(([key, label]) =>
                         <div key={key}><label><input type="checkbox" checked={receipt[key]} onChange={(e) => set(key, e.target.checked)} />{t(label)}</label>
                             {form.errors[`receipt.${key}`] && <small className="field-error">{form.errors[`receipt.${key}`]}</small>}
                         </div>)}

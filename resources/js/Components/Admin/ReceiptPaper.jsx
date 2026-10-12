@@ -32,7 +32,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 <div className="receipt-a5-brand">
                     <div className="receipt-a5-identity">
                         {receipt.show_logo && settings.logo_url && <img className="receipt-logo" src={settings.logo_url} alt="" />}
-                        <h2>{shopName}</h2>
+                        <h2 className="receipt-shop-name">{shopName}</h2>
                     </div>
                     <div className="receipt-a5-contacts">
                         {receipt.address && <p className="receipt-multiline">{receipt.address}</p>}
@@ -69,9 +69,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 <thead><tr>{['Item description', 'Qty', 'Unit price', 'Amount'].map((label) => <th scope="col" key={label}>{t(label)}</th>)}</tr></thead>
                 <tbody>{order.items.map((item, index) => <tr key={item.id}>
                     <td><strong>{index + 1}. {item.product?.name || t('Product')}</strong>
-                        {item.product?.code && <span>{item.product.code}</span>}
-                        <span>{item.unit_name || item.unit?.name || t('unit')}</span>
-                        <span>{t(String(item.price_type || 'retail').replaceAll('_', ' '))}</span>
+                        <span>{[item.product?.code, item.unit_name || item.unit?.name || t('unit'), t(String(item.price_type || 'retail').replaceAll('_', ' '))].filter(Boolean).join(' · ')}</span>
                         {item.promotion_snapshot?.type === 'flash_sale' && <span className="receipt-flash-sale">
                             {t('Flash sale')}{item.promotion_snapshot.name ? `: ${item.promotion_snapshot.name}` : ''} · {formatMoney(item.promotion_snapshot.regular_unit_price)} → {formatMoney(item.promotion_snapshot.sale_unit_price)} · {t('Saved')} {formatMoney(item.promotion_snapshot.discount_amount)}
                         </span>}
@@ -119,9 +117,8 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 <span>{t('Due date')}</span><strong>{order.credit_due_date || '-'}</strong>
             </>}
         </div>
-        {(!isA5 || order.order_notes || receipt.show_cashier) && <footer>
+        {(order.order_notes || (!isA5 && receipt.footer)) && <footer>
             {order.order_notes && <p className="receipt-multiline">{t('Note')}: {order.order_notes}</p>}
-            {receipt.show_cashier && !is80mm && <span>{t('Served by')} {order.server?.name || t('Staff')}</span>}
             {!isA5 && receipt.footer && <p className="receipt-multiline">{receipt.footer}</p>}
         </footer>}
     </section>;
