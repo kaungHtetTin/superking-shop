@@ -15,15 +15,25 @@
         <link rel="icon" href="{{ $settings['favicon_url'] }}">
     @endif
     <style>
+        @font-face {
+            font-family: 'Voucher Padauk';
+            src: url('{{ asset('fonts/Padauk-Regular.ttf') }}') format('truetype');
+            font-weight: 400;
+        }
+        @font-face {
+            font-family: 'Voucher Padauk';
+            src: url('{{ asset('fonts/Padauk-Bold.ttf') }}') format('truetype');
+            font-weight: 700;
+        }
         @page { size: A5; margin: 8mm; }
         * { box-sizing: border-box; }
         body {
             margin: 0;
-            background: #eef3f1;
-            color: #172033;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 10.5px;
-            line-height: 1.35;
+            background: #fff;
+            color: #000;
+            font-family: 'Voucher Padauk', Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.45;
         }
         .sheet {
             width: 148mm;
@@ -31,7 +41,7 @@
             margin: 14px auto;
             background: #fff;
             padding: 8mm;
-            border: 1px solid #d7dfdc;
+            border: 0;
         }
         .top-actions {
             width: 148mm;
@@ -56,7 +66,7 @@
             display: table;
             width: 100%;
             table-layout: fixed;
-            border-bottom: 2px solid {{ $settings['theme_color'] ?? '#087f74' }};
+            border-bottom: 1px solid #000;
             padding-bottom: 10px;
         }
         .brand {
@@ -76,8 +86,9 @@
             width: 38px;
             height: 38px;
             border-radius: 6px;
-            background: {{ $settings['theme_color'] ?? '#087f74' }};
-            color: #fff;
+            background: #fff;
+            border: 1px solid #000;
+            color: #000;
             display: inline-block;
             vertical-align: middle;
             margin-right: 10px;
@@ -90,8 +101,8 @@
         h1, h2, h3, p { margin: 0; }
         h1 { font-size: 18px; font-weight: 900; }
         h2 { font-size: 16px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
-        h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: {{ $settings['theme_color'] ?? '#087f74' }}; margin-bottom: 5px; }
-        .muted { color: #667286; }
+        h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #000; margin-bottom: 5px; }
+        .muted { color: #000; }
         .invoice-meta { width: 42%; text-align: right; display: table-cell; vertical-align: top; }
         .invoice-meta > * { display: block; }
         .grid {
@@ -101,13 +112,14 @@
             margin-top: 12px;
         }
         .box {
-            border: 1px solid #dfe6e3;
-            border-radius: 6px;
-            padding: 8px;
+            border: 0;
+            border-radius: 0;
+            padding: 8px 0;
             min-height: 58px;
         }
         .grid > .box { display: table-cell; width: 50%; vertical-align: top; }
-        .grid > .box:first-child { border-right: 5px solid #fff; }
+        .grid > .box:first-child { padding-right: 12px; }
+        .grid > .box:last-child { padding-left: 12px; }
         .detail-row {
             display: table;
             width: 100%;
@@ -123,34 +135,34 @@
         }
         .items th {
             text-align: left;
-            background: #f1f5f3;
-            color: #667286;
+            background: #fff;
+            color: #000;
             font-size: 9px;
             letter-spacing: .07em;
             text-transform: uppercase;
-            border-top: 1px solid #dfe6e3;
-            border-bottom: 1px solid #dfe6e3;
+            border-top: 0;
+            border-bottom: 1px solid #000;
             padding: 6px;
         }
         .items td {
-            border-bottom: 1px solid #edf1ef;
+            border-bottom: 0;
             padding: 6px;
             vertical-align: top;
         }
         .items .num { text-align: right; white-space: nowrap; }
         .totals {
-            width: 58%;
-            float: right;
+            width: 100%;
+            float: none;
             margin-left: auto;
             margin-top: 10px;
-            border: 1px solid #dfe6e3;
-            border-radius: 6px;
-            padding: 7px 8px;
+            border-top: 1px solid #000;
+            border-radius: 0;
+            padding: 7px 0;
         }
         .total-final {
             margin-top: 5px;
             padding-top: 6px;
-            border-top: 1px solid #dfe6e3;
+            border-top: 1px solid #000;
             font-size: 12px;
             font-weight: 900;
         }
@@ -158,17 +170,17 @@
             clear: both;
             margin-top: 12px;
             width: 100%;
-            border-top: 1px solid #dfe6e3;
+            border-top: 0;
             padding-top: 9px;
             overflow: hidden;
         }
         .totals + .box { clear: both; }
-        .footer .footer-copy { margin-right: 92px; padding-top: 34px; }
+        .footer .footer-copy { margin-right: 92px; padding-top: 0; }
         .footer .qr { width: 82px; float: right; }
         .qr {
             text-align: center;
             font-size: 8px;
-            color: #667286;
+            color: #000;
         }
         .qr img {
             width: 68px;
@@ -178,15 +190,15 @@
         }
         .status {
             display: inline-block;
-            border-radius: 999px;
-            background: #e7f4ef;
-            color: {{ $settings['theme_color'] ?? '#087f74' }};
-            padding: 2px 7px;
+            border-radius: 0;
+            background: #fff;
+            color: #000;
+            padding: 2px 0;
             font-weight: 800;
             text-transform: capitalize;
         }
         @media screen and (max-width: 640px) {
-            body { font-size: 12px; background: #f6f3ed; }
+            body { font-size: 12px; background: #fff; }
             .sheet,
             .top-actions { width: calc(100% - 24px); margin-left: 12px; margin-right: 12px; }
             .sheet { min-height: 0; padding: 18px; margin-top: 12px; overflow: hidden; }
@@ -200,7 +212,8 @@
             h2 { text-align: left; }
             .grid,
             .grid > .box { display: block; width: 100%; }
-            .grid > .box:first-child { border-right: 1px solid #dfe6e3; margin-bottom: 10px; }
+            .grid > .box:first-child { border-right: 0; margin-bottom: 10px; }
+            .grid > .box:last-child { padding-left: 0; }
             .items { font-size: 10px; }
             .items th,
             .items td { padding: 5px 3px; }
@@ -211,8 +224,11 @@
             .qr img { margin-left: 0; }
         }
         @media print {
-            body { background: #fff; }
-            .sheet { margin: 0; border: 0; width: auto; min-height: auto; }
+            body { background: #fff; color: #000; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .sheet { margin: 0; border: 0; width: auto; min-height: auto; padding: 0; }
+            .sheet, .sheet * { color: #000 !important; opacity: 1 !important; text-shadow: none !important; }
+            .sheet img { filter: grayscale(1) contrast(1.5); }
+            .header, .grid, .items tr, .totals, .footer { break-inside: avoid; }
             .no-print { display: none !important; }
         }
     @if(!empty($pdf))
@@ -233,8 +249,8 @@
         body {
             background: #fff;
             font-family: 'Padauk', 'DejaVu Sans', sans-serif;
-            font-size: 9px;
-            line-height: 1.25;
+            font-size: 11px;
+            line-height: 1.45;
         }
         .no-print { display: none !important; }
         .sheet {
@@ -258,9 +274,9 @@
         .box { min-height: 48px; padding: 7px; }
         .items { margin-top: 10px; }
         .items th, .items td { padding: 5px; }
-        .totals { width: 58%; float: right; }
+        .totals { width: 100%; float: none; }
         .footer { width: 100%; }
-        .footer .footer-copy { margin-right: 92px; padding-top: 34px; }
+        .footer .footer-copy { margin-right: 92px; padding-top: 0; }
         .footer .qr { width: 82px; float: right; }
         @endif
     </style>
@@ -268,7 +284,7 @@
 <body>
     @if(empty($public))
         <div class="top-actions no-print">
-            <button type="button" onclick="window.print()">Print A5</button>
+            <button type="button" onclick="printVoucher()">Print A5</button>
             <a class="primary" href="{{ route('admin.orders.voucher.pdf', $order) }}">Download PDF</a>
         </div>
     @endif
@@ -412,18 +428,26 @@
             <div class="footer-copy">
                 <h3>Thank you</h3>
                 <p class="muted">Scan the QR code to open the public invoice link.</p>
-                <p style="word-break: break-all; font-size: 8.5px;">{{ $publicUrl }}</p>
+                <p style="word-break: break-all; font-size: 10px;">{{ $publicUrl }}</p>
             </div>
         </footer>
     </main>
-    @if(request()->routeIs('admin.orders.voucher.pdf'))
-        <script>
-            window.addEventListener('load', function () {
-                window.setTimeout(function () {
-                    window.print();
-                }, 150);
-            });
-        </script>
-    @endif
+    <script>
+        async function printVoucher() {
+            if (document.fonts) {
+                await Promise.all([
+                    document.fonts.load('400 11px "Voucher Padauk"', 'မြန်မာစာ'),
+                    document.fonts.load('700 11px "Voucher Padauk"', 'မြန်မာစာ'),
+                ].map((load) => load.catch(() => {})));
+            }
+            await Promise.all(Array.from(document.querySelectorAll('.sheet img')).map((image) =>
+                image.decode ? image.decode().catch(() => {}) : Promise.resolve()
+            ));
+            window.print();
+        }
+        @if(request()->routeIs('admin.orders.voucher.pdf'))
+            window.addEventListener('load', printVoucher);
+        @endif
+    </script>
 </body>
 </html>

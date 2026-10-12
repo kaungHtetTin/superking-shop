@@ -59,6 +59,16 @@
     body.pos-receipt-print-mode .pos-receipt-paper { margin: 0; border: 0; box-shadow: none; color: #000; background: #fff; font-family: 'Receipt Padauk', 'Noto Sans Myanmar', sans-serif; font-size: 12px; line-height: 1.5; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     body.pos-receipt-print-mode .pos-receipt-paper:is([data-paper='A4'], [data-paper='A5']) { font-size: 14px; }
     body.pos-receipt-print-mode .pos-receipt-paper * { color: #000 !important; opacity: 1 !important; text-shadow: none !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items,
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items th,
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items td { border: 0 !important; background: #fff !important; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items thead { border-bottom: 1px solid #000; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-thermal-item { border-bottom: 0; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-thermal-items { border-top: 1px solid #000; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-flash-detail { border: 0; padding-left: 0; background: #fff; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-totals { width: 100%; border-top: 1px solid #000; padding-top: 8px; }
+    body.pos-receipt-print-mode .pos-receipt-paper .receipt-grand-total { font-weight: 700; }
+    body.pos-receipt-print-mode .pos-receipt-paper footer { border-top: 0 !important; }
     body.pos-receipt-print-mode .pos-receipt-paper span,
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items th,
     body.pos-receipt-print-mode .pos-receipt-paper .receipt-a4-items td { font-size: 12px !important; line-height: 1.5 !important; }

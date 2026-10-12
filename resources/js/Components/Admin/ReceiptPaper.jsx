@@ -77,7 +77,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
             <span>{t('Subtotal')}</span><strong>{formatMoney(subtotalBeforeFlash)}</strong>
             {flashDiscount > 0 && <><span>{t('Flash sale discount')}</span><strong>-{formatMoney(flashDiscount)}</strong></>}
             <span>{t('Discount')}</span><strong>-{formatMoney(order.discount_amount || 0)}</strong>
-            <span>{t('Total')}</span><strong>{formatMoney(order.final_amount)}</strong>
+            <span className="receipt-grand-total">{t('Total')}</span><strong className="receipt-grand-total">{formatMoney(order.final_amount)}</strong>
             <span>{t('Tender')}</span><strong>{tender === 'mmqr' ? 'MMQR (Pay)' : t(tender || 'cash')}</strong>
             {tender === 'cash' && <><span>{t('Cash received')}</span><strong>{formatMoney(amountTendered)}</strong></>}
             {tender === 'cash' && <><span>{t('Change')}</span><strong>{formatMoney(changeDue)}</strong></>}
