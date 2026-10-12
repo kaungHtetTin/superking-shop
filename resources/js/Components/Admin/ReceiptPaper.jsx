@@ -33,19 +33,18 @@ export default function ReceiptPaper({ order, settings = {} }) {
         </header>
         {isSheet ? <div className="receipt-line-items" role="region" aria-label={t('Receipt line items')}>
             <table className="receipt-a4-items">
-                <colgroup><col style={{ width: '5%' }} /><col style={{ width: '29%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /></colgroup>
-                <thead><tr>{['#', 'Item description', 'Unit', 'Qty', 'Unit price', 'Amount'].map((label) => <th scope="col" key={label}>{t(label)}</th>)}</tr></thead>
+                <colgroup><col style={{ width: '43%' }} /><col style={{ width: '11%' }} /><col style={{ width: '22%' }} /><col style={{ width: '24%' }} /></colgroup>
+                <thead><tr>{['Item description', 'Qty', 'Unit price', 'Amount'].map((label) => <th scope="col" key={label}>{t(label)}</th>)}</tr></thead>
                 <tbody>{order.items.map((item, index) => <tr key={item.id}>
-                    <td>{index + 1}</td>
-                    <td><strong>{item.product?.name || t('Product')}</strong>
+                    <td><strong>{index + 1}. {item.product?.name || t('Product')}</strong>
                         {item.product?.code && <span>{item.product.code}</span>}
+                        <span>{item.unit_name || item.unit?.name || t('unit')}</span>
                         <span>{t(String(item.price_type || 'retail').replaceAll('_', ' '))}</span>
                         {item.promotion_snapshot?.type === 'flash_sale' && <span className="receipt-flash-sale">
                             {t('Flash sale')}{item.promotion_snapshot.name ? `: ${item.promotion_snapshot.name}` : ''} · {formatMoney(item.promotion_snapshot.regular_unit_price)} → {formatMoney(item.promotion_snapshot.sale_unit_price)} · {t('Saved')} {formatMoney(item.promotion_snapshot.discount_amount)}
                         </span>}
                         {receipt.show_foc && Number(item.foc_quantity || 0) > 0 && <span>{t('FOC')}: {item.foc_quantity} {item.foc_unit?.name || t('unit')} ({t('Free of charge')})</span>}
                     </td>
-                    <td>{item.unit_name || item.unit?.name || '-'}</td>
                     <td>{Number(item.quantity)}</td>
                     <td>{formatMoney(item.unit_price ?? (Number(item.quantity) > 0 ? Number(item.total_price) / Number(item.quantity) : 0))}</td>
                     <td>{formatMoney(item.total_price)}</td>

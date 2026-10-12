@@ -8677,6 +8677,10 @@
   body.barcode-print-mode .barcode-label span,
   body.barcode-print-mode .barcode-label small,
   body.barcode-print-mode .barcode-label b { color: #000 !important; opacity: 1 !important; }
+  body.barcode-print-mode .barcode-label strong { font-size: 10.5pt; line-height: 1.15; }
+  body.barcode-print-mode .barcode-label span { font-size: 10pt; line-height: 1.15; }
+  body.barcode-print-mode .barcode-label small,
+  body.barcode-print-mode .barcode-label b { font-size: 9pt; line-height: 1.15; }
   body.barcode-print-mode .barcode-svg { fill: #000 !important; }
 
   .pos-receipt-paper {

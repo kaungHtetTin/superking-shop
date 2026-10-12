@@ -32,7 +32,7 @@
             background: #fff;
             color: #000;
             font-family: 'Voucher Padauk', Arial, sans-serif;
-            font-size: 11px;
+            font-size: 16px;
             line-height: 1.45;
         }
         .sheet {
@@ -99,9 +99,9 @@
         }
         .brand > div:last-child { display: inline-block; vertical-align: middle; }
         h1, h2, h3, p { margin: 0; }
-        h1 { font-size: 18px; font-weight: 900; }
-        h2 { font-size: 16px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
-        h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #000; margin-bottom: 5px; }
+        h1 { font-size: 24px; font-weight: 900; }
+        h2 { font-size: 22px; text-align: right; letter-spacing: .08em; text-transform: uppercase; }
+        h3 { font-size: 16px; text-transform: uppercase; letter-spacing: .08em; color: #000; margin-bottom: 5px; }
         .muted { color: #000; }
         .invoice-meta { width: 42%; text-align: right; display: table-cell; vertical-align: top; }
         .invoice-meta > * { display: block; }
@@ -109,13 +109,13 @@
             display: table;
             width: 100%;
             table-layout: fixed;
-            margin-top: 12px;
+            margin-top: 8px;
         }
         .box {
             border: 0;
             border-radius: 0;
             padding: 8px 0;
-            min-height: 58px;
+            min-height: 0;
         }
         .grid > .box { display: table-cell; width: 50%; vertical-align: top; }
         .grid > .box:first-child { padding-right: 12px; }
@@ -131,30 +131,30 @@
         .items {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 12px;
+            margin-top: 8px;
         }
         .items th {
             text-align: left;
             background: #fff;
             color: #000;
-            font-size: 9px;
+            font-size: 14px;
             letter-spacing: .07em;
             text-transform: uppercase;
             border-top: 0;
             border-bottom: 1px solid #000;
-            padding: 6px;
+            padding: 4px;
         }
         .items td {
             border-bottom: 0;
-            padding: 6px;
+            padding: 4px;
             vertical-align: top;
         }
-        .items .num { text-align: right; white-space: nowrap; }
+        .items .num { text-align: right; white-space: nowrap; font-weight: 700; }
         .totals {
             width: 100%;
             float: none;
             margin-left: auto;
-            margin-top: 10px;
+            margin-top: 6px;
             border-top: 1px solid #000;
             border-radius: 0;
             padding: 7px 0;
@@ -163,23 +163,24 @@
             margin-top: 5px;
             padding-top: 6px;
             border-top: 1px solid #000;
-            font-size: 12px;
+            font-size: 18px;
             font-weight: 900;
         }
         .footer {
             clear: both;
-            margin-top: 12px;
+            margin-top: 6px;
             width: 100%;
             border-top: 0;
-            padding-top: 9px;
+            padding-top: 4px;
             overflow: hidden;
         }
+        .voucher-ending { break-inside: avoid; page-break-inside: avoid; }
         .totals + .box { clear: both; }
         .footer .footer-copy { margin-right: 92px; padding-top: 0; }
         .footer .qr { width: 82px; float: right; }
         .qr {
             text-align: center;
-            font-size: 8px;
+            font-size: 12px;
             color: #000;
         }
         .qr img {
@@ -249,7 +250,7 @@
         body {
             background: #fff;
             font-family: 'Padauk', 'DejaVu Sans', sans-serif;
-            font-size: 11px;
+            font-size: 16px;
             line-height: 1.45;
         }
         .no-print { display: none !important; }
@@ -265,9 +266,9 @@
         .header > .invoice-meta { display: table-cell; width: 38%; }
         .brand img { width: 38px; height: auto; max-height: 30px; border-radius: 0; }
         .brand-mark { width: 30px; height: 30px; line-height: 30px; font-size: 13px; }
-        h1 { font-size: 14px; line-height: 1.3; }
-        h2 { font-size: 14px; }
-        h3 { font-size: 9.5px; }
+        h1 { font-size: 24px; line-height: 1.3; }
+        h2 { font-size: 22px; }
+        h3 { font-size: 16px; }
         .status { padding: 1px 6px; }
         .grid { display: table; width: 100%; }
         .grid > .box { display: table-cell; width: 50%; }
@@ -368,6 +369,7 @@
             </tbody>
         </table>
 
+        <div class="voucher-ending">
         <section class="totals">
             <div class="detail-row">
                 <span>Subtotal</span>
@@ -428,9 +430,10 @@
             <div class="footer-copy">
                 <h3>Thank you</h3>
                 <p class="muted">Scan the QR code to open the public invoice link.</p>
-                <p style="word-break: break-all; font-size: 10px;">{{ $publicUrl }}</p>
+                <p style="word-break: break-all; font-size: 12px;">{{ $publicUrl }}</p>
             </div>
         </footer>
+        </div>
     </main>
     <script>
         async function printVoucher() {
