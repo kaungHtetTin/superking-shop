@@ -193,7 +193,7 @@ export default function Barcodes({ products, categories, filters, app_base }) {
             <Head title={t('Barcode Printing')} />
             <style>{`@font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(regularFont)}) format('truetype'); font-style: normal; font-weight: 400; font-display: block; }
                 @font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(boldFont)}) format('truetype'); font-style: normal; font-weight: 700; font-display: block; }`}</style>
-            <style>{`@media print { @page { size: ${printPaper === 'A5' ? 'A5' : '80mm 297mm'}; margin: ${printPaper === 'A5' ? '5mm' : '0'}; } body.barcode-print-mode .barcode-print-sheet { width: ${printPaper === 'A5' ? '100mm' : '50mm'}; grid-template-columns: repeat(${printPaper === 'A5' ? '2' : '1'}, 50mm); } }`}</style>
+            <style>{`@media print { @page { size: ${printPaper === 'A5' ? 'A5' : '80mm 297mm'}; margin: 0; } body.barcode-print-mode .barcode-print-sheet { width: ${printPaper === 'A5' ? '100mm' : '50mm'}; grid-template-columns: repeat(${printPaper === 'A5' ? '2' : '1'}, 50mm); grid-auto-rows: ${printPaper === 'A5' ? '40mm' : '36mm'}; } body.barcode-print-mode .barcode-label :is(strong, span, small, b) { font-size: ${printPaper === 'A5' ? '16px' : '14px'} !important; line-height: 1.2; } }`}</style>
 
             <section className="panel glass no-print barcode-list-panel">
                 <PanelHeading

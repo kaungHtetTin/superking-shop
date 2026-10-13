@@ -26,7 +26,7 @@
             src: url('{{ asset('fonts/Padauk-Bold.ttf') }}') format('truetype');
             font-weight: 700;
         }
-        @page { size: {{ $paperSize === 'A5' ? 'A5' : '80mm 297mm' }}; margin: {{ $paperSize === 'A5' ? '8mm' : '0' }}; }
+        @page { size: {{ $paperSize === 'A5' ? 'A5' : '80mm 297mm' }}; margin: 0; }
         * { box-sizing: border-box; }
         body {
             margin: 0;
@@ -242,25 +242,26 @@
             .qr img { margin-left: 0; }
         }
         @media print {
-            body { background: #fff; color: #000; font-size: 12px; line-height: 1.25; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            .sheet { margin: 0; border: 0; width: auto; min-height: auto; padding: 0; }
+            body { background: #fff; color: #000; font-size: 16px; line-height: 1.3; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .sheet { margin: 0; border: 0; width: 148mm; min-height: auto; padding: 8mm; }
             .sheet, .sheet * { color: #000 !important; opacity: 1 !important; text-shadow: none !important; }
             .sheet img { filter: grayscale(1) contrast(1.5); }
             .header { padding-bottom: 3px; }
+            .shop-title { font-size: 16px; line-height: 1.2; }
             .brand img { width: 52px; height: 52px; margin-bottom: 2px; }
             .grid { margin-top: 3px; }
             .grid > .box { padding-top: 2px; padding-bottom: 2px; }
-            h3 { font-size: 12px; margin-bottom: 1px; }
+            h3 { font-size: 16px; margin-bottom: 1px; }
             .invoice-meta { margin-bottom: 2px; }
-            .invoice-meta h2 { font-size: 12px; }
+            .invoice-meta h2 { font-size: 16px; }
             .detail-row { padding: 1px 0; }
             .items { margin-top: 3px; }
-            .items th { font-size: 10px; }
-            .items th, .items td { padding: 2px; overflow-wrap: anywhere; }
+            .items th { font-size: 16px; }
+            .items th, .items td { font-size: 16px; padding: 3px; overflow-wrap: anywhere; }
             .items .num { white-space: normal; }
             .totals { margin-top: 3px; }
             .totals .detail-row > span, .totals .detail-row > strong { padding: 2px; }
-            .total-final { font-size: 14px; }
+            .total-final { font-size: 16px; }
             .header, .grid, .items tr, .totals, .footer { break-inside: avoid; }
             .no-print { display: none !important; }
         }
@@ -283,12 +284,20 @@
         .items th:nth-child(4) { width: 27%; }
         .totals { width: 100%; }
         @media print {
+            body { font-size: 14px; }
             .sheet { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 0; }
+            .shop-title { width: auto; max-width: 100%; font-size: 14px; white-space: normal; overflow-wrap: anywhere; }
+            h3, .invoice-meta h2, .total-final { font-size: 14px; }
             .header { display: grid; border-bottom-style: dashed; }
             .brand, .shop-contacts { width: 100%; }
             .grid { display: table; }
             .grid > .box { display: table-cell; width: 50%; }
-            .items th, .items td { font-size: 9px; }
+            .items, .items tbody, .items tr, .items td { display: block; width: 100%; }
+            .items thead { display: none; }
+            .items tr { border-bottom: 1px solid #000; padding: 3px 0; }
+            .items td { border: 0; padding: 1px 0; font-size: 14px; text-align: left; }
+            .items td.num { display: flex; justify-content: space-between; gap: 6px; }
+            .items td.num::before { content: attr(data-label); flex: 0 0 auto; font-weight: 700; }
             .totals { width: 100%; }
         }
         @endif

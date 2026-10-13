@@ -41,7 +41,7 @@ export default function PosReceipt({ order }) {
         <Head title={order.receipt_number} />
         <style>{`@font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(regularFont)}) format('truetype'); font-style: normal; font-weight: 400; font-display: block; }
             @font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(boldFont)}) format('truetype'); font-style: normal; font-weight: 700; font-display: block; }
-            @media print { @page { size: ${paper === '80mm' ? '80mm 297mm' : isSheet ? paper : 'auto'}; margin: ${isSheet ? '8mm' : '0'}; } }`}</style>
+            @media print { @page { size: ${paper === '80mm' ? '80mm 297mm' : isSheet ? paper : 'auto'}; margin: 0; } }`}</style>
         <div className="sticky-toolbar no-print"><Link className="back-link" href={routeWithBase('/admin/pos', app_base)}>{t('Back to POS')}</Link></div>
         <ReceiptPaper order={order} settings={app_settings} />
     </AdminLayout>;

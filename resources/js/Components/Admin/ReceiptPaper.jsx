@@ -75,9 +75,9 @@ export default function ReceiptPaper({ order, settings = {} }) {
                         </span>}
                         {receipt.show_foc && Number(item.foc_quantity || 0) > 0 && <span>{t('FOC')}: {item.foc_quantity} {item.foc_unit?.name || t('unit')} ({t('Free of charge')})</span>}
                     </td>
-                    <td>{Number(item.quantity)}</td>
-                    <td>{formatMoney(item.unit_price ?? (Number(item.quantity) > 0 ? Number(item.total_price) / Number(item.quantity) : 0))}</td>
-                    <td>{formatMoney(item.total_price)}</td>
+                    <td data-label={t('Qty')}>{Number(item.quantity)}</td>
+                    <td data-label={t('Unit price')}>{formatMoney(item.unit_price ?? (Number(item.quantity) > 0 ? Number(item.total_price) / Number(item.quantity) : 0))}</td>
+                    <td data-label={t('Amount')}>{formatMoney(item.total_price)}</td>
                 </tr>)}</tbody>
             </table>
         </div> : <div className="receipt-thermal-items">{order.items.map((item) => {
