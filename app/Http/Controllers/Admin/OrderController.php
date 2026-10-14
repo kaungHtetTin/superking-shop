@@ -275,7 +275,7 @@ class OrderController extends Controller
 
         $retained = Order::query()->whereKey($order->id)->exists();
         $message = $retained
-            ? 'Sale cancelled. Payment history retained for audit; any refund due must still be paid.'
+            ? 'Sale cancelled. Stock and outstanding credit reversed; payment history retained for audit. Any refund due must still be paid.'
             : 'Order deleted. Stock and finance records were reversed.';
         if ($request->header('X-SPA') === 'true') {
             return response()->json(['deleted' => ! $retained, 'redirect' => route('admin.orders.index'), 'message' => $message]);

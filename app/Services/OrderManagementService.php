@@ -263,18 +263,13 @@ class OrderManagementService
 
     public function deleteOrderAsReturn(Order $order, ?User $actor = null, ?string $reason = null): void
     {
-        if ((float) $order->credit_amount > 0) {
-            throw ValidationException::withMessages([
-                'order' => 'Credit orders must be cancelled and retained for ledger audit; they cannot be deleted.',
-            ]);
-        }
         DB::transaction(function () use ($order, $actor, $reason) {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $order->load(['location', 'items.product', 'items.unit', 'items.focUnit', 'returns', 'user']);
 
-            // Paid sales must retain their payment/refund audit trail. A delete
-            // request returns/cancels the sale instead of erasing that evidence.
-            if ($order->payment_status === 'paid' || (float) $order->paid_amount > 0 || $order->payments()->exists()) {
+            // Credit sales and collected payments must retain their ledger and
+            // refund audit trail. The delete action cancels them instead.
+            if ((float) $order->credit_amount > 0 || $order->payment_status === 'paid' || (float) $order->paid_amount > 0 || $order->payments()->exists()) {
                 if ($order->status !== 'cancelled') {
                     $this->cancelOrder($order, $actor, $reason ?: 'Order returned by admin');
                 }

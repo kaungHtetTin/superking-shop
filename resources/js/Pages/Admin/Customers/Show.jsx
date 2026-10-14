@@ -152,7 +152,7 @@ export default function CustomerShow({ customer, stats, recentOrders, topCategor
                                 <span>{t('Payment method')}</span>
                                 <select value={creditPaymentForm.data.tender_type} onChange={(e) => creditPaymentForm.setData('tender_type', e.target.value)}>
                                     <option value="cash">{t('Cash')}</option>
-                                    <option value="card">{t('Card')}</option>
+                                    <option value="mmqr">MMQR (Pay)</option>
                                     <option value="mobile">{t('Mobile')}</option>
                                     <option value="bank_transfer">{t('Bank transfer')}</option>
                                 </select>

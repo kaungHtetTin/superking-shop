@@ -664,6 +664,40 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame(0.0, (float) $shift->fresh()->cash_sales);
     }
 
+    public function test_customer_credit_payment_accepts_mmqr_and_preserves_its_method_in_all_records(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $cashier = User::factory()->create(['role' => 'super_admin']);
+        $cashier->roles()->sync([\App\Models\Role::where('name', 'super_admin')->value('id')]);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $cashier);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'mmqr-credit-stock');
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 0,
+        ], $cashier);
+
+        $this->post('/admin/login', ['email' => $cashier->email, 'password' => 'password'])->assertRedirect();
+        $this->post("/admin/customers/{$customer->id}/credit-payments", [
+            'order_id' => $order->id,
+            'amount' => 4,
+            'tender_type' => 'mmqr',
+            'reference' => 'MMQR-CREDIT-TEST',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame('partially_paid', $order->fresh()->payment_status);
+        $this->assertEquals(4, $order->fresh()->paid_amount);
+        $this->assertEquals(6, $customer->creditTransactions()->sum('amount'));
+        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'tender_type' => 'mmqr', 'amount' => 4]);
+        $this->assertDatabaseHas('customer_credit_transactions', ['order_id' => $order->id, 'type' => 'payment', 'tender_type' => 'mmqr', 'amount' => -4]);
+        $this->assertDatabaseHas('financial_entries', ['reference' => 'MMQR-CREDIT-TEST', 'payment_method' => 'mmqr', 'amount' => 4]);
+    }
+
     public function test_account_credit_payment_is_allocated_to_oldest_due_invoices_first(): void
     {
         [$product, $piece] = $this->productWithUnits();
@@ -723,6 +757,64 @@ class ProductUnitArchitectureTest extends TestCase
         $this->assertSame('cancelled', $order->fresh()->payment_status);
         $this->assertSame(0.0, (float) $customer->creditTransactions()->latest()->first()->balance_after);
         $this->assertSame(5.0, (float) InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
+    }
+
+    public function test_delete_action_cancels_unpaid_credit_sale_without_erasing_ledger_or_restoring_stock_twice(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $admin);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'credit-delete-stock');
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 0,
+        ], $admin);
+
+        $this->actingAs($admin)->delete('/admin/orders/'.$order->id, ['reason' => 'Incorrect credit sale'], ['X-SPA' => 'true'])
+            ->assertOk()->assertJsonPath('deleted', false);
+
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertEquals(0, $customer->creditTransactions()->sum('amount'));
+        $this->assertDatabaseHas('customer_credit_transactions', ['order_id' => $order->id, 'type' => 'sale']);
+        $this->assertDatabaseHas('customer_credit_transactions', ['order_id' => $order->id, 'type' => 'reversal']);
+        $this->assertEquals(5, InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
+
+        app(OrderManagementService::class)->deleteOrderAsReturn($order->fresh(), $admin);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'cancelled']);
+        $this->assertSame(2, $customer->creditTransactions()->where('order_id', $order->id)->count());
+        $this->assertEquals(5, InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
+    }
+
+    public function test_delete_action_on_partially_paid_credit_sale_retains_deposit_and_creates_refund_due(): void
+    {
+        [$product, $piece] = $this->productWithUnits();
+        $location = $this->location();
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $customer = User::factory()->create(['role' => User::CUSTOMER_ROLE, 'credit_status' => 'active', 'credit_limit' => 100]);
+        $shift = $this->shift($location, $admin);
+        app(InventoryService::class)->receive($location, $product, 5, idempotencyKey: 'partial-credit-delete-stock');
+        $order = app(PosCheckoutService::class)->checkout([
+            'location_id' => $location->id,
+            'shift_id' => $shift->id,
+            'customer_id' => $customer->id,
+            'items' => [['product_unit_id' => $piece->id, 'quantity' => 1, 'price_type' => 'retail']],
+            'tender_type' => 'credit',
+            'amount_tendered' => 4,
+            'credit_deposit_method' => 'cash',
+        ], $admin);
+
+        app(OrderManagementService::class)->deleteOrderAsReturn($order, $admin, 'Returned credit sale');
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertEquals(0, $customer->creditTransactions()->sum('amount'));
+        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'amount' => 4, 'status' => 'paid']);
+        $this->assertDatabaseHas('financial_entries', ['reference' => 'order-refund:'.$order->id, 'category' => 'refund_payable', 'status' => 'pending', 'amount' => 4]);
+        $this->assertEquals(5, InventoryBalance::where('location_id', $location->id)->where('product_id', $product->id)->value('on_hand_qty'));
     }
 
     public function test_closed_shift_rejects_a_stale_sale_without_changing_stock(): void

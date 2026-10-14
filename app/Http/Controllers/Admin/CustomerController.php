@@ -322,7 +322,8 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'order_id' => ['nullable', 'integer', Rule::exists('orders', 'id')->where('user_id', $customer->id)],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'tender_type' => ['required', Rule::in(['cash', 'card', 'mobile', 'bank_transfer'])],
+            // Card is accepted only for an already-open legacy form; new UI offers MMQR instead.
+            'tender_type' => ['required', Rule::in(['cash', 'mmqr', 'card', 'mobile', 'bank_transfer'])],
             'reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);

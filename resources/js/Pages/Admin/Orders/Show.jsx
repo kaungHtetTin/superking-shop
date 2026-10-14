@@ -47,6 +47,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
     const displayStatus = statusOverride || order.status;
     const awaitingReview = order.payment_status === 'pending_review' && displayStatus !== 'cancelled';
     const isCancelled = displayStatus === 'cancelled';
+    const isCreditSale = Number(order.credit_amount || 0) > 0;
     const isDelivered = displayStatus === 'delivered';
     const stepActive = activeStepIndex(displayStatus, order.payment_status);
     const adminDiscountAmount = Number(order.admin_discount_amount || 0);
@@ -540,7 +541,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                         </button>
                     )}
 
-                    {canCancelOrders && (
+                    {canCancelOrders && !(isCancelled && isCreditSale) && (
                         <button
                             type="button"
                             className="btn danger full"
@@ -549,7 +550,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                             aria-busy={deleteForm.processing}
                         >
                             <Icon name="trash" size={14} />
-                            {deleteForm.processing ? t('Deleting...') : t('Delete & return stock')}
+                            {deleteForm.processing ? t('Deleting...') : t(isCreditSale ? 'Cancel credit sale & return stock' : 'Delete & return stock')}
                         </button>
                     )}
 
@@ -638,7 +639,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                             <div className="admin-form-modal-title">
                                 <span className="admin-form-title-icon"><Icon name="trash" size={16} /></span>
                                 <div>
-                                    <h2>{t('Delete order')}</h2>
+                                    <h2>{t(isCreditSale ? 'Cancel credit sale' : 'Delete order')}</h2>
                                 </div>
                             </div>
                             <button type="button" className="icon-btn small" onClick={() => setDeleteOpen(false)}>
@@ -647,7 +648,9 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                         </div>
                         <div className="crud-grid admin-form-grid admin-form-grid-single">
                             <p className="admin-form-notice">
-                                {t('Unpaid orders will be removed and reservations released. Paid sales will be cancelled and stock returned; payment history is retained. Any refund due must still be paid separately.')}
+                                {t(isCreditSale
+                                    ? 'Credit sale will be cancelled, stock returned and outstanding debt reversed. Payment history stays for audit; any collected amount must be refunded separately.'
+                                    : 'Unpaid orders will be removed and reservations released. Paid sales will be cancelled and stock returned; payment history is retained. Any refund due must still be paid separately.')}
                             </p>
                             <label className="form-field span-2">
                                 <span>{t('Reason (optional)')}</span>
@@ -662,7 +665,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                                 {t('Close')}
                             </button>
                             <button type="submit" className="btn danger" disabled={deleteForm.processing} aria-busy={deleteForm.processing}>
-                                {deleteForm.processing ? t('Deleting...') : t('Delete order')}
+                                {deleteForm.processing ? t('Deleting...') : t(isCreditSale ? 'Cancel credit sale' : 'Delete order')}
                             </button>
                         </div>
                     </form>
