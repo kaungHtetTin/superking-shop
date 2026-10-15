@@ -1151,6 +1151,8 @@ return [
         'Category strip' => 'Category strip',
         'Order detail' => 'Order detail',
         'Placed' => 'Placed',
+        'Receipt No.' => 'Receipt No.',
+        'POS/RCT no., name, email or phone' => 'POS/RCT no., name, email or phone',
         'Print voucher' => 'Print voucher',
         'Copied' => 'Copied',
         'Public link' => 'Public link',

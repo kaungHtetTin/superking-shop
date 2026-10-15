@@ -1151,6 +1151,8 @@ return [
         'Category strip' => 'အမျိုးအစားတန်း',
         'Order detail' => 'အော်ဒါအသေးစိတ်',
         'Placed' => 'တင်ထားချိန်',
+        'Receipt No.' => 'ဘောက်ချာအမှတ်',
+        'POS/RCT no., name, email or phone' => 'POS/RCT အမှတ်၊ အမည်၊ အီးမေးလ် သို့မဟုတ် ဖုန်း',
         'Print voucher' => 'ဗောက်ချာပရင့်ထုတ်ရန်',
         'Copied' => 'ကူးယူပြီး',
         'Public link' => 'အများပြည်သူလင့်ခ်',

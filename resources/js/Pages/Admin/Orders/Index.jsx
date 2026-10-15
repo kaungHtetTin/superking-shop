@@ -114,7 +114,7 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                     <input
                         autoFocus={autoFocus}
                         type="search"
-                        placeholder={t('Order #, name, email or phone')}
+                        placeholder={t('POS/RCT no., name, email or phone')}
                         value={filterState.q}
                         onChange={(event) => setFilterState((current) => ({ ...current, q: event.target.value }))}
                     />
@@ -284,6 +284,7 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                                     >
                                         <td>
                                             <strong>{order.order_number}</strong>
+                                            {order.receipt_number && <small>{t('Receipt No.')}: {order.receipt_number}</small>}
                                             <small title={order.created_at}>{formatOrderDate(order.created_at)}</small>
                                         </td>
                                         <td>

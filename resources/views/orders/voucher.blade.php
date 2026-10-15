@@ -6,12 +6,14 @@
     $checkoutDiscount = max(0, (float) ($order->discount_amount ?? 0) - (float) ($order->admin_discount_amount ?? 0));
     $adminDiscount = (float) ($order->admin_discount_amount ?? 0);
     $formatMoney = fn ($value) => trim(rtrim(rtrim(number_format((float) $value, 2), '0'), '.').' '.$currencyLabel);
+    $isPosReceipt = $order->sales_channel === 'pos' && filled($order->receipt_number);
+    $voucherNumber = $isPosReceipt ? $order->receipt_number : $order->order_number;
 @endphp
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Invoice {{ $order->order_number }}</title>
+    <title>{{ $isPosReceipt ? 'Sales receipt' : 'Invoice' }} {{ $voucherNumber }}</title>
     @if(!empty($settings['favicon_url']))
         <link rel="icon" href="{{ $settings['favicon_url'] }}">
     @endif
@@ -110,6 +112,7 @@
         .invoice-meta { width: 100%; text-align: left; display: block; }
         .invoice-meta > * { display: block; }
         .invoice-meta h2 { text-align: left; font-size: 12px; }
+        .invoice-meta .secondary-reference { font-size: .85em; }
         .invoice-meta { margin-bottom: 2px; }
         .invoice-meta .status { padding: 0; }
         .payment-line { margin-top: 1px; display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 0; align-items: baseline; }
@@ -399,8 +402,11 @@
             </div>
             <div class="box">
                 <div class="invoice-meta">
-                    <h2>Invoice</h2>
-                    <strong>{{ $order->order_number }}</strong>
+                    <h2>{{ $isPosReceipt ? 'Sales receipt' : 'Invoice' }}</h2>
+                    <strong>{{ $voucherNumber }}</strong>
+                    @if($isPosReceipt)
+                        <span class="secondary-reference">Order No.: {{ $order->order_number }}</span>
+                    @endif
                     <span>{{ optional($order->created_at)->format('M d, Y h:i A') }}</span>
                 </div>
             </div>

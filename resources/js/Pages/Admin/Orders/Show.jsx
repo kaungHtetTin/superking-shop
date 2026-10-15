@@ -16,6 +16,20 @@ const stepLabels = {
     delivered: 'Delivered',
 };
 
+const formatOrderDate = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
+};
+
 function activeStepIndex(status, paymentStatus) {
     if (status === 'cancelled') return -1;
     if (paymentStatus === 'pending_review') return 0;
@@ -161,10 +175,13 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                     <div>
                         <p className="eyebrow">{t('Order')}</p>
                         <h2 style={{ fontSize: 18, fontWeight: 800 }}>{order.order_number}</h2>
-                        <small>
-                            {t('Placed')} {order.created_at}
-                            {order.status_updated_at ? ` - ${t('Updated')} ${order.status_updated_at}` : ''}
-                        </small>
+                        <div style={{ display: 'grid', gap: 3, marginTop: 5 }}>
+                            {order.receipt_number && <small>{t('Receipt No.')}: {order.receipt_number}</small>}
+                            <small>
+                                {t('Placed')}: {formatOrderDate(order.created_at)}
+                                {order.status_updated_at ? ` · ${t('Updated')}: ${formatOrderDate(order.status_updated_at)}` : ''}
+                            </small>
+                        </div>
                     </div>
                     <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

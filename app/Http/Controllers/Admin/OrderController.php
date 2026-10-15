@@ -47,6 +47,7 @@ class OrderController extends Controller
                 $like = '%'.$search.'%';
                 $q->where(function ($inner) use ($like) {
                     $inner->where('order_number', 'like', $like)
+                        ->orWhere('receipt_number', 'like', $like)
                         ->orWhereHas('user', function ($u) use ($like) {
                             $u->where('name', 'like', $like)
                                 ->orWhere('email', 'like', $like)
@@ -94,10 +95,10 @@ class OrderController extends Controller
         return response()->streamDownload(function () use ($query) {
             $output = fopen('php://output', 'w');
             fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['Order number', 'Date', 'Store', 'Channel', 'Customer', 'Phone', 'Email', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment method', 'Payment status', 'Fulfillment status']);
+            fputcsv($output, ['Order number', 'Receipt number', 'Date', 'Store', 'Channel', 'Customer', 'Phone', 'Email', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment method', 'Payment status', 'Fulfillment status']);
             $query->orderBy('id')->chunkById(500, function ($orders) use ($output) {
                 foreach ($orders as $order) {
-                    fputcsv($output, [$order->order_number, $order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->sales_channel, $order->user?->name, $order->user?->phone, $order->user?->email, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $order->payment_method, $order->payment_status, $order->status]);
+                    fputcsv($output, [$order->order_number, $order->receipt_number, $order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->sales_channel, $order->user?->name, $order->user?->phone, $order->user?->email, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $order->payment_method, $order->payment_status, $order->status]);
                 }
             });
             fclose($output);
@@ -121,7 +122,7 @@ class OrderController extends Controller
             ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))
             ->when($search, function ($q) use ($search) {
                 $like = '%'.$search.'%';
-                $q->where(fn ($inner) => $inner->where('order_number', 'like', $like)->orWhereHas('user', fn ($u) => $u->where('name', 'like', $like)->orWhere('email', 'like', $like)->orWhere('phone', 'like', $like)));
+                $q->where(fn ($inner) => $inner->where('order_number', 'like', $like)->orWhere('receipt_number', 'like', $like)->orWhereHas('user', fn ($u) => $u->where('name', 'like', $like)->orWhere('email', 'like', $like)->orWhere('phone', 'like', $like)));
             });
     }
 
