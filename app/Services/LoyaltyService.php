@@ -126,6 +126,26 @@ class LoyaltyService
         $this->refreshTier($user->fresh());
     }
 
+    public function reverseEarnedPoints(Order $order, string $description = 'Order cancelled'): void
+    {
+        if ($order->earned_points <= 0 || ! $order->loyalty_awarded_at || ! $order->user) return;
+
+        $user = User::query()->whereKey($order->user_id)->lockForUpdate()->firstOrFail();
+        $points = min((int) $order->earned_points, max(0, (int) $user->loyalty_points));
+        if ($points > 0) {
+            $user->decrement('loyalty_points', $points);
+            RewardHistory::create([
+                'user_id' => $user->id,
+                'order_id' => $order->id,
+                'points' => -$points,
+                'type' => 'reversal',
+                'description' => "{$description}: {$order->order_number}",
+            ]);
+            $this->refreshTier($user->fresh());
+        }
+        $order->forceFill(['loyalty_awarded_at' => null, 'earned_points' => 0])->save();
+    }
+
     public function adjustPoints(User $user, int $points, string $description, ?User $actor = null): void
     {
         if ($points === 0) {

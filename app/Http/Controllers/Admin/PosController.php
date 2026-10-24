@@ -17,8 +17,10 @@ use App\Services\AuditLogService;
 use App\Services\FlashSalePricingService;
 use App\Services\POS\PosCheckoutService;
 use App\Services\POS\PosShiftService;
+use App\Services\POS\PosSaleRevisionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +29,11 @@ use App\Support\Spa;
 class PosController extends Controller
 {
     public function index(Request $request)
+    {
+        return $this->renderPos($request);
+    }
+
+    private function renderPos(Request $request, ?Order $editOrder = null, $editCart = []): \Symfony\Component\HttpFoundation\Response
     {
         abort_unless($request->user()->hasAdminPermission('pos.access') && config('inventory.pos_enabled', true), 403);
 
@@ -57,10 +64,95 @@ class PosController extends Controller
                 'discount' => $request->user()->hasAdminPermission('pos.discount'),
                 'credit' => $request->user()->hasAdminPermission('credit.manage'),
                 'manageRegisters' => $request->user()->hasAdminPermission('registers.manage'),
+                'editVoucher' => $request->user()->hasAdminPermission('orders.manage') || $request->user()->hasAdminPermission('pos.void'),
             ],
             'registers' => PosRegister::query()->whereIn('location_id', $locationIds)->where('is_active', true)
                 ->orderBy('name')->get(['id', 'location_id', 'code', 'name']),
+            'editOrder' => $editOrder,
+            'editCart' => $editCart,
         ]);
+    }
+
+    public function editSale(Request $request, Order $order)
+    {
+        abort_unless($request->user()->hasAdminPermission('pos.access') && config('inventory.pos_enabled', true), 403);
+        abort_unless($order->sales_channel === 'pos' && $order->status !== 'cancelled', 404);
+        $order->load([
+            'items.product.primaryImage',
+            'items.product.inventoryBalances' => fn ($query) => $query->where('location_id', $order->location_id),
+            'items.product.units' => fn ($query) => $query->where('is_active', true)->with(['prices.typeDefinition.pricingRule'])->orderByDesc('is_default_selling')->orderBy('sort_order'),
+            'items.product.baseUnit.prices',
+            'items.unit',
+            'items.focUnit',
+            'payments',
+            'user:id,name,email,phone,credit_limit,credit_terms_days,credit_status',
+        ]);
+        abort_unless($order->location_id && $request->user()->canAccessLocation($order->location), 403);
+        abort_if($order->returns()->exists(), 422, 'A sale with returned items cannot be edited.');
+        if ($order->user) {
+            $balance = (float) $order->user->creditTransactions()->sum('amount');
+            $order->user->setAttribute('available_credit', max(0, round((float) $order->user->credit_limit - $balance + (float) $order->credit_amount, 2)));
+        }
+
+        $originalUsage = $order->items->groupBy('product_id')->map(fn ($items) => (float) $items->sum(fn ($item) => (float) $item->base_quantity + (float) $item->foc_base_quantity));
+        $editCart = $order->items->map(function ($item) use ($originalUsage) {
+            $product = $item->product;
+            abort_unless($product && $item->unit && $product->is_active && $product->status === 'active', 422, 'One or more original products are no longer available.');
+            $availableBase = (float) ($product->inventoryBalances->first()?->available_qty ?? 0) + (float) ($originalUsage[$product->id] ?? 0);
+            $basePrices = $product->baseUnit?->prices?->keyBy('price_type') ?? collect();
+            $options = $product->units->map(function (ProductUnit $unit) use ($availableBase, $basePrices) {
+                $factor = max((float) $unit->conversion_factor, 0.000001);
+                $prices = $unit->prices->map(function ($price) use ($basePrices, $factor) {
+                    $configured = (float) $price->price;
+                    $basePrice = (float) ($basePrices->get($price->price_type)?->price ?? 0);
+                    return [
+                        'price_type' => $price->price_type,
+                        'price' => ! $price->is_manual && $price->calculation_status === 'cost_required' && $configured <= 0 ? 0 : ($configured > 0 ? $configured : round($basePrice * $factor, 2)),
+                        'display_name' => $price->typeDefinition?->pricingRule?->name ?? $price->price_type,
+                    ];
+                })->values();
+                return [
+                    'id' => $unit->id,
+                    'name' => $unit->name,
+                    'code' => $unit->code,
+                    'conversion_factor' => (float) $unit->conversion_factor,
+                    'is_base' => (bool) $unit->is_base,
+                    'is_default_selling' => (bool) $unit->is_default_selling,
+                    'available_qty' => floor((($availableBase / $factor) + 0.0000001) * 10000) / 10000,
+                    'prices' => $prices,
+                    'flash_sale' => null,
+                ];
+            })->values();
+            $selected = $options->firstWhere('id', $item->product_unit_id);
+            abort_unless($selected, 422, 'One or more original product units are no longer available.');
+
+            return [
+                'id' => 'edit-'.$item->id,
+                'product_unit_id' => $item->product_unit_id,
+                'product_id' => $product->id,
+                'product_code' => $product->product_code,
+                'barcode' => $product->barcode,
+                'product_name' => $product->name,
+                'name' => collect([$product->name, $selected['name']])->filter()->join(' · '),
+                'unit_name' => $selected['name'],
+                'unit_code' => $selected['code'],
+                'image_path' => $product->primaryImage?->image_path,
+                'available_qty' => $selected['available_qty'],
+                'available_base_qty' => $availableBase,
+                'conversion_factor' => (float) $item->conversion_factor,
+                'prices' => $selected['prices'],
+                'flash_sale' => null,
+                'unit_options' => $options,
+                'price_type' => $item->price_type,
+                'unit_price' => (float) $item->unit_price,
+                'use_flash_sale' => false,
+                'quantity' => (float) $item->quantity,
+                'foc_quantity' => (float) $item->foc_quantity,
+                'foc_product_unit_id' => $item->foc_product_unit_id ?: $item->product_unit_id,
+            ];
+        })->values();
+
+        return $this->renderPos($request, $order, $editCart);
     }
 
     public function activeShift(Request $request, PosShiftService $service)
@@ -204,7 +296,8 @@ class PosController extends Controller
             ->withSum([
                 'orderItems as pos_sold_qty' => fn ($query) => $query->whereHas('order', fn ($order) => $order
                     ->where('sales_channel', 'pos')
-                    ->where('location_id', $location->id)),
+                    ->where('location_id', $location->id)
+                    ->recognizedSale()),
             ], 'quantity')
             ->when(! empty($validated['category_id']), function ($query) use ($validated) {
                 $query->whereHas('product', fn ($product) => $product->where('category_id', $validated['category_id']));
@@ -392,7 +485,45 @@ class PosController extends Controller
     public function checkout(Request $request, PosCheckoutService $service)
     {
         abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
-        $validated = $request->validate([
+        $validated = $this->validateCheckout($request);
+
+        try {
+            $order = $service->checkout($validated, $request->user());
+        } catch (ValidationException $exception) {
+            return response()->json(['errors' => $exception->errors()], 422);
+        }
+
+        return response()->json([
+            'order' => $order,
+            'receipt_url' => route('admin.pos.orders.receipt', $order),
+        ]);
+    }
+
+    public function reviseSale(Request $request, Order $order, PosSaleRevisionService $service)
+    {
+        abort_unless($request->user()->hasAdminPermission('pos.access'), 403);
+        $order->loadMissing('location');
+        abort_unless($order->location && $request->user()->canAccessLocation($order->location), 403);
+        $validated = $this->validateCheckout($request);
+        if ((int) $validated['location_id'] !== (int) $order->location_id) {
+            throw ValidationException::withMessages(['location_id' => 'A revised sale must remain in its original warehouse.']);
+        }
+        try {
+            $replacement = $service->revise($order, $validated, $request->user());
+        } catch (ValidationException $exception) {
+            return response()->json(['errors' => $exception->errors()], 422);
+        }
+
+        return response()->json([
+            'order' => $replacement,
+            'message' => 'POS sale updated successfully.',
+            'receipt_url' => route('admin.pos.orders.receipt', $replacement),
+        ]);
+    }
+
+    private function validateCheckout(Request $request): array
+    {
+        return $request->validate([
             'location_id' => ['required', 'integer', 'exists:locations,id'],
             'shift_id' => ['required', 'integer', 'exists:pos_shifts,id'],
             'customer_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::CUSTOMER_ROLE)],
@@ -408,23 +539,17 @@ class PosController extends Controller
             'items.*.foc_product_unit_id' => ['nullable', 'integer', 'exists:product_units,id'],
             'discount_type' => ['nullable', 'string', Rule::in(['percent', 'amount'])],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
-            'tender_type' => ['required', 'string', Rule::in(['cash', 'mmqr', 'credit'])],
+            'tender_type' => ['required_without:tenders', 'nullable', 'string', Rule::in(['cash', 'mmqr', 'credit'])],
             'credit_deposit_method' => ['nullable', 'string', Rule::in(['cash', 'mmqr'])],
-            'amount_tendered' => ['required', 'numeric', 'min:0'],
+            'amount_tendered' => ['required_without:tenders', 'nullable', 'numeric', 'min:0'],
+            'tenders' => ['nullable', 'array', 'min:1', 'max:3'],
+            'tenders.*.type' => ['required_with:tenders', 'string', 'distinct', Rule::in(['cash', 'mmqr', 'credit'])],
+            'tenders.*.amount' => ['required_with:tenders', 'numeric', 'gt:0'],
+            'tenders.*.amount_tendered' => ['nullable', 'numeric', 'min:0'],
+            'tenders.*.reference' => ['nullable', 'string', 'max:100'],
             'payment_details' => ['nullable', 'array'],
             'payment_details.reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        try {
-            $order = $service->checkout($validated, $request->user());
-        } catch (ValidationException $exception) {
-            return response()->json(['errors' => $exception->errors()], 422);
-        }
-
-        return response()->json([
-            'order' => $order,
-            'receipt_url' => route('admin.pos.orders.receipt', $order),
         ]);
     }
 
@@ -474,7 +599,57 @@ class PosController extends Controller
 
         $order->load(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'register', 'server', 'user']);
 
-        return Spa::render('Admin/POS/Receipt', ['order' => $order]);
+        return Spa::render('Admin/POS/Receipt', [
+            'order' => $order,
+            'canEditVoucher' => $request->user()->hasAdminPermission('orders.manage') || $request->user()->hasAdminPermission('pos.void'),
+        ]);
+    }
+
+    public function updateVoucher(Request $request, Order $order, AuditLogService $audit)
+    {
+        abort_unless($order->sales_channel === 'pos', 404);
+        $order->loadMissing('location');
+        abort_unless($order->location && $request->user()->canAccessLocation($order->location), 403);
+        if ($order->status === 'cancelled') {
+            throw ValidationException::withMessages(['voucher' => 'Cancelled sale vouchers cannot be edited.']);
+        }
+        $data = $request->validate([
+            'receiver_name' => ['required', 'string', 'max:255'],
+            'receiver_phone' => ['nullable', 'string', 'max:50'],
+            'order_notes' => ['nullable', 'string', 'max:2000'],
+            'payment_references' => ['nullable', 'array'],
+            'payment_references.*' => ['nullable', 'string', 'max:100'],
+        ]);
+        $before = $order->only(['receiver_name', 'receiver_phone', 'order_notes']);
+
+        DB::transaction(function () use ($order, $data, $request, $audit, $before) {
+            $order->forceFill([
+                'receiver_name' => trim($data['receiver_name']),
+                'receiver_phone' => trim((string) ($data['receiver_phone'] ?? '')) ?: null,
+                'order_notes' => trim((string) ($data['order_notes'] ?? '')) ?: null,
+            ])->save();
+
+            foreach (($data['payment_references'] ?? []) as $paymentId => $reference) {
+                $payment = $order->payments()->whereKey((int) $paymentId)->first();
+                if (! $payment) continue;
+                $details = $payment->payment_details ?: [];
+                $cleanReference = trim((string) $reference);
+                if ($cleanReference === '') unset($details['reference']);
+                else $details['reference'] = $cleanReference;
+                $payment->update(['payment_details' => $details ?: null]);
+            }
+
+            $audit->record('pos.voucher.updated', $order, [
+                'before' => $before,
+                'after' => $order->only(['receiver_name', 'receiver_phone', 'order_notes']),
+            ], $request);
+        });
+
+        if ($request->header('X-SPA') === 'true') {
+            return response()->json(['success' => true, 'message' => 'Voucher details updated.']);
+        }
+
+        return back()->with('success', 'Voucher details updated.');
     }
 
     private function heldCarts(Request $request)

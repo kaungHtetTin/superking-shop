@@ -8,6 +8,7 @@ use App\Models\InventoryBalance;
 use App\Models\InventoryMovement;
 use App\Models\Location;
 use App\Models\Product;
+use App\Services\ExcelExportService;
 use App\Models\ProductUnit;
 use App\Models\StockAdjustment;
 use App\Models\StockReceipt;
@@ -229,35 +230,27 @@ class InventoryController extends Controller
             : $query->limit(20)->get()->map($map);
     }
 
-    public function exportBalances(Request $request)
+    public function exportBalances(Request $request, ExcelExportService $excel)
     {
         abort_unless($request->user()->hasAdminPermission('inventory.view'), 403);
         $locationIds = $request->user()->accessibleLocationIds();
-        $rows = $this->stockOverviewQuery($this->filteredLocationIds($request, $locationIds), $this->isAllWarehousesFilter($request))->orderBy('products.name')->cursor();
+        $rows = $this->stockOverviewQuery($this->filteredLocationIds($request, $locationIds), $this->isAllWarehousesFilter($request))->orderBy('products.name')->cursor()
+            ->map(fn ($row) => [$row->location_code, $row->location_name, $row->product_code, (string) $row->barcode, $row->product_name, $row->base_unit_code, $row->selling_unit_code, $row->on_hand_qty, $row->reserved_qty, $row->available_qty, $row->min_quantity]);
+        $path = $excel->create('Inventory Balances', ['warehouse_code', 'warehouse_name', 'product_code', 'barcode', 'product', 'base_unit', 'default_selling_unit', 'on_hand_base', 'reserved_base', 'available_base', 'min_quantity'], $rows);
 
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['warehouse_code', 'warehouse_name', 'product_code', 'barcode', 'product', 'base_unit', 'default_selling_unit', 'on_hand_base', 'reserved_base', 'available_base', 'min_quantity']);
-            foreach ($rows as $row) {
-                fputcsv($out, [$row->location_code, $row->location_name, $row->product_code, $row->barcode, $row->product_name, $row->base_unit_code, $row->selling_unit_code, $row->on_hand_qty, $row->reserved_qty, $row->available_qty, $row->min_quantity]);
-            }
-            fclose($out);
-        }, 'inventory-balances-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv']);
+        return response()->download($path, 'inventory-balances-'.now()->format('Ymd-His').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
-    public function exportMovements(Request $request, Product $product)
+    public function exportMovements(Request $request, Product $product, ExcelExportService $excel)
     {
         abort_unless($request->user()->hasAdminPermission('inventory.history'), 403);
         $rows = InventoryMovement::query()->where('product_id', $product->id)->whereIn('location_id', $request->user()->accessibleLocationIds())->with(['location:id,code', 'creator:id,name', 'unit:id,code'])->latest('occurred_at')->cursor();
 
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['occurred_at', 'location', 'type', 'unit', 'unit_quantity', 'base_quantity_delta', 'before', 'after', 'reserved_delta', 'user', 'reason', 'notes']);
-            foreach ($rows as $movement) {
-                fputcsv($out, [$movement->occurred_at, $movement->location->code, $movement->type, $movement->unit?->code, $movement->unit_quantity, $movement->quantity_delta, $movement->on_hand_before, $movement->on_hand_after, $movement->reserved_delta, $movement->creator?->name, $movement->reason_code, $movement->notes]);
-            }
-            fclose($out);
-        }, "movements-{$product->product_code}-".now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv']);
+        $data = $rows->map(fn ($movement) => [$movement->occurred_at, $movement->location->code, $movement->type, $movement->unit?->code, $movement->unit_quantity, $movement->quantity_delta, $movement->on_hand_before, $movement->on_hand_after, $movement->reserved_delta, $movement->creator?->name, $movement->reason_code, $movement->notes]);
+        $path = $excel->create('Inventory Movements', ['occurred_at', 'location', 'type', 'unit', 'unit_quantity', 'base_quantity_delta', 'before', 'after', 'reserved_delta', 'user', 'reason', 'notes'], $data);
+        return response()->download($path, "movements-{$product->product_code}-".now()->format('Ymd-His').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     private function stockOverviewQuery(array $locationIds, bool $aggregate)

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Location;
 use App\Models\StockTransfer;
 use App\Services\AuditLogService;
+use App\Services\ExcelExportService;
 use App\Services\Inventory\StockTransferService;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,7 +53,7 @@ class StockTransferController extends Controller
         ]);
     }
 
-    public function export(Request $request)
+    public function export(Request $request, ExcelExportService $excel)
     {
         $this->authorize('viewAny', StockTransfer::class);
         $locationIds = $request->user()->accessibleLocationIds();
@@ -64,29 +65,22 @@ class StockTransferController extends Controller
         $bySource = $this->summarizeByLocation($rows, 'sourceLocation');
         $byDestination = $this->summarizeByLocation($rows, 'destinationLocation');
 
-        return response()->streamDownload(function () use ($rows, $bySource, $byDestination) {
-            $output = fopen('php://output', 'w');
-            fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['TRANSFER RECORDS']);
-            fputcsv($output, ['Date', 'Transfer', 'From shop', 'To shop', 'Lines', 'Units', 'Transfer amount', 'Note']);
-            foreach ($rows as $row) {
-                $total = (float) $row->total_amount;
-                fputcsv($output, [$row->created_at?->format('Y-m-d H:i:s'), $row->transfer_number, $row->sourceLocation?->name, $row->destinationLocation?->name, $row->items->count(), $row->items->sum('requested_quantity'), $total, $row->notes]);
-            }
-            fputcsv($output, []);
-            fputcsv($output, ['FILTERED OVERALL SUMMARY']);
-            fputcsv($output, ['Transfers', 'Transfer amount']);
-            fputcsv($output, [$rows->count(), $rows->sum('total_amount')]);
-            fputcsv($output, []);
-            fputcsv($output, ['SENT BY SHOP']);
-            fputcsv($output, ['Shop', 'Transfers', 'Transfer amount']);
-            foreach ($bySource as $row) fputcsv($output, [$row['name'], $row['count'], $row['transfer_value']]);
-            fputcsv($output, []);
-            fputcsv($output, ['RECEIVED BY SHOP']);
-            fputcsv($output, ['Shop', 'Transfers', 'Transfer amount']);
-            foreach ($byDestination as $row) fputcsv($output, [$row['name'], $row['count'], $row['transfer_value']]);
-            fclose($output);
-        }, 'transfer-records-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        $data = $rows->map(fn ($row) => [$row->created_at?->format('Y-m-d H:i:s'), $row->transfer_number, $row->sourceLocation?->name, $row->destinationLocation?->name, $row->items->count(), $row->items->sum('requested_quantity'), (float) $row->total_amount, $row->notes]);
+        $data->push(['', '', '', '', '', '', '', '']);
+        $data->push(['OVERALL SUMMARY', '', '', '', '', '', '', '']);
+        $data->push(['Transfers', $rows->count(), 'Transfer amount', (float) $rows->sum('total_amount'), '', '', '', '']);
+        $data->push(['', '', '', '', '', '', '', '']);
+        $data->push(['SENT BY SHOP', 'Transfers', 'Transfer amount', '', '', '', '', '']);
+        foreach ($bySource as $summary) {
+            $data->push([$summary['name'], $summary['count'], (float) $summary['transfer_value'], '', '', '', '', '']);
+        }
+        $data->push(['', '', '', '', '', '', '', '']);
+        $data->push(['RECEIVED BY SHOP', 'Transfers', 'Transfer amount', '', '', '', '', '']);
+        foreach ($byDestination as $summary) {
+            $data->push([$summary['name'], $summary['count'], (float) $summary['transfer_value'], '', '', '', '', '']);
+        }
+        $path = $excel->create('Transfer Records', ['Date', 'Transfer', 'From shop', 'To shop', 'Lines', 'Units', 'Transfer amount', 'Note'], $data);
+        return response()->download($path, 'transfer-records-'.now()->format('Ymd-His').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     public function create(Request $request)

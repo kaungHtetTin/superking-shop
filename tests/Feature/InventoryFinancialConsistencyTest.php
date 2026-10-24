@@ -120,6 +120,12 @@ class InventoryFinancialConsistencyTest extends TestCase
         $this->assertSame('cancelled', $order->fresh()->payment_status);
         $this->assertDatabaseHas('payments', ['id' => $payment->id, 'status' => 'paid']);
         $this->assertDatabaseHas('financial_entries', ['reference' => 'order-refund:'.$order->id, 'category' => 'refund_payable', 'status' => 'pending', 'amount' => 100]);
+        $posReport = app(OperationsReportService::class)->pos($actor, [
+            'location_id' => $location->id,
+            'from' => now()->subDay()->toDateString(),
+            'to' => now()->addDay()->toDateString(),
+        ]);
+        $this->assertCount(0, $posReport['tenders']);
         $summary = $this->summary($actor);
         $this->assertEquals(0, $summary['order_revenue']);
         $this->assertEquals(0, $summary['cost_of_goods']);

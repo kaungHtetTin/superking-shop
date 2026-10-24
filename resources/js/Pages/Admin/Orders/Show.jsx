@@ -192,6 +192,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                             />
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            {canManageOrders && order.sales_channel === 'pos' && !isCancelled && <Link className="btn primary" style={{ minHeight: 38, fontSize: 13 }} href={routeWithBase(`/admin/orders/${order.id}/edit-pos-sale`, app_base)}><Icon name="edit" size={13} />{t('Edit POS Sale')}</Link>}
                             <a href={voucherLinks.print} target="_blank" rel="noopener noreferrer" className="btn secondary" style={{ minHeight: 38, fontSize: 13 }}>
                                 <Icon name="receipt" size={13} />
                                 {t('Print voucher')}
@@ -352,6 +353,12 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                                 <span>{t('Total')}</span>
                                 <strong style={{ fontSize: 15 }}>{formatMoney(order.final_amount)}</strong>
                             </div>
+                            {(order.payments || []).map((payment) => (
+                                <div className="detail-row" key={payment.id}>
+                                    <span>{payment.tender_type === 'mmqr' ? 'MMQR (Pay)' : t(payment.tender_type || payment.method || 'Payment')}</span>
+                                    <strong>{formatMoney(payment.amount)}</strong>
+                                </div>
+                            ))}
                             {Number(order.credit_amount || 0) > 0 && (
                                 <>
                                     <div className="detail-row"><span>{t('Paid')}</span><strong>{formatMoney(order.paid_amount || 0)}</strong></div>

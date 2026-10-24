@@ -32,6 +32,7 @@ class OrderVoucherService
             'items.product',
             'items.unit',
             'items.focUnit',
+            'payments',
             'selectedPaymentMethod',
         ]);
 

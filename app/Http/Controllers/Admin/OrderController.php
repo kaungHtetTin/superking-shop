@@ -8,6 +8,7 @@ use App\Models\Location;
 use App\Services\OrderManagementService;
 use App\Services\OrderPaymentService;
 use App\Services\OrderVoucherService;
+use App\Services\ExcelExportService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Support\Spa;
@@ -80,7 +81,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function export(Request $request)
+    public function export(Request $request, ExcelExportService $excel)
     {
         $locationId = $request->integer('location_id');
         $accessibleLocationIds = array_map('intval', $request->user()->accessibleLocationIds());
@@ -92,17 +93,9 @@ class OrderController extends Controller
             ->withCount('items');
         $this->applyFilters($query, $request);
 
-        return response()->streamDownload(function () use ($query) {
-            $output = fopen('php://output', 'w');
-            fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['Order number', 'Receipt number', 'Date', 'Store', 'Channel', 'Customer', 'Phone', 'Email', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment method', 'Payment status', 'Fulfillment status']);
-            $query->orderBy('id')->chunkById(500, function ($orders) use ($output) {
-                foreach ($orders as $order) {
-                    fputcsv($output, [$order->order_number, $order->receipt_number, $order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->sales_channel, $order->user?->name, $order->user?->phone, $order->user?->email, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $order->payment_method, $order->payment_status, $order->status]);
-                }
-            });
-            fclose($output);
-        }, 'orders-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        $rows = $query->orderBy('id')->lazyById(500)->map(fn ($order) => [$order->order_number, $order->receipt_number, $order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->sales_channel, $order->user?->name, $order->user?->phone, $order->user?->email, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $order->payment_method, $order->payment_status, $order->status]);
+        $path = $excel->create('Orders', ['Order number', 'Receipt number', 'Date', 'Store', 'Channel', 'Customer', 'Phone', 'Email', 'Items', 'Subtotal', 'Discount', 'Shipping', 'Total', 'Payment method', 'Payment status', 'Fulfillment status'], $rows);
+        return response()->download($path, 'orders-'.now()->format('Ymd-His').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     private function applyFilters($query, Request $request): void
@@ -135,7 +128,7 @@ class OrderController extends Controller
             'processing' => (clone $orders)->where('status', 'processing')->count(),
             'shipped' => (clone $orders)->where('status', 'shipped')->count(),
             'delivered' => (clone $orders)->where('status', 'delivered')->count(),
-            'revenue_paid' => (float) (clone $orders)->where('payment_status', 'paid')->sum('final_amount'),
+            'revenue_paid' => (float) (clone $orders)->recognizedSale()->where('payment_status', 'paid')->sum('final_amount'),
         ];
     }
 
@@ -147,6 +140,7 @@ class OrderController extends Controller
             'items.product',
             'items.unit',
             'items.focUnit',
+            'payments',
             'paymentReviewer:id,name',
             'selectedPaymentMethod',
         ]);

@@ -195,6 +195,7 @@ class OperationsReportService
         $tenders = DB::table('payments')
             ->join('orders', 'orders.id', '=', 'payments.order_id')
             ->where('orders.sales_channel', 'pos')
+            ->whereIn('orders.id', \App\Models\Order::query()->recognizedSale()->select('orders.id'))
             ->where('payments.status', 'paid')
             ->whereIn('orders.location_id', $locationIds)
             ->whereBetween('payments.created_at', [$from, $to])

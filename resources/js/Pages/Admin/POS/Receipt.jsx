@@ -7,7 +7,7 @@ import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import '@/styles/receipt.css';
 
-export default function PosReceipt({ order }) {
+export default function PosReceipt({ order, canEditVoucher = false }) {
     const { app_base, app_settings = {} } = usePage().props;
     const t = usePhraseTranslation();
     const paper = app_settings.receipt?.paper_size || receiptDefaults.paper_size;
@@ -37,7 +37,7 @@ export default function PosReceipt({ order }) {
     }, []);
 
     return <AdminLayout title={order.receipt_number} eyebrow={t('POS receipt')} contentClassName="pos-receipt-page"
-        action={<button className="btn primary no-print" type="button" onClick={printReceipt}><Icon name="receipt" size={14} /> {t('Print')}</button>}>
+        action={<div className="inline-actions no-print">{canEditVoucher && <Link className="btn primary" href={routeWithBase(`/admin/orders/${order.id}/edit-pos-sale`, app_base)}><Icon name="edit" size={14} /> {t('Edit POS Sale')}</Link>}<button className="btn primary" type="button" onClick={printReceipt}><Icon name="receipt" size={14} /> {t('Print')}</button></div>}>
         <Head title={order.receipt_number} />
         <style>{`@font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(regularFont)}) format('truetype'); font-style: normal; font-weight: 400; font-display: block; }
             @font-face { font-family: 'Receipt Padauk'; src: url(${JSON.stringify(boldFont)}) format('truetype'); font-style: normal; font-weight: 700; font-display: block; }

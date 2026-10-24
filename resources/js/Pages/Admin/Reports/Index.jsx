@@ -288,7 +288,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
                     <div className="reports-filter__scroll"><div className="reports-filter__fields">{renderFilterFields(false, true)}</div></div>
                     <div className="inline-actions reports-filter__actions">
                         <button className="btn primary" type="submit"><Icon name="search" size={14} /> {t('Apply')}</button>
-                        {canExport && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> CSV</a>}
+                        {canExport && <a className="btn secondary" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> XLSX</a>}
                         {activeFilterCount > 0 && <button className="btn secondary" type="button" onClick={resetFilters}>{t('Reset')}</button>}
                     </div>
                 </form>
@@ -298,7 +298,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
                 <div className="modal-backdrop reports-filter__backdrop" onMouseDown={() => setFilterDrawerOpen(false)}>
                     <form className="drawer glass reports-filter__drawer" onSubmit={submitFilters} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="reports-filter-title">
                         <div className="drawer-header"><div><small className="eyebrow">{t('Report controls')}</small><h2 id="reports-filter-title">{t('Report filters')}</h2></div><button type="button" className="icon-btn" onClick={() => setFilterDrawerOpen(false)} aria-label={t('Close')}><Icon name="close" size={16} /></button></div>
-                        <div className="reports-filter__drawer-body">{renderFilterFields(true)}{canExport && <a className="btn secondary reports-filter__drawer-export" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> CSV</a>}</div>
+                        <div className="reports-filter__drawer-body">{renderFilterFields(true)}{canExport && <a className="btn secondary reports-filter__drawer-export" href={`${routeWithBase('/admin/reports/export', appBase)}?${query.toString()}`}><Icon name="download" size={14} /> XLSX</a>}</div>
                         <div className="drawer-actions"><button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button><button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Apply')}</button></div>
                     </form>
                 </div>
@@ -335,7 +335,7 @@ function ProductSalesReport({ report, filters, locations, appBase }) {
                         <div className="inline-actions">
                             <button type="button" className={`btn ${table === 'summary' ? 'primary' : 'secondary'}`} onClick={() => setTable('summary')}>{t('Summary')}</button>
                             <button type="button" className={`btn ${table === 'daily' ? 'primary' : 'secondary'}`} onClick={() => setTable('daily')}>{t('Daily breakdown')}</button>
-                            <a className="btn secondary" href={exportQuery(table)}><Icon name="download" size={14} /> CSV</a>
+                            <a className="btn secondary" href={exportQuery(table)}><Icon name="download" size={14} /> XLSX</a>
                         </div>
                     )}
                 />

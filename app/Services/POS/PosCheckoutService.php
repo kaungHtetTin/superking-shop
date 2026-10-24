@@ -152,39 +152,24 @@ class PosCheckoutService
 
             $discount = $this->discountAmount($payload, $subtotal, $cashier);
             $final = round(max(0, $subtotal - $discount), 2);
-            $tenderType = $payload['tender_type'] ?? 'cash';
-            if (! in_array($tenderType, ['cash', 'mmqr', 'credit'], true)) {
-                throw ValidationException::withMessages(['tender_type' => 'Choose Cash, MMQR (Pay), or Credit.']);
-            }
-            $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
-            $isCredit = $tenderType === 'credit';
-            $creditAmount = 0.0;
-            $depositMethod = $payload['credit_deposit_method'] ?? 'cash';
-
-            if ($isCredit) {
+            $tenders = $this->resolveTenders($payload, $final);
+            $creditAmount = round((float) $tenders->where('type', 'credit')->sum('amount'), 2);
+            $paidNow = round((float) $tenders->whereIn('type', ['cash', 'mmqr'])->sum('amount'), 2);
+            $usesCredit = $creditAmount > 0;
+            if ($usesCredit) {
                 if (! $cashier->hasAdminPermission('credit.manage')) {
-                    throw ValidationException::withMessages(['tender_type' => 'You cannot create credit sales.']);
+                    throw ValidationException::withMessages(['tenders' => 'You cannot create credit sales.']);
                 }
                 if (! $customer) {
                     throw ValidationException::withMessages(['customer_id' => 'Choose a registered customer for a credit sale.']);
                 }
-                if ($amountTendered < 0 || $amountTendered >= $final) {
-                    throw ValidationException::withMessages(['amount_tendered' => 'Credit deposit must be zero or less than the sale total.']);
-                }
-                if (! in_array($depositMethod, ['cash', 'mmqr'], true)) {
-                    throw ValidationException::withMessages(['credit_deposit_method' => 'Choose a valid deposit payment method.']);
-                }
-                $creditAmount = round($final - $amountTendered, 2);
                 $this->creditService->assertCanBorrow($customer, $creditAmount);
-            } elseif ($amountTendered < $final) {
-                throw ValidationException::withMessages(['amount_tendered' => 'Amount tendered must cover the sale total.']);
             }
-            if (! $isCredit && $tenderType !== 'cash' && abs($amountTendered - $final) > 0.009) {
-                throw ValidationException::withMessages(['amount_tendered' => 'MMQR payments must equal the sale total.']);
-            }
-            $changeDue = ! $isCredit && $tenderType === 'cash' ? round($amountTendered - $final, 2) : 0.0;
-            $paymentStatus = $isCredit ? ($amountTendered > 0 ? 'partially_paid' : 'unpaid') : 'paid';
-            $dueDate = $isCredit ? now()->addDays(max(1, (int) $customer->credit_terms_days))->toDateString() : null;
+            $paymentStatus = $usesCredit ? ($paidNow > 0 ? 'partially_paid' : 'unpaid') : 'paid';
+            $dueDate = $usesCredit ? now()->addDays(max(1, (int) $customer->credit_terms_days))->toDateString() : null;
+            $tenderType = $tenders->count() > 1 ? 'split' : $tenders->first()['type'];
+            $amountTendered = round((float) $tenders->whereIn('type', ['cash', 'mmqr'])->sum('amount_tendered'), 2);
+            $changeDue = round((float) $tenders->sum('change_due'), 2);
             $order = Order::create([
                 'user_id' => $customer?->id,
                 'order_number' => $this->number('POS'),
@@ -206,9 +191,15 @@ class PosCheckoutService
                 'payment_status' => $paymentStatus,
                 'credit_due_date' => $dueDate,
                 'credit_amount' => $creditAmount,
-                'paid_amount' => $isCredit ? $amountTendered : $final,
+                'paid_amount' => $paidNow,
                 'payment_method' => $tenderType,
-                'pos_tender_summary' => ['tender_type' => $tenderType, 'amount_tendered' => $amountTendered, 'change_due' => $changeDue, 'credit_amount' => $creditAmount, 'deposit_method' => $isCredit ? $depositMethod : null],
+                'pos_tender_summary' => [
+                    'tender_type' => $tenderType,
+                    'amount_tendered' => $amountTendered,
+                    'change_due' => $changeDue,
+                    'credit_amount' => $creditAmount,
+                    'tenders' => $tenders->values()->all(),
+                ],
                 'receiver_name' => $customer?->name ?: trim((string) ($payload['customer_name'] ?? '')) ?: 'Walk-in customer',
                 'receiver_phone' => $customer?->phone ?: ($payload['customer_phone'] ?? null),
                 'order_notes' => $payload['notes'] ?? null,
@@ -251,42 +242,37 @@ class PosCheckoutService
                 }
             }
 
-            $payment = null;
-            $paidNow = $isCredit ? $amountTendered : $final;
-            $actualTender = $isCredit ? $depositMethod : $tenderType;
-            if ($paidNow > 0) {
-                $payment = Payment::create([
+            foreach ($tenders->whereIn('type', ['cash', 'mmqr']) as $tender) {
+                Payment::create([
                 'order_id' => $order->id,
                 'register_id' => $shift->pos_register_id,
                 'shift_id' => $shift->id,
                 'received_by' => $cashier->id,
                 'transaction_id' => $this->paymentTransactionId(),
-                'amount' => $paidNow,
-                'amount_tendered' => $amountTendered,
-                'change_due' => $changeDue,
-                'method' => $actualTender,
-                'tender_type' => $actualTender,
+                    'amount' => $tender['amount'],
+                    'amount_tendered' => $tender['amount_tendered'],
+                    'change_due' => $tender['change_due'],
+                    'method' => $tender['type'],
+                    'tender_type' => $tender['type'],
                 'status' => 'paid',
-                'payment_details' => array_merge($payload['payment_details'] ?? [], $isCredit ? ['credit_deposit' => true] : []),
+                    'payment_details' => array_filter(['reference' => $tender['reference'] ?? null]),
                 ]);
-            }
-            if ($isCredit) {
-                $this->creditService->recordSale($customer, $order, $creditAmount, $cashier);
-            }
-            if ($paidNow > 0) {
                 FinancialEntry::create([
                 'recorded_by' => $cashier->id,
                 'location_id' => $location->id,
                 'type' => 'income',
                 'category' => FinancialEntry::CATEGORY_POS_SALE,
                 'title' => "POS sale {$order->receipt_number}",
-                'amount' => $paidNow,
+                    'amount' => $tender['amount'],
                 'entry_date' => now()->toDateString(),
-                'payment_method' => $actualTender,
+                    'payment_method' => $tender['type'],
                 'reference' => $order->receipt_number,
                 'status' => 'approved',
                 'notes' => "Auto-created from POS sale in {$location->name}.",
                 ]);
+            }
+            if ($usesCredit) {
+                $this->creditService->recordSale($customer, $order, $creditAmount, $cashier);
             }
             $this->auditLogService->record('pos.sale.completed', $order, [
                 'receipt_number' => $order->receipt_number,
@@ -294,15 +280,85 @@ class PosCheckoutService
                 'total' => $final,
                 'paid_now' => $paidNow,
                 'credit_amount' => $creditAmount,
+                'tenders' => $tenders->map(fn ($tender) => ['type' => $tender['type'], 'amount' => $tender['amount']])->values()->all(),
                 'foc_line_count' => collect($items)->where('focQuantity', '>', 0)->count(),
                 'foc_base_quantity' => round((float) collect($items)->sum('focBaseQuantity'), 4),
             ]);
-            if (! $isCredit) {
+            if (! $usesCredit) {
                 $this->loyaltyService->awardForPaidOrder($order->fresh('user'));
             }
 
             return $order->fresh(['items.product', 'items.unit', 'items.focUnit', 'payments', 'location', 'server', 'user']);
         }, 3);
+    }
+
+    private function resolveTenders(array $payload, float $final): \Illuminate\Support\Collection
+    {
+        if (! empty($payload['tenders'])) {
+            $tenders = collect($payload['tenders'])->map(function (array $tender) {
+                $type = strtolower((string) ($tender['type'] ?? ''));
+                if (! in_array($type, ['cash', 'mmqr', 'credit'], true)) {
+                    throw ValidationException::withMessages(['tenders' => 'Choose only cash, MMQR, or credit payment methods.']);
+                }
+                $amount = round((float) ($tender['amount'] ?? 0), 2);
+                $amountTendered = $type === 'cash'
+                    ? round((float) ($tender['amount_tendered'] ?? $amount), 2)
+                    : $amount;
+                if ($amount <= 0) {
+                    throw ValidationException::withMessages(['tenders' => 'Every selected payment amount must be greater than zero.']);
+                }
+                if ($type === 'cash' && $amountTendered + 0.009 < $amount) {
+                    throw ValidationException::withMessages(['tenders' => 'Cash received cannot be less than the cash payment amount.']);
+                }
+
+                return [
+                    'type' => $type,
+                    'amount' => $amount,
+                    'amount_tendered' => $amountTendered,
+                    'change_due' => $type === 'cash' ? round($amountTendered - $amount, 2) : 0.0,
+                    'reference' => trim((string) ($tender['reference'] ?? '')) ?: null,
+                ];
+            })->values();
+            if ($tenders->pluck('type')->unique()->count() !== $tenders->count()) {
+                throw ValidationException::withMessages(['tenders' => 'Each payment method can only be used once.']);
+            }
+            if (abs((float) $tenders->sum('amount') - $final) > 0.009) {
+                throw ValidationException::withMessages(['tenders' => 'Cash, MMQR, and credit amounts must equal the sale total.']);
+            }
+
+            return $tenders;
+        }
+
+        $type = strtolower((string) ($payload['tender_type'] ?? 'cash'));
+        if (! in_array($type, ['cash', 'mmqr', 'credit'], true)) {
+            throw ValidationException::withMessages(['tender_type' => 'Choose cash, MMQR, or credit.']);
+        }
+        $amountTendered = round((float) ($payload['amount_tendered'] ?? 0), 2);
+        if ($type === 'credit') {
+            if ($amountTendered < 0 || $amountTendered >= $final) {
+                throw ValidationException::withMessages(['amount_tendered' => 'Credit deposit must be zero or less than the sale total.']);
+            }
+            $depositMethod = strtolower((string) ($payload['credit_deposit_method'] ?? 'cash'));
+            if (! in_array($depositMethod, ['cash', 'mmqr'], true)) {
+                throw ValidationException::withMessages(['credit_deposit_method' => 'Choose cash or MMQR for the credit deposit.']);
+            }
+            $rows = collect();
+            if ($amountTendered > 0) {
+                $rows->push(['type' => $depositMethod, 'amount' => $amountTendered, 'amount_tendered' => $amountTendered, 'change_due' => 0.0, 'reference' => $payload['payment_details']['reference'] ?? null]);
+            }
+            return $rows->push(['type' => 'credit', 'amount' => round($final - $amountTendered, 2), 'amount_tendered' => round($final - $amountTendered, 2), 'change_due' => 0.0, 'reference' => null]);
+        }
+        if ($amountTendered < $final || ($type !== 'cash' && abs($amountTendered - $final) > 0.009)) {
+            throw ValidationException::withMessages(['amount_tendered' => $type === 'cash' ? 'Amount tendered must cover the sale total.' : 'MMQR payments must equal the sale total.']);
+        }
+
+        return collect([[
+            'type' => $type,
+            'amount' => $final,
+            'amount_tendered' => $amountTendered,
+            'change_due' => $type === 'cash' ? round($amountTendered - $final, 2) : 0.0,
+            'reference' => $payload['payment_details']['reference'] ?? null,
+        ]]);
     }
 
     private function discountAmount(array $payload, float $subtotal, User $cashier): float

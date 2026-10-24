@@ -191,6 +191,8 @@ class OrderManagementService
                 );
             }
 
+            $this->loyaltyService->reverseEarnedPoints($order, 'Points reversed for cancelled sale');
+
             foreach ($order->items as $item) {
                 $flashSaleItemId = $item->promotion_snapshot['flash_sale_item_id'] ?? null;
                 if ($flashSaleItemId) {
@@ -347,7 +349,7 @@ class OrderManagementService
             'shipped' => (clone $orders)->where('status', 'shipped')->count(),
             'delivered' => (clone $orders)->where('status', 'delivered')->count(),
             'cancelled' => (clone $orders)->where('status', 'cancelled')->count(),
-            'revenue_paid' => (float) (clone $orders)->where('payment_status', 'paid')->sum('final_amount'),
+            'revenue_paid' => (float) (clone $orders)->recognizedSale()->where('payment_status', 'paid')->sum('final_amount'),
         ];
     }
 }

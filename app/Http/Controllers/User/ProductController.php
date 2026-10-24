@@ -4,6 +4,7 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\Category;
@@ -105,7 +106,7 @@ class ProductController extends Controller
                     $query->leftJoinSub(
                         DB::table('order_items')
                             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                            ->where('orders.payment_status', 'paid')
+                            ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
                             ->selectRaw('order_items.product_id, SUM(order_items.quantity) as sold_qty')
                             ->groupBy('order_items.product_id'),
                         'sales_sort',
@@ -188,6 +189,7 @@ class ProductController extends Controller
                 ->join('orders', 'orders.id', '=', 'order_items.order_id')
                 ->join('products', 'products.id', '=', 'order_items.product_id')
                 ->where('orders.user_id', auth()->id())
+                ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
                 ->groupBy('products.category_id')
                 ->orderByRaw('SUM(order_items.quantity) DESC')
                 ->pluck('products.category_id');
@@ -220,7 +222,7 @@ class ProductController extends Controller
             ->join('orders', 'orders.id', '=', 'current_items.order_id')
             ->where('current_items.product_id', $product->id)
             ->whereColumn('other_items.product_id', '!=', 'current_items.product_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
             ->groupBy('other_items.product_id')
             ->orderByDesc(DB::raw('SUM(other_items.quantity)'))
             ->limit(6)

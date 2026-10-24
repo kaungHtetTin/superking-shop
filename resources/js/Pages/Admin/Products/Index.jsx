@@ -100,7 +100,7 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                     </Link>
                     <a href={routeWithBase('/admin/products/export', app_base)} className="btn secondary">
                         <Icon name="download" size={14} />
-                        {t('Export CSV')}
+                        {t('Export XLSX')}
                     </a>
                     <Link href={routeWithBase('/admin/products/barcodes', app_base)} className="btn secondary">
                         <Icon name="barcode" size={14} />

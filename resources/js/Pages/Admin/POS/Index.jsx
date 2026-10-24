@@ -103,14 +103,14 @@ const resolveCartPrice = (prices, priceType, flashSale, useFlashSale = false) =>
         : { ...regular, use_flash_sale: false };
 };
 
-export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {} }) {
+export default function PosIndex({ locations = [], registers = [], categories = [], priceTypes = ['retail'], can = {}, editOrder = null, editCart = [] }) {
     const { app_base, app_url, app_settings = {}, admin_landing_path, auth, flash = {}, errors: pageErrors = {} } = usePage().props;
     const logoutForm = useForm({});
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const t = useTranslation();
     const tp = usePhraseTranslation();
-    const firstLocation = locations[0];
+    const firstLocation = locations.find((item) => Number(item.id) === Number(editOrder?.location_id)) || locations[0];
     const [locationId, setLocationId] = useState(firstLocation?.id || '');
     const [categoryId, setCategoryId] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -139,6 +139,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const [mobileStep, setMobileStep] = useState('products');
     const [tenderType, setTenderType] = useState('cash');
     const [amountTendered, setAmountTendered] = useState('');
+    const [splitAmounts, setSplitAmounts] = useState({ cash: '', mmqr: '', credit: '' });
     const [creditDepositMethod, setCreditDepositMethod] = useState('cash');
     const [paymentReference, setPaymentReference] = useState('');
     const [saleNote, setSaleNote] = useState('');
@@ -167,7 +168,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const location = locations.find((item) => Number(item.id) === Number(locationId));
     const locationRegisters = registers.filter((item) => Number(item.location_id) === Number(locationId));
     const [registerId, setRegisterId] = useState('');
-    const paymentMethods = ['cash', 'mmqr', ...(can.credit ? ['credit'] : [])];
+    const paymentMethods = ['cash', 'mmqr', ...(can.credit ? ['credit'] : []), 'split'];
     const api = async (url, options = {}) => {
         setErrors({});
         try {
@@ -200,10 +201,47 @@ export default function PosIndex({ locations = [], registers = [], categories = 
 
     useEffect(() => {
         setRegisterId(String(locationRegisters[0]?.id || ''));
-        setCart([]);
-        setFlashSelection({});
+        if (!editOrder) {
+            setCart([]);
+            setFlashSelection({});
+        }
         refreshShift();
-    }, [locationId, refreshShift]);
+    }, [locationId, refreshShift, editOrder?.id]);
+
+    useEffect(() => {
+        if (!editOrder) return;
+        try {
+                if (!editCart.length) throw new Error(tp('The original sale has no editable items.'));
+                setCart(editCart.map((line) => ({ ...line })));
+                setSalePriceType(editOrder.items?.[0]?.price_type || 'retail');
+                setDiscountType(editOrder.admin_discount_type || '');
+                setDiscountValue(String(editOrder.admin_discount_value || ''));
+                setSaleNote(editOrder.order_notes || '');
+                if (editOrder.user) {
+                    const customer = { ...editOrder.user, is_walk_in: false };
+                    setCustomerOptions([WALK_IN_CUSTOMER, customer]);
+                    setSelectedCustomer(customer);
+                }
+                const allocations = {};
+                (editOrder.payments || []).filter((payment) => payment.status === 'paid').forEach((payment) => {
+                    allocations[payment.tender_type || payment.method] = (allocations[payment.tender_type || payment.method] || 0) + Number(payment.amount || 0);
+                    if ((payment.tender_type || payment.method) === 'mmqr') setPaymentReference(payment.payment_details?.reference || '');
+                });
+                if (Number(editOrder.credit_amount || 0) > 0) allocations.credit = Number(editOrder.credit_amount);
+                const methods = Object.keys(allocations).filter((key) => allocations[key] > 0);
+                if (methods.length > 1) {
+                    setTenderType('split');
+                    setSplitAmounts({ cash: String(allocations.cash || ''), mmqr: String(allocations.mmqr || ''), credit: String(allocations.credit || '') });
+                } else {
+                    const method = methods[0] || 'cash';
+                    setTenderType(method);
+                    setAmountTendered(String(method === 'credit' ? Number(editOrder.paid_amount || 0) : allocations[method] || editOrder.final_amount));
+                }
+                setMessage(`${tp('Editing POS sale')} ${editOrder.order_number}`);
+        } catch (error) {
+            setErrors({ edit: error.message || tp('Unable to load this POS sale for editing.') });
+        }
+    }, [editOrder?.id, editCart]);
 
     useEffect(() => {
         const refreshWhenActive = () => document.visibilityState === 'visible' && refreshShift();
@@ -463,12 +501,14 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     }, [cart.length, isMobile, mobileStep]);
 
     useEffect(() => {
-        setCart([]);
-        setFlashSelection({});
+        if (!editOrder) {
+            setCart([]);
+            setFlashSelection({});
+        }
         setSearchResults([]);
         setResultMeta((prev) => ({ ...prev, page: 1, has_more: false, next_page: null, mode: 'popular' }));
         setSearchQuery('');
-    }, [locationId]);
+    }, [locationId, editOrder?.id]);
 
     const getProductDisplayName = (product) => [product?.product_name, product?.unit_name].filter(Boolean).join(' · ') || product?.product_code || tp('Product');
 
@@ -641,15 +681,24 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             savings: items.reduce((sum, item) => sum + item.savings, 0),
         };
     }, [cart]);
+    const splitCash = Math.max(0, Number(splitAmounts.cash || 0));
+    const splitMmqr = Math.max(0, Number(splitAmounts.mmqr || 0));
+    const splitCredit = Math.max(0, Number(splitAmounts.credit || 0));
+    const splitTotal = splitCash + splitMmqr + splitCredit;
+    const splitRemaining = totals.grandTotal - splitTotal;
     const creditDeposit = tenderType === 'credit' ? Math.max(0, Number(amountTendered || 0)) : 0;
-    const creditAmount = tenderType === 'credit' ? Math.max(0, totals.grandTotal - creditDeposit) : 0;
-    const creditUnavailable = tenderType === 'credit' && (
+    const creditAmount = tenderType === 'credit' ? Math.max(0, totals.grandTotal - creditDeposit) : tenderType === 'split' ? splitCredit : 0;
+    const usesCredit = creditAmount > 0;
+    const creditUnavailable = usesCredit && (
         !selectedCustomer
         || selectedCustomer.is_walk_in
         || selectedCustomer.credit_status !== 'active'
         || creditAmount <= 0
         || creditAmount > Number(selectedCustomer.available_credit || 0) + 0.009
     );
+    const paymentInvalid = (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal)
+        || (tenderType === 'split' && (Math.abs(splitRemaining) > 0.009 || [splitCash, splitMmqr, splitCredit].filter((amount) => amount > 0).length < 2))
+        || creditUnavailable;
     const quickCashAmounts = useMemo(() => {
         const total = Math.ceil(Number(totals.grandTotal || 0));
         const denominations = [1000, 5000, 10000, 20000, 50000, 100000];
@@ -752,7 +801,9 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 if (updated.some(line => line.unit_price <= 0)) { setScanError('A cart item is unavailable or needs a selling price. Review the cart.'); return; }
                 const subtotal = updated.reduce((sum, item) => sum + calculateLineTotal(item), 0);
                 const discount = Math.min(subtotal, Math.max(0, discountType === 'percent' ? subtotal * Number(discountValue || 0) / 100 : Number(discountValue || 0)));
-                setAmountTendered(String(subtotal - discount));
+                const finalTotal = subtotal - discount;
+                setAmountTendered(String(finalTotal));
+                setSplitAmounts({ cash: String(Math.floor(finalTotal / 2)), mmqr: String(finalTotal - Math.floor(finalTotal / 2)), credit: '' });
             } catch { return; }
             finally { setBusy(false); }
             if (isMobile) {
@@ -766,7 +817,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
     const checkout = async (event) => {
         event.preventDefault();
         if (!locationId || !cart.length || checkoutSubmittingRef.current) return;
-        if (!selectedCustomer && tenderType === 'credit') {
+        if (!selectedCustomer && usesCredit) {
             setScanError(tp('Choose a registered customer before completing the sale.'));
             return;
         }
@@ -774,7 +825,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
         checkoutSubmittingRef.current = true;
         setBusy(true);
         try {
-            const data = await api('/admin/pos/checkout', {
+            const data = await api(editOrder ? `/admin/orders/${editOrder.id}/revise-pos-sale` : '/admin/pos/checkout', {
                 method: 'post',
                 data: {
                     location_id: locationId,
@@ -793,8 +844,13 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     })),
                     discount_type: discountType || null,
                     discount_value: discountValue || 0,
-                    tender_type: tenderType,
-                    amount_tendered: ['cash', 'credit'].includes(tenderType) ? Number(amountTendered || 0) : totals.grandTotal,
+                    tender_type: tenderType === 'split' ? null : tenderType,
+                    amount_tendered: tenderType === 'split' ? null : (['cash', 'credit'].includes(tenderType) ? Number(amountTendered || 0) : totals.grandTotal),
+                    tenders: tenderType === 'split' ? [
+                        splitCash > 0 ? { type: 'cash', amount: splitCash, amount_tendered: splitCash } : null,
+                        splitMmqr > 0 ? { type: 'mmqr', amount: splitMmqr, reference: paymentReference.trim() || null } : null,
+                        splitCredit > 0 ? { type: 'credit', amount: splitCredit } : null,
+                    ].filter(Boolean) : null,
                     credit_deposit_method: tenderType === 'credit' ? creditDepositMethod : null,
                     payment_details: paymentReference.trim() && (tenderType === 'mmqr' || (tenderType === 'credit' && creditDepositMethod === 'mmqr'))
                         ? { reference: paymentReference.trim() }
@@ -812,13 +868,14 @@ export default function PosIndex({ locations = [], registers = [], categories = 
             setFlashSelection({});
             setDiscountType('');
             setDiscountValue('');
+            setSplitAmounts({ cash: '', mmqr: '', credit: '' });
             setSelectedCustomer(WALK_IN_CUSTOMER);
             setCustomerSearchInput('');
             setPaymentReference('');
             setSaleNote('');
             setPaymentDialogOpen(false);
             setMobileStep('products');
-            setMessage(`${tp('Sale completed')}: ${data.order.receipt_number}`);
+            setMessage(`${tp(editOrder ? 'POS sale updated' : 'Sale completed')}: ${data.order.receipt_number}`);
             await refreshShift();
             window.setTimeout(() => searchInputRef.current?.focus(), 100);
         } finally {
@@ -1011,11 +1068,15 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         if (!next) return;
                         setTenderType(next);
                         setAmountTendered(next === 'credit' ? '0' : String(totals.grandTotal));
+                        if (next === 'split') {
+                            const half = Math.floor(totals.grandTotal / 2);
+                            setSplitAmounts({ cash: String(half), mmqr: String(totals.grandTotal - half), credit: '' });
+                        }
                         setPaymentReference('');
                     }}
                 >
                     {paymentMethods.map((method) => (
-                        <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{method === 'mmqr' ? 'MMQR (Pay)' : tp(method)}</ToggleButton>
+                        <ToggleButton key={method} value={method} sx={{ flex: 1, textTransform: 'none' }}>{method === 'mmqr' ? 'MMQR (Pay)' : tp(method === 'split' ? 'Split' : method)}</ToggleButton>
                     ))}
                 </ToggleButtonGroup>
             </Box>
@@ -1077,6 +1138,34 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     )}
                 </Stack>
             )}
+            {tenderType === 'split' && (
+                <Stack spacing={1}>
+                    <Alert severity={Math.abs(splitRemaining) <= 0.009 ? 'success' : splitRemaining > 0 ? 'info' : 'error'}>
+                        {Math.abs(splitRemaining) <= 0.009
+                            ? tp('Payment total matches the sale total.')
+                            : `${tp(splitRemaining > 0 ? 'Remaining' : 'Over allocated')}: ${money(Math.abs(splitRemaining))}`}
+                    </Alert>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1 }}>
+                        <TextField size="small" type="number" label={tp('Cash amount')} value={splitAmounts.cash}
+                            onChange={(event) => setSplitAmounts((current) => ({ ...current, cash: event.target.value }))}
+                            inputProps={{ min: 0, step: 100 }} fullWidth />
+                        <TextField size="small" type="number" label="MMQR (Pay)" value={splitAmounts.mmqr}
+                            onChange={(event) => setSplitAmounts((current) => ({ ...current, mmqr: event.target.value }))}
+                            inputProps={{ min: 0, step: 100 }} fullWidth />
+                        {can.credit && <TextField size="small" type="number" label={tp('Credit amount')} value={splitAmounts.credit}
+                            onChange={(event) => setSplitAmounts((current) => ({ ...current, credit: event.target.value }))}
+                            inputProps={{ min: 0, step: 100 }} fullWidth />}
+                    </Box>
+                    {splitMmqr > 0 && <TextField size="small" label={tp('MMQR transaction reference')} value={paymentReference}
+                        onChange={(event) => setPaymentReference(event.target.value)} inputProps={{ maxLength: 100 }} fullWidth />}
+                    {splitCredit > 0 && (!selectedCustomer || selectedCustomer.is_walk_in) && <Alert severity="warning">{tp('Choose a registered customer for a credit sale.')}</Alert>}
+                    {splitCredit > 0 && selectedCustomer && !selectedCustomer.is_walk_in && (
+                        <Alert severity={!creditUnavailable ? 'info' : 'error'}>
+                            {tp('Credit balance')}: {money(splitCredit)} · {tp('Available credit')}: {money(selectedCustomer.available_credit || 0)}
+                        </Alert>
+                    )}
+                </Stack>
+            )}
             <TextField size="small" label={tp('Sale note (optional)')} value={saleNote}
                 onChange={(event) => setSaleNote(event.target.value)} inputProps={{ maxLength: 500 }} multiline minRows={2} fullWidth />
         </Stack>
@@ -1088,7 +1177,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                 type="submit"
                 variant="outlined"
                 startIcon={<PrintIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || paymentInvalid}
                 onClick={() => {
                     checkoutIntentRef.current = 'print';
                 }}
@@ -1102,13 +1191,13 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
                 }}
             >
-                {tp('Complete & Print')}
+                {tp(editOrder ? 'Update & Print' : 'Complete & Print')}
             </Button>
             <Button
                 type="submit"
                 variant="contained"
                 startIcon={<CheckoutIcon />}
-                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || (tenderType === 'cash' && Number(amountTendered || 0) < totals.grandTotal) || creditUnavailable}
+                disabled={busy || cart.length === 0 || !locationId || !activeShift || hasStockIssue || hasFlashSaleIssue || paymentInvalid}
                 onClick={() => {
                     checkoutIntentRef.current = 'complete';
                 }}
@@ -1122,7 +1211,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
                 }}
             >
-                {tp('Complete Sale')}
+                {tp(editOrder ? 'Update Sale' : 'Complete Sale')}
             </Button>
         </>
     );
@@ -1866,7 +1955,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                             </Box>
                             <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', minHeight: 28 }}>
                                 <Typography component="h2" className="pos-console__shift-title">
-                                    {tp('Complete Sale')}
+                                    {tp(editOrder ? 'Edit POS Sale' : 'Complete Sale')}{editOrder ? ` — ${editOrder.order_number}` : ''}
                                 </Typography>
                             </Box>
                         </Stack>
@@ -1875,6 +1964,7 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                         </IconButton>
                     </DialogTitle>
                     <DialogContent className="pos-console__payment-body pos-console__shift-body" sx={{ p: 1.25, bgcolor: 'grey.50', overflowY: 'auto' }}>
+                        {editOrder && <Alert severity="warning" sx={{ mb: 1 }}>{tp('Saving will revise stock, payments, credit, loyalty points, and reports. The original sale remains in the audit history.')}</Alert>}
                         {paymentFormContent}
                     </DialogContent>
                     <DialogActions className="pos-console__payment-actions pos-console__shift-actions" sx={{ flexWrap: 'wrap', gap: 0.75, px: 1.25, py: 1, borderTop: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
@@ -2077,7 +2167,6 @@ export default function PosIndex({ locations = [], registers = [], categories = 
                     {receipt?.receipt_url && <Button variant="contained" component="a" href={receipt.receipt_url}>{tp('Open receipt')}</Button>}
                 </DialogActions>
             </Dialog>
-
             <Dialog open={customerDialogOpen} onClose={() => !customerCreating && setCustomerDialogOpen(false)} maxWidth="xs" fullWidth>
                 <Box component="form" onSubmit={createCustomer}>
                     <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

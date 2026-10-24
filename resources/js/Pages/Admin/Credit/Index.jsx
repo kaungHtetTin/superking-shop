@@ -38,7 +38,7 @@ export default function CreditReport({ customers, filters = {}, aging = {}, coll
     const clearFilters = () => router.get(routeWithBase('/admin/credit', app_base), {}, { preserveState: true, preserveScroll: true });
 
     return (
-        <AdminLayout title={t('Credit accounts')} eyebrow={t('Accounts receivable')} action={<a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('Export CSV')}</a>}>
+        <AdminLayout title={t('Credit accounts')} eyebrow={t('Accounts receivable')} action={<a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('Export XLSX')}</a>}>
             <Head title={t('Credit accounts')} />
 
             <div className="credit-report-page">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditTransaction;
 use App\Models\Order;
+use App\Services\ExcelExportService;
 use App\Support\Spa;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -49,7 +50,7 @@ class CreditReportController extends Controller
         ]);
     }
 
-    public function export(Request $request)
+    public function export(Request $request, ExcelExportService $excel)
     {
         $bucket = $request->string('bucket')->toString() ?: 'all';
         abort_unless(in_array($bucket, ['all', 'current', '1_30', '31_60', '61_90', '90_plus'], true), 422);
@@ -59,12 +60,9 @@ class CreditReportController extends Controller
             ->orderByDesc('outstanding')
             ->selectRaw('users.name, users.email, users.phone, users.credit_limit, users.credit_status, SUM(orders.final_amount - orders.paid_amount) outstanding, SUM(CASE WHEN orders.credit_due_date < CURRENT_DATE THEN orders.final_amount - orders.paid_amount ELSE 0 END) overdue, MIN(orders.credit_due_date) oldest_due_date, COUNT(*) invoice_count')->cursor();
 
-        return response()->streamDownload(function () use ($rows) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, ['Customer', 'Email', 'Phone', 'Status', 'Credit limit', 'Outstanding', 'Overdue', 'Oldest due', 'Invoices']);
-            foreach ($rows as $row) fputcsv($out, [$row->name, $row->email, $row->phone, $row->credit_status, $row->credit_limit, $row->outstanding, $row->overdue, $row->oldest_due_date, $row->invoice_count]);
-            fclose($out);
-        }, 'credit-aging-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
+        $data = $rows->map(fn ($row) => [$row->name, $row->email, $row->phone, $row->credit_status, $row->credit_limit, $row->outstanding, $row->overdue, $row->oldest_due_date, $row->invoice_count]);
+        $path = $excel->create('Credit Aging', ['Customer', 'Email', 'Phone', 'Status', 'Credit limit', 'Outstanding', 'Overdue', 'Oldest due', 'Invoices'], $data);
+        return response()->download($path, 'credit-aging-'.now()->format('Y-m-d').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     private function openOrders(): Builder

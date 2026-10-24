@@ -28,7 +28,7 @@ class CustomerController extends Controller
         $query = User::query()
             ->where('role', User::CUSTOMER_ROLE)
             ->withCount('orders')
-            ->withSum(['orders as paid_revenue' => fn ($q) => $q->where('payment_status', 'paid')], 'final_amount')
+            ->withSum(['orders as paid_revenue' => fn ($q) => $q->recognizedSale()->where('payment_status', 'paid')], 'final_amount')
             ->withSum('creditTransactions as credit_balance', 'amount')
             ->latest();
 
@@ -196,9 +196,9 @@ class CustomerController extends Controller
         abort_unless($customer->role === User::CUSTOMER_ROLE, 404);
 
         $customer->loadCount(['orders', 'reviews'])
-            ->loadSum(['orders as paid_revenue' => fn ($q) => $q->where('payment_status', 'paid')], 'final_amount');
+            ->loadSum(['orders as paid_revenue' => fn ($q) => $q->recognizedSale()->where('payment_status', 'paid')], 'final_amount');
 
-        $paidOrders = $customer->orders()->where('payment_status', 'paid');
+        $paidOrders = $customer->orders()->recognizedSale()->where('payment_status', 'paid');
         $paidOrderCount = (clone $paidOrders)->count();
         $totalSpent = (float) (clone $paidOrders)->sum('final_amount');
         $cancelledOrders = $customer->orders()->where('status', 'cancelled')->count();
@@ -216,7 +216,7 @@ class CustomerController extends Controller
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->join('categories', 'categories.id', '=', 'products.category_id')
             ->where('orders.user_id', $customer->id)
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
             ->groupBy('categories.id', 'categories.name')
             ->orderByDesc(DB::raw('SUM(order_items.total_price)'))
             ->limit(5)

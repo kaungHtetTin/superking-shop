@@ -16,11 +16,13 @@ export default function ReceiptPaper({ order, settings = {} }) {
     const is80mm = receipt.paper_size === '80mm';
     const isOrderPaper = isA5 || is80mm;
     const tender = order.pos_tender_summary?.tender_type || order.payment_method;
-    const cashPayment = order.payments?.find((payment) => payment.tender_type === 'cash');
-    const payment = order.payments?.[0];
-    const changeDue = Number(order.pos_tender_summary?.change_due ?? cashPayment?.change_due ?? 0);
-    const amountTendered = Number(order.pos_tender_summary?.amount_tendered ?? payment?.amount_tendered ?? order.final_amount ?? 0);
-    const paymentReference = payment?.payment_details?.reference;
+    const tenderRows = Array.isArray(order.pos_tender_summary?.tenders)
+        ? order.pos_tender_summary.tenders
+        : [
+            ...(order.payments || []).map((row) => ({ type: row.tender_type || row.method, amount: Number(row.amount), amount_tendered: Number(row.amount_tendered ?? row.amount), change_due: Number(row.change_due || 0), reference: row.payment_details?.reference })),
+            ...(Number(order.credit_amount || 0) > 0 ? [{ type: 'credit', amount: Number(order.credit_amount) }] : []),
+        ];
+    const tenderLabel = tenderRows.length > 1 ? t('Split payment') : (tender === 'mmqr' ? 'MMQR (Pay)' : t(tender || 'cash'));
     const flashDiscount = order.items.reduce((sum, item) => sum + Number(item.promotion_snapshot?.discount_amount || 0), 0);
     const subtotalBeforeFlash = Number(order.total_amount || 0) + flashDiscount;
     const shopName = receipt.shop_name || settings.app_name || 'LaLaPick';
@@ -42,7 +44,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 <div className="receipt-a5-details">
                     <div>
                         <strong>{t('Customer')}</strong>
-                        {receipt.show_customer && <span>{order.user?.name || t('Walk-in customer')}</span>}
+                        {receipt.show_customer && <span>{order.receiver_name || order.user?.name || t('Walk-in customer')}{order.receiver_phone ? ` · ${order.receiver_phone}` : ''}</span>}
                         <span>{locationName}</span>
                     </div>
                     <div>
@@ -51,7 +53,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
                         <span>{receiptDate}</span>
                     </div>
                 </div>
-                <div className="receipt-order-payment"><strong>{t('Tender')}:</strong> <span>{tender === 'mmqr' ? 'MMQR (Pay)' : t(tender || 'cash')}</span></div>
+                <div className="receipt-order-payment"><strong>{t('Tender')}:</strong> <span>{tenderLabel}</span></div>
             </> : <>
                 {isSheet && <p className="receipt-document-title">{t('Sales receipt')}</p>}
                 {receipt.show_logo && settings.logo_url && <img className="receipt-logo" src={settings.logo_url} alt="" />}
@@ -60,7 +62,7 @@ export default function ReceiptPaper({ order, settings = {} }) {
                 {receipt.phone && <p>{receipt.phone}</p>}
                 <p>{locationName}</p>
                 <div className="receipt-meta-line"><strong>{order.receipt_number}</strong><span>{receiptDate}</span></div>
-                {receipt.show_customer && <span>{t('Customer')}: {order.user?.name || t('Walk-in customer')}</span>}
+                {receipt.show_customer && <span>{t('Customer')}: {order.receiver_name || order.user?.name || t('Walk-in customer')}{order.receiver_phone ? ` · ${order.receiver_phone}` : ''}</span>}
             </>}
         </header>
         {isOrderPaper || isSheet ? <div className="receipt-line-items" role="region" aria-label={t('Receipt line items')}>
@@ -107,10 +109,15 @@ export default function ReceiptPaper({ order, settings = {} }) {
             {flashDiscount > 0 && <><span>{t('Flash sale discount')}</span><strong>-{formatMoney(flashDiscount)}</strong></>}
             <span>{t('Discount')}</span><strong>-{formatMoney(order.discount_amount || 0)}</strong>
             <span className="receipt-grand-total">{t('Total')}</span><strong className="receipt-grand-total">{formatMoney(order.final_amount)}</strong>
-            <span>{t('Tender')}</span><strong>{tender === 'mmqr' ? 'MMQR (Pay)' : t(tender || 'cash')}</strong>
-            {tender === 'cash' && <><span>{t('Cash received')}</span><strong>{formatMoney(amountTendered)}</strong></>}
-            {tender === 'cash' && <><span>{t('Change')}</span><strong>{formatMoney(changeDue)}</strong></>}
-            {paymentReference && <><span>{t('Transaction reference')}</span><strong>{paymentReference}</strong></>}
+            <span>{t('Tender')}</span><strong>{tenderLabel}</strong>
+            {tenderRows.map((row, index) => <div key={`${row.type}-${index}`} style={{ display: 'contents' }}>
+                <span>{row.type === 'mmqr' ? 'MMQR (Pay)' : t(row.type || 'cash')}</span><strong>{formatMoney(row.amount)}</strong>
+                {row.type === 'cash' && Number(row.amount_tendered || 0) > Number(row.amount || 0) && <>
+                    <span>{t('Cash received')}</span><strong>{formatMoney(row.amount_tendered)}</strong>
+                    <span>{t('Change')}</span><strong>{formatMoney(row.change_due || 0)}</strong>
+                </>}
+                {row.reference && <><span>{t('Transaction reference')}</span><strong>{row.reference}</strong></>}
+            </div>)}
             {Number(order.credit_amount || 0) > 0 && <>
                 <span>{t('Paid now')}</span><strong>{formatMoney(order.paid_amount || 0)}</strong>
                 <span>{t('Credit balance')}</span><strong>{formatMoney(Math.max(0, Number(order.final_amount) - Number(order.paid_amount || 0)))}</strong>

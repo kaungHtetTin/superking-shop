@@ -227,8 +227,8 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                     </div>
                     <div className="inline-actions orders-filter__actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
-                        <a className="btn secondary" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
-                            <Icon name="download" size={14} /> CSV
+                        <a className="btn secondary" href={`${routeWithBase('/admin/orders-export.xlsx', app_base)}?${exportQuery.toString()}`}>
+                            <Icon name="download" size={14} /> XLSX
                         </a>
                     </div>
                 </form>
@@ -352,8 +352,8 @@ export default function OrdersIndex({ orders, stats, filters, locations = [], ca
                         </div>
                         <div className="orders-filter__drawer-body">
                             {renderFilterFields(true)}
-                            <a className="btn secondary orders-filter__drawer-export" href={`${routeWithBase('/admin/orders-export.csv', app_base)}?${exportQuery.toString()}`}>
-                                <Icon name="download" size={14} /> CSV
+                            <a className="btn secondary orders-filter__drawer-export" href={`${routeWithBase('/admin/orders-export.xlsx', app_base)}?${exportQuery.toString()}`}>
+                                <Icon name="download" size={14} /> XLSX
                             </a>
                         </div>
                         <div className="drawer-actions">

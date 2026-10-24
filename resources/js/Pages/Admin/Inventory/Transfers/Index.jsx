@@ -45,7 +45,7 @@ export default function TransfersIndex({ transfers, filters = {}, locations = []
         <AdminLayout
             title={t('Transfers')}
             eyebrow={t('Inventory')}
-            action={<div className="inline-actions"><a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('CSV')}</a>{canCreate && <Link className="btn primary" href={routeWithBase('/admin/inventory/transfers/create', app_base)}><Icon name="plus" size={14} /> {t('New transfer')}</Link>}</div>}
+            action={<div className="inline-actions"><a className="btn secondary" href={exportHref}><Icon name="download" size={14} /> {t('XLSX')}</a>{canCreate && <Link className="btn primary" href={routeWithBase('/admin/inventory/transfers/create', app_base)}><Icon name="plus" size={14} /> {t('New transfer')}</Link>}</div>}
         >
             <Head title={t('Stock Transfers')} />
             <AdminFlash flash={flash} errors={errors} />

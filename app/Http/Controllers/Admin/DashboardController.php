@@ -27,9 +27,9 @@ class DashboardController extends Controller
         $monthStart = now()->startOfMonth();
 
         $salesByDay = Order::query()
+            ->recognizedSale()
             ->whereIn('location_id', $locationIds)
             ->selectRaw('DATE(created_at) as day, COUNT(*) as orders, COALESCE(SUM(final_amount), 0) as revenue')
-            ->where('payment_status', 'paid')
             ->where('created_at', '>=', $monthStart)
             ->groupBy('day')
             ->orderBy('day')
@@ -75,7 +75,7 @@ class DashboardController extends Controller
         $topProducts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
             ->whereIn('orders.location_id', $locationIds)
             ->where('orders.created_at', '>=', $monthStart)
             ->selectRaw(
@@ -112,12 +112,12 @@ class DashboardController extends Controller
                 'topProducts' => $topProducts,
                 'lowStockCount' => $lowStockCount,
                 'lowStockItems' => $lowStockItems,
-                'todayRevenue' => (float) Order::where('payment_status', 'paid')
+                'todayRevenue' => (float) Order::query()->recognizedSale()
                     ->whereIn('location_id', $locationIds)
                     ->whereDate('created_at', today())
                     ->sum('final_amount'),
-                'todayOrders' => Order::whereIn('location_id', $locationIds)->whereDate('created_at', today())->count(),
-                'monthRevenue' => (float) Order::where('payment_status', 'paid')
+                'todayOrders' => Order::query()->recognizedSale()->whereIn('location_id', $locationIds)->whereDate('created_at', today())->count(),
+                'monthRevenue' => (float) Order::query()->recognizedSale()
                     ->whereIn('location_id', $locationIds)
                     ->where('created_at', '>=', $monthStart)
                     ->sum('final_amount'),

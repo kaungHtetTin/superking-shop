@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Location;
 use App\Models\OrderItem;
 use App\Services\AuditLogService;
+use App\Services\ExcelExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -215,7 +216,7 @@ class FinanceController extends Controller
         return back()->with('success', 'Financial entry created.');
     }
 
-    public function export(Request $request)
+    public function export(Request $request, ExcelExportService $excel)
     {
         [$from, $to] = $this->dateRange($request);
         $location = $this->selectedLocation($request);
@@ -235,15 +236,9 @@ class FinanceController extends Controller
                 $q->where(fn ($inner) => $inner->where('title', 'like', "%{$term}%")->orWhere('reference', 'like', "%{$term}%")->orWhere('notes', 'like', "%{$term}%"));
             });
 
-        return response()->streamDownload(function () use ($query) {
-            $output = fopen('php://output', 'w');
-            fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['Date', 'Store', 'Type', 'Category', 'Title', 'Amount', 'Payment method', 'Reference', 'Status', 'Recorded by', 'Notes']);
-            $query->orderBy('id')->chunkById(500, function ($entries) use ($output) {
-                foreach ($entries as $entry) fputcsv($output, [$entry->entry_date?->format('Y-m-d'), $entry->location?->name ?: 'Overall', $entry->type, $entry->category, $entry->title, $entry->amount, $entry->payment_method, $entry->reference, $entry->status, $entry->recorder?->name, $entry->notes]);
-            });
-            fclose($output);
-        }, 'finance-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        $rows = $query->orderBy('id')->lazyById(500)->map(fn ($entry) => [$entry->entry_date?->format('Y-m-d'), $entry->location?->name ?: 'Overall', $entry->type, $entry->category, $entry->title, $entry->amount, $entry->payment_method, $entry->reference, $entry->status, $entry->recorder?->name, $entry->notes]);
+        $path = $excel->create('Finance', ['Date', 'Store', 'Type', 'Category', 'Title', 'Amount', 'Payment method', 'Reference', 'Status', 'Recorded by', 'Notes'], $rows);
+        return response()->download($path, 'finance-'.now()->format('Ymd-His').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     public function update(Request $request, FinancialEntry $entry, AuditLogService $auditLogService)

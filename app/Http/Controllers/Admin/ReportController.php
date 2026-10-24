@@ -11,6 +11,7 @@ use App\Models\Coupon;
 use App\Models\Location;
 use App\Models\FinancialEntry;
 use App\Services\OperationsReportService;
+use App\Services\ExcelExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -344,11 +345,11 @@ class ReportController extends Controller
         ]);
     }
 
-    public function export(Request $request, OperationsReportService $operations)
+    public function export(Request $request, OperationsReportService $operations, ExcelExportService $excel)
     {
         $view = $request->string('view')->toString();
         if (! in_array($view, ['sales', 'product-sales', 'inventory', 'pos'], true)) {
-            throw ValidationException::withMessages(['view' => 'Choose sales, product sales, inventory, or POS for CSV export.']);
+            throw ValidationException::withMessages(['view' => 'Choose sales, product sales, inventory, or POS for XLSX export.']);
         }
 
         $this->authorizeView($request->user(), $view);
@@ -369,7 +370,7 @@ class ReportController extends Controller
         abort_if($locationId && ! in_array($locationId, $accessibleIds, true), 403);
         $locationIds = $locationId ? [$locationId] : $accessibleIds;
 
-        $filename = $view.'-report-'.now()->format('Ymd-His').'.csv';
+        $filename = $view.'-report-'.now()->format('Ymd-His').'.xlsx';
         if ($view === 'product-sales') {
             $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : now()->startOfMonth();
             $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
@@ -388,63 +389,40 @@ class ReportController extends Controller
             $rows = $query->groupBy($groups)->orderBy($daily ? DB::raw('DATE(orders.created_at)') : 'products.name')
                 ->selectRaw(($daily ? 'DATE(orders.created_at) as sale_date, ' : '')."products.name as product_name, products.product_code, locations.name as location_name, COUNT(DISTINCT orders.id) as orders, SUM(order_items.base_quantity) as units_sold, SUM(order_items.foc_base_quantity) as foc_units, SUM(order_items.total_price) as gross_sales, SUM($discount) as discount_amount, SUM(order_items.total_price - ($discount)) as net_sales")->get();
 
-            return response()->streamDownload(function () use ($rows, $daily) {
-                $output = fopen('php://output', 'w'); fwrite($output, "\xEF\xBB\xBF");
-                fputcsv($output, array_values(array_filter(['Date' => $daily ? 'Date' : null, 'Product' => 'Product', 'Code' => 'Code', 'Store' => 'Store', 'Orders' => 'Orders', 'Units' => 'Units sold', 'FOC' => 'FOC units', 'Gross' => 'Gross sales', 'Discount' => 'Discount', 'Net' => 'Net sales'])));
-                foreach ($rows as $row) fputcsv($output, array_values(array_filter([$daily ? $row->sale_date : null, $row->product_name, $row->product_code, $row->location_name, $row->orders, $row->units_sold, $row->foc_units, $row->gross_sales, $row->discount_amount, $row->net_sales], fn ($value) => $value !== null)));
-                fclose($output);
-            }, ($daily ? 'daily-' : 'summary-').$filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+            $headers = array_values(array_filter(['Date' => $daily ? 'Date' : null, 'Product' => 'Product', 'Code' => 'Code', 'Store' => 'Store', 'Orders' => 'Orders', 'Units' => 'Units sold', 'FOC' => 'FOC units', 'Gross' => 'Gross sales', 'Discount' => 'Discount', 'Net' => 'Net sales']));
+            $data = $rows->map(fn ($row) => array_values(array_filter([$daily ? $row->sale_date : null, $row->product_name, $row->product_code, $row->location_name, $row->orders, $row->units_sold, $row->foc_units, $row->gross_sales, $row->discount_amount, $row->net_sales], fn ($value) => $value !== null)));
+            $path = $excel->create('Product Sales', $headers, $data);
+            return response()->download($path, ($daily ? 'daily-' : 'summary-').$filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
         }
         if ($view === 'sales') {
             $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
             $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
-            $orders = Order::query()->with(['location:id,code,name', 'user:id,name,email,phone'])->withCount('items')
+            $orders = Order::query()->with(['location:id,code,name', 'user:id,name,email,phone', 'items:id,order_id,cost_price,quantity,foc_cost_price'])->withCount('items')
                 ->recognizedSale()->whereIn('location_id', $locationIds)
                 ->when($from, fn ($query) => $query->where('created_at', '>=', $from))
                 ->when($to, fn ($query) => $query->where('created_at', '<=', $to));
 
-            return response()->streamDownload(function () use ($orders) {
-                $output = fopen('php://output', 'w');
-                fwrite($output, "\xEF\xBB\xBF");
-                fputcsv($output, ['Date', 'Store', 'Order number', 'Channel', 'Customer', 'Items', 'Gross sales', 'Discount', 'Shipping', 'Revenue', 'COGS', 'Gross profit']);
-                $orders->orderBy('id')->chunkById(500, function ($rows) use ($output) {
-                    $costs = OrderItem::query()->whereIn('order_id', $rows->pluck('id'))
-                        ->selectRaw('order_id, COALESCE(SUM((cost_price * quantity) + foc_cost_price), 0) as cost')
-                        ->groupBy('order_id')->pluck('cost', 'order_id');
-                    foreach ($rows as $order) {
-                        $cost = (float) ($costs[$order->id] ?? 0);
-                        fputcsv($output, [$order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->order_number, $order->sales_channel, $order->user?->name, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $cost, round((float) $order->final_amount - $cost, 2)]);
-                    }
-                });
-                fclose($output);
-            }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+            $data = $orders->orderBy('id')->lazyById(500)->map(function ($order) {
+                $cost = (float) $order->items->sum(fn ($item) => ((float) $item->cost_price * (float) $item->quantity) + (float) $item->foc_cost_price);
+                return [$order->created_at?->format('Y-m-d H:i:s'), $order->location?->name, $order->order_number, $order->sales_channel, $order->user?->name, $order->items_count, $order->total_amount, $order->discount_amount, $order->shipping_fee, $order->final_amount, $cost, round((float) $order->final_amount - $cost, 2)];
+            });
+            $path = $excel->create('Sales', ['Date', 'Store', 'Order number', 'Channel', 'Customer', 'Items', 'Gross sales', 'Discount', 'Shipping', 'Revenue', 'COGS', 'Gross profit'], $data);
+            return response()->download($path, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
         }
 
         $report = $view === 'inventory'
             ? $operations->inventory($request->user(), $filters)
             : $operations->pos($request->user(), $filters);
 
-        return response()->streamDownload(function () use ($view, $report) {
-            $output = fopen('php://output', 'w');
-            fwrite($output, "\xEF\xBB\xBF");
-            if ($view === 'inventory') {
-                fputcsv($output, ['Warehouse', 'Product', 'Product code', 'On hand (base)', 'Reserved (base)', 'Available (base)', 'Minimum quantity', 'Cost value', 'Default retail price']);
-                foreach ($report['stock_rows'] as $row) {
-                    fputcsv($output, [
-                        $row->location_name, $row->product_name, $row->product_code, $row->on_hand_qty,
-                        $row->reserved_qty, $row->available_qty, $row->min_quantity, $row->cost_value, $row->retail_price,
-                    ]);
-                }
-            } else {
-                fputcsv($output, ['Tender type', 'Payments', 'Amount']);
-                foreach ($report['tenders'] as $row) {
-                    fputcsv($output, [
-                        $row->tender_type, $row->payments, $row->amount,
-                    ]);
-                }
-            }
-            fclose($output);
-        }, $filename, ['Content-Type' => 'text/csv']);
+        if ($view === 'inventory') {
+            $headers = ['Warehouse', 'Product', 'Product code', 'On hand (base)', 'Reserved (base)', 'Available (base)', 'Minimum quantity', 'Cost value', 'Default retail price'];
+            $data = collect($report['stock_rows'])->map(fn ($row) => [$row->location_name, $row->product_name, $row->product_code, $row->on_hand_qty, $row->reserved_qty, $row->available_qty, $row->min_quantity, $row->cost_value, $row->retail_price]);
+        } else {
+            $headers = ['Tender type', 'Payments', 'Amount'];
+            $data = collect($report['tenders'])->map(fn ($row) => [$row->tender_type, $row->payments, $row->amount]);
+        }
+        $path = $excel->create($view === 'inventory' ? 'Inventory Report' : 'Tender Report', $headers, $data);
+        return response()->download($path, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
     }
 
     private function authorizeView(User $user, string $view): void

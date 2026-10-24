@@ -88,7 +88,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin.permission:catalog.manage')->name('products.toggle-status');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('admin.permission:catalog.manage')->name('products.destroy');
     Route::get('/orders', [OrderController::class, 'index'])->middleware('admin.permission:orders.view')->name('orders.index');
-    Route::get('/orders-export.csv', [OrderController::class, 'export'])->middleware('admin.permission:orders.view')->name('orders.export');
+    Route::get('/orders-export.xlsx', [OrderController::class, 'export'])->middleware('admin.permission:orders.view')->name('orders.export');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->middleware('admin.permission:orders.view')->name('orders.show');
     Route::get('/orders/{order}/voucher', [OrderVoucherController::class, 'show'])->middleware('admin.permission:orders.view')->name('orders.voucher.show');
     Route::get('/orders/{order}/voucher/pdf', [OrderVoucherController::class, 'pdf'])->middleware('admin.permission:orders.view')->name('orders.voucher.pdf');
@@ -105,6 +105,15 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::patch('/orders/{order}/notes', [OrderController::class, 'updateNotes'])
         ->middleware('order.staff')
         ->name('orders.update-notes');
+    Route::patch('/orders/{order}/voucher', [PosController::class, 'updateVoucher'])
+        ->middleware('admin.any_permission:orders.manage,pos.void')
+        ->name('orders.voucher.update');
+    Route::get('/orders/{order}/edit-pos-sale', [PosController::class, 'editSale'])
+        ->middleware('admin.any_permission:orders.manage,pos.void')
+        ->name('orders.pos-sale.edit');
+    Route::post('/orders/{order}/revise-pos-sale', [PosController::class, 'reviseSale'])
+        ->middleware('admin.any_permission:orders.manage,pos.void')
+        ->name('orders.pos-sale.revise');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])
         ->middleware('admin.permission:orders.cancel')
         ->name('orders.cancel');

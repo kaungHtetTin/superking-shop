@@ -468,7 +468,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                     </div>
                     <div className="inline-actions finance-report-filter__actions">
                         <button type="submit" className="btn primary"><Icon name="search" size={14} /> {t('Search')}</button>
-                        <a className="btn secondary" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
+                        <a className="btn secondary" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> XLSX</a>
                         <button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button>
                     </div>
                 </form>
@@ -483,7 +483,7 @@ export default function FinanceIndex({ entries, summary, trend, filters, options
                         </div>
                         <div className="finance-report-filter__drawer-body">
                             {renderFilterFields(true)}
-                            <a className="btn secondary finance-report-filter__drawer-export" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> CSV</a>
+                            <a className="btn secondary finance-report-filter__drawer-export" href={`${routeWithBase('/admin/finance/export', app_base)}?${exportQuery.toString()}`}><Icon name="download" size={14} /> XLSX</a>
                         </div>
                         <div className="drawer-actions">
                             <button type="button" className="btn secondary" onClick={resetFilters}>{t('Reset')}</button>

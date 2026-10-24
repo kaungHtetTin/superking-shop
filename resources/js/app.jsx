@@ -202,7 +202,7 @@ if (el && window.__SPA_PAGE__) {
                                     {loading
                                         ? <PageSkeleton url={pendingUrl || page.url} appBase={page.props.app_base || ''} />
                                         : <Component
-                                            key={page.component === 'Profile/Edit' ? `${page.component}:${page.url}` : page.component}
+                                            key={['Profile/Edit', 'Admin/POS/Index'].includes(page.component) ? `${page.component}:${page.url}` : page.component}
                                             {...page.props}
                                         />}
                                 </UserPersistentShell>

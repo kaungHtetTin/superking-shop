@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\BlogPost;
 use App\Models\Category;
 use App\Models\OrderItem;
+use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\StorefrontBlock;
 use App\Services\FlashSalePricingService;
@@ -41,7 +42,7 @@ class HomeController extends Controller
 
         $bestSellerIds = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.payment_status', 'paid')
+            ->whereIn('orders.id', Order::query()->recognizedSale()->select('orders.id'))
             ->groupBy('order_items.product_id')
             ->orderByDesc(DB::raw('SUM(order_items.quantity)'))
             ->limit(12)

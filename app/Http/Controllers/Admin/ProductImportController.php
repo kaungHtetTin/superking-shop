@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\ExcelExportService;
 use App\Services\ProductCsvImportService;
 use App\Services\ProductUnitPriceCsvService;
 use App\Support\Spa;
@@ -34,43 +35,39 @@ class ProductImportController extends Controller
         }, 'product-import-template.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    public function export()
+    public function export(ExcelExportService $excel)
     {
-        return response()->streamDownload(function () {
-            $output = fopen('php://output', 'wb');
-            fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ProductCsvImportService::HEADERS);
+        $products = Product::query()
+            ->with(['category:id,parent_id,name', 'category.parent:id,name', 'baseUnit.prices.typeDefinition'])
+            ->orderBy('id')
+            ->lazyById(500);
 
-            Product::query()
-                ->with(['category:id,parent_id,name', 'category.parent:id,name', 'baseUnit.prices.typeDefinition'])
-                ->orderBy('id')
-                ->chunkById(500, function ($products) use ($output) {
-                    foreach ($products as $product) {
-                        $baseUnit = $product->baseUnit;
-                        $retailPrice = $baseUnit?->prices
-                            ->first(fn ($price) => $price->typeDefinition?->name === 'retail')?->price;
+        $rows = $products->map(function ($product) {
+            $baseUnit = $product->baseUnit;
+            $retailPrice = $baseUnit?->prices
+                ->first(fn ($price) => $price->typeDefinition?->name === 'retail')?->price;
 
-                        fputcsv($output, [
-                            $this->excelSafe($product->name),
-                            $this->excelSafe($product->category?->parent?->name),
-                            $this->excelSafe($product->category?->name),
-                            $this->excelSafe($product->sku),
-                            $this->excelSafe($product->barcode),
-                            $this->excelSafe($baseUnit?->name),
-                            $this->excelSafe($baseUnit?->code),
-                            $product->original_price,
-                            $retailPrice,
-                            $product->min_quantity,
-                            $product->status,
-                            $this->excelSafe($product->description),
-                        ]);
-                    }
-                });
+            return [
+                $product->name,
+                $product->category?->parent?->name,
+                $product->category?->name,
+                $product->sku,
+                $product->barcode,
+                $baseUnit?->name,
+                $baseUnit?->code,
+                (float) $product->original_price,
+                $retailPrice === null ? '' : (float) $retailPrice,
+                (float) $product->min_quantity,
+                $product->status,
+                $product->description,
+            ];
+        });
 
-            fclose($output);
-        }, 'products-'.now()->format('Y-m-d-His').'.csv', [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
+        $path = $excel->create('Products', ProductCsvImportService::HEADERS, $rows);
+
+        return response()->download($path, 'products-'.now()->format('Y-m-d-His').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     public function unitPriceTemplate()

@@ -482,6 +482,12 @@
                 <span>Total</span>
                 <strong>{{ $formatMoney($order->final_amount) }}</strong>
             </div>
+            @foreach($order->payments as $payment)
+                <div class="detail-row">
+                    <span>{{ $payment->tender_type === 'mmqr' ? 'MMQR (Pay)' : ucfirst($payment->tender_type ?: $payment->method) }}</span>
+                    <strong>{{ $formatMoney($payment->amount) }}</strong>
+                </div>
+            @endforeach
             @if($order->credit_amount > 0)
                 <div class="detail-row">
                     <span>Paid</span>
