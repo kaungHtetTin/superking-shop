@@ -5,6 +5,7 @@ import Icon from '@/Components/Admin/icons';
 import ReceiptPaper, { receiptDefaults } from '@/Components/Admin/ReceiptPaper';
 import { routeWithBase } from '@/Utils/url';
 import { usePhraseTranslation } from '@/Utils/i18n';
+import { printReceiptWithDrawer } from '@/Utils/posPrinter';
 import '@/styles/receipt.css';
 
 export default function PosReceipt({ order, canEditVoucher = false }) {
@@ -24,6 +25,15 @@ export default function PosReceipt({ order, canEditVoucher = false }) {
 
     const printReceipt = async () => {
         await waitForPrintAssets();
+        try {
+            const printedDirectly = await printReceiptWithDrawer({ ...receiptDefaults, ...app_settings.receipt });
+            if (printedDirectly) return;
+        } catch (error) {
+            console.error('Direct POS printing failed.', error);
+            const detail = error instanceof Error ? error.message : String(error || 'Unknown error');
+            window.alert(`${t('Direct printing failed. No second print was started to prevent a duplicate receipt.')}\n\n${detail}`);
+            return;
+        }
         window.print();
     };
 
@@ -31,7 +41,7 @@ export default function PosReceipt({ order, canEditVoucher = false }) {
         document.body.classList.add('pos-receipt-print-mode');
         let cancelled = false;
         if (new URLSearchParams(window.location.search).get('print') === '1') {
-            waitForPrintAssets().then(() => { if (!cancelled) window.print(); });
+            waitForPrintAssets().then(() => { if (!cancelled) printReceipt(); });
         }
         return () => { cancelled = true; document.body.classList.remove('pos-receipt-print-mode'); };
     }, []);

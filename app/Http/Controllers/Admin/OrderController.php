@@ -258,6 +258,12 @@ class OrderController extends Controller
 
     public function destroy(Request $request, Order $order, OrderManagementService $orderManagementService)
     {
+        if ($order->status === 'cancelled') {
+            return back()->withErrors([
+                'order' => 'This order is already cancelled. Stock and related records will not be reversed again.',
+            ]);
+        }
+
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);

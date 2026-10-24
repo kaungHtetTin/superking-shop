@@ -9,6 +9,13 @@ return [
     'phrases' => [
         'Export XLSX' => 'XLSX ထုတ်ယူရန်',
         'XLSX' => 'XLSX',
+        'Direct printer and cash drawer' => 'တိုက်ရိုက်ပရင်တာနှင့် ငွေသားအံဆွဲ',
+        'Use QZ Tray direct printing' => 'QZ Tray ဖြင့် တိုက်ရိုက်ပရင့်ထုတ်ရန်',
+        'Windows printer name' => 'Windows ပရင်တာအမည်',
+        'Enter the printer name exactly as shown in Windows Printers & scanners.' => 'Windows Printers & scanners တွင် ပြထားသည့် ပရင်တာအမည်အတိုင်း အတိအကျထည့်ပါ။',
+        'Open cash drawer with printed receipt' => 'ဘောင်ချာထုတ်သည့်အခါ ငွေသားအံဆွဲဖွင့်ရန်',
+        'QZ Tray must be installed and running on the POS computer. The printer must support ESC/POS and the drawer must be connected to its drawer port.' => 'POS ကွန်ပျူတာတွင် QZ Tray ကို install လုပ်၍ ဖွင့်ထားရပါမည်။ ပရင်တာသည် ESC/POS ကိုထောက်ပံ့ပြီး အံဆွဲကို ပရင်တာ၏ drawer port တွင် ချိတ်ထားရပါမည်။',
+        'Direct printing failed. No second print was started to prevent a duplicate receipt.' => 'တိုက်ရိုက်ပရင့်ထုတ်ခြင်း မအောင်မြင်ပါ။ ဘောင်ချာနှစ်ခါထွက်ခြင်းကို ကာကွယ်ရန် ဒုတိယအကြိမ် ပရင့်မစတင်ထားပါ။',
         'Home' => 'ပင်မ',
         'Blog' => 'ဘလော့',
         'Wishlist' => 'နှစ်သက်စာရင်း',

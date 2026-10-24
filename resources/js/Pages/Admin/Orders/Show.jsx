@@ -565,7 +565,7 @@ export default function OrdersShow({ order, voucherLinks = {}, canReviewPayments
                         </button>
                     )}
 
-                    {canCancelOrders && !(isCancelled && isCreditSale) && (
+                    {canCancelOrders && !isCancelled && (
                         <button
                             type="button"
                             className="btn danger full"

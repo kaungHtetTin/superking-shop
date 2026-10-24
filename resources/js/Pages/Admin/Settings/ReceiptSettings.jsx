@@ -50,6 +50,18 @@ export default function ReceiptSettings({ form, settings, logoUrl }) {
                         </div>)}
                 </fieldset>
                 <small>{t('Automatic printing opens the browser print dialog; it does not silently send to a printer.')}</small>
+                <fieldset className="receipt-options"><legend>{t('Direct printer and cash drawer')}</legend>
+                    <label><input type="checkbox" checked={receipt.qz_printing} onChange={(e) => set('qz_printing', e.target.checked)} />{t('Use QZ Tray direct printing')}</label>
+                    {form.errors['receipt.qz_printing'] && <small className="field-error">{form.errors['receipt.qz_printing']}</small>}
+                    <label className="form-field">
+                        <span>{t('Windows printer name')}</span>
+                        <input maxLength={180} value={receipt.qz_printer_name} disabled={!receipt.qz_printing} placeholder="EPSON TM-T82 Receipt" onChange={(e) => set('qz_printer_name', e.target.value)} />
+                        <small>{t('Enter the printer name exactly as shown in Windows Printers & scanners.')}</small>
+                    </label>
+                    <label><input type="checkbox" checked={receipt.cash_drawer} disabled={!receipt.qz_printing} onChange={(e) => set('cash_drawer', e.target.checked)} />{t('Open cash drawer with printed receipt')}</label>
+                    {form.errors['receipt.cash_drawer'] && <small className="field-error">{form.errors['receipt.cash_drawer']}</small>}
+                </fieldset>
+                <small>{t('QZ Tray must be installed and running on the POS computer. The printer must support ESC/POS and the drawer must be connected to its drawer port.')}</small>
             </div>
             <aside className="receipt-settings-preview" aria-label={t('Receipt preview')}>
                 <p className="eyebrow">{t('Live preview')} · {receipt.paper_size}</p>

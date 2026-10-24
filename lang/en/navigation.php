@@ -9,6 +9,13 @@ return [
     'phrases' => [
         'Export XLSX' => 'Export XLSX',
         'XLSX' => 'XLSX',
+        'Direct printer and cash drawer' => 'Direct printer and cash drawer',
+        'Use QZ Tray direct printing' => 'Use QZ Tray direct printing',
+        'Windows printer name' => 'Windows printer name',
+        'Enter the printer name exactly as shown in Windows Printers & scanners.' => 'Enter the printer name exactly as shown in Windows Printers & scanners.',
+        'Open cash drawer with printed receipt' => 'Open cash drawer with printed receipt',
+        'QZ Tray must be installed and running on the POS computer. The printer must support ESC/POS and the drawer must be connected to its drawer port.' => 'QZ Tray must be installed and running on the POS computer. The printer must support ESC/POS and the drawer must be connected to its drawer port.',
+        'Direct printing failed. No second print was started to prevent a duplicate receipt.' => 'Direct printing failed. No second print was started to prevent a duplicate receipt.',
         'Home' => 'Home',
         'Blog' => 'Blog',
         'Wishlist' => 'Wishlist',

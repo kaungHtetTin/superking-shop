@@ -5,7 +5,7 @@ const formatMoney = (value) => `${Number(value || 0).toLocaleString(undefined, {
 export const receiptDefaults = {
     shop_name: '', address: '', phone: '', footer: 'Thank you for shopping with us!',
     paper_size: 'A5', show_logo: true, show_customer: true, show_cashier: true,
-    show_foc: true, auto_print: false,
+    show_foc: true, auto_print: false, qz_printing: false, qz_printer_name: '', cash_drawer: false,
 };
 
 export default function ReceiptPaper({ order, settings = {} }) {

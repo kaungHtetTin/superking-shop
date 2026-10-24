@@ -42,7 +42,7 @@ class SettingController extends Controller
     public function update(Request $request, AppSettingsService $settings, AuditLogService $auditLogService)
     {
         $validated = $request->validate([
-            'receipt' => ['sometimes', 'array:shop_name,address,phone,footer,paper_size,show_logo,show_customer,show_cashier,show_foc,auto_print'],
+            'receipt' => ['sometimes', 'array:shop_name,address,phone,footer,paper_size,show_logo,show_customer,show_cashier,show_foc,auto_print,qz_printing,qz_printer_name,cash_drawer'],
             'receipt.shop_name' => ['nullable', 'string', 'max:80'],
             'receipt.address' => ['nullable', 'string', 'max:300'],
             'receipt.phone' => ['nullable', 'string', 'max:80'],
@@ -53,6 +53,9 @@ class SettingController extends Controller
             'receipt.show_cashier' => ['required_with:receipt', 'boolean'],
             'receipt.show_foc' => ['required_with:receipt', 'boolean'],
             'receipt.auto_print' => ['required_with:receipt', 'boolean'],
+            'receipt.qz_printing' => ['required_with:receipt', 'boolean'],
+            'receipt.qz_printer_name' => ['nullable', 'required_if:receipt.qz_printing,true,1', 'string', 'max:180'],
+            'receipt.cash_drawer' => ['required_with:receipt', 'boolean'],
             'app_name' => ['required', 'string', 'max:80'],
             'currency_label' => ['required', 'string', 'max:12'],
             'theme_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -84,10 +87,10 @@ class SettingController extends Controller
 
         if (isset($validated['receipt'])) {
             $receipt = array_replace(AppSettingsService::RECEIPT_DEFAULTS, $validated['receipt']);
-            foreach (['shop_name', 'address', 'phone', 'footer'] as $key) {
+            foreach (['shop_name', 'address', 'phone', 'footer', 'qz_printer_name'] as $key) {
                 $receipt[$key] = trim((string) $receipt[$key]);
             }
-            foreach (['show_logo', 'show_customer', 'show_cashier', 'show_foc', 'auto_print'] as $key) {
+            foreach (['show_logo', 'show_customer', 'show_cashier', 'show_foc', 'auto_print', 'qz_printing', 'cash_drawer'] as $key) {
                 $receipt[$key] = (bool) $receipt[$key];
             }
             $payload['receipt'] = $receipt;
