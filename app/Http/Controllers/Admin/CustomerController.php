@@ -246,7 +246,8 @@ class CustomerController extends Controller
             ->get();
         $creditOrders = $customer->orders()
             ->where('credit_amount', '>', 0)
-            ->whereIn('payment_status', ['unpaid', 'partially_paid'])
+            ->where('status', '!=', 'cancelled')
+            ->whereRaw('final_amount > paid_amount')
             ->orderBy('credit_due_date')
             ->get(['id', 'order_number', 'receipt_number', 'final_amount', 'paid_amount', 'credit_due_date', 'payment_status']);
         $creditBalance = $creditService->balance($customer);
