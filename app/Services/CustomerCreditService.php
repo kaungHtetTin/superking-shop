@@ -74,6 +74,49 @@ class CustomerCreditService
         ]);
     }
 
+    /**
+     * Older orders can carry a remaining credit amount without having a matching
+     * customer-credit ledger entry. Record only the missing positive balance so
+     * a legitimate repayment is not rejected as an overpayment.
+     */
+    public function reconcileOpenOrderBalances(User $customer, iterable $orders, User $actor): void
+    {
+        $orders = collect($orders)->values();
+        if ($orders->isEmpty()) {
+            return;
+        }
+
+        $recordedByOrder = CustomerCreditTransaction::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->selectRaw('order_id, COALESCE(SUM(amount), 0) as balance')
+            ->groupBy('order_id')
+            ->pluck('balance', 'order_id');
+
+        foreach ($orders as $order) {
+            $outstanding = round(max(0, (float) $order->final_amount - (float) $order->paid_amount), 2);
+            $recorded = round((float) ($recordedByOrder[$order->id] ?? 0), 2);
+            $missing = round($outstanding - $recorded, 2);
+
+            if ($missing <= 0.009) {
+                continue;
+            }
+
+            $this->record($customer, [
+                'order_id' => $order->id,
+                'register_id' => $order->register_id,
+                'shift_id' => $order->shift_id,
+                'created_by' => $actor->id,
+                'type' => 'adjustment',
+                'amount' => $missing,
+                'reference' => $order->receipt_number ?: $order->order_number,
+                'due_date' => $order->credit_due_date,
+                'notes' => 'Opening credit balance reconciled before repayment.',
+                'metadata' => ['source' => 'credit_repayment_reconciliation'],
+            ]);
+        }
+    }
+
     public function reverseOrderBalance(User $customer, Order $order, User $actor, string $notes): ?CustomerCreditTransaction
     {
         $outstanding = round((float) $order->final_amount - (float) $order->paid_amount, 2);

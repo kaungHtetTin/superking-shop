@@ -345,6 +345,7 @@ class CustomerController extends Controller
             if ($orders->isEmpty()) {
                 throw ValidationException::withMessages(['order_id' => 'This customer has no outstanding credit balance.']);
             }
+            $creditService->reconcileOpenOrderBalances($customer, $orders, $request->user());
             if ($amount > $availableOutstanding + 0.009) {
                 throw ValidationException::withMessages(['amount' => 'Payment exceeds the selected outstanding balance.']);
             }
