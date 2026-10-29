@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class LoyaltySettingsService
 {
@@ -33,7 +34,18 @@ class LoyaltySettingsService
 
     public function earnPointsPerCurrency(): float
     {
-        return max(0, (float) $this->all()['earn_points_per_currency']);
+        $rate = (float) $this->all()['earn_points_per_currency'];
+
+        // One point for every 1 MMK is already the highest supported rate.
+        // Treat invalid legacy settings as disabled rather than allowing a
+        // payment to overflow the integer loyalty_points column.
+        if ($rate > 1) {
+            Log::warning('Ignored an invalid loyalty earning rate above 1.', ['rate' => $rate]);
+
+            return 0;
+        }
+
+        return max(0, $rate);
     }
 
     public function redeemCurrencyPerPoint(): float

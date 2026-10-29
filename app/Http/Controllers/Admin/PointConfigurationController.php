@@ -21,7 +21,7 @@ class PointConfigurationController extends Controller
     {
         $validated = $request->validate([
             'is_enabled' => ['required', 'boolean'],
-            'earn_points_per_currency' => ['required', 'numeric', 'min:0', 'max:1000000'],
+            'earn_points_per_currency' => ['required', 'numeric', 'min:0', 'max:1'],
             'redeem_currency_per_point' => ['required', 'numeric', 'min:0', 'max:1000000'],
             'minimum_redeem_points' => ['required', 'integer', 'min:0', 'max:100000000'],
         ]);
