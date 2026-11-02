@@ -34,7 +34,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->with(['category', 'primaryImage', 'baseUnit', 'units.prices', 'defaultSellingUnit.prices'])
-            ->withExists(['inventoryMovements as has_inventory_history', 'orderItems as has_sales_history'])
+            ->withExists(['inventoryMovements as has_inventory_history', 'orderItems as has_sales_history', 'cycleCountItems as has_count_history'])
             ->withSum('inventoryBalances as total_on_hand', 'on_hand_qty')
             ->when($filters['q'] ?? null, function ($query, $search) {
                 $query->where(fn ($scope) => $scope
@@ -190,14 +190,14 @@ class ProductController extends Controller
         return DB::transaction(function () use ($request, $product) {
         app(\App\Services\AutomaticPricingService::class)->lock();
         $product = Product::lockForUpdate()->findOrFail($product->id);
-        if ($product->inventoryMovements()->exists() || $product->orderItems()->exists()) {
+        if ($product->inventoryMovements()->exists() || $product->orderItems()->exists() || $product->cycleCountItems()->exists()) {
             if ($request->headers->has('X-SPA')) {
                 return response()->json([
-                    'errors' => ['product' => 'A product with inventory or sales history cannot be deleted. Deactivate it instead.'],
+                    'errors' => ['product' => 'A product with inventory, sales, or cycle count history cannot be deleted. Deactivate it instead.'],
                 ], 422);
             }
 
-            return back()->with('error', 'A product with inventory or sales history cannot be deleted. Deactivate it instead.');
+            return back()->with('error', 'A product with inventory, sales, or cycle count history cannot be deleted. Deactivate it instead.');
         }
 
         foreach ($product->images as $image) {
@@ -356,7 +356,7 @@ class ProductController extends Controller
         $submittedIds = collect($units)->pluck('id')->filter()->map(fn ($id) => (int) $id)->all();
         $removed = $product->units()->whereNotIn('id', $submittedIds)->get();
         foreach ($removed as $unit) {
-            if ($unit->orderItems()->exists() || $unit->inventoryMovements()->exists()) {
+            if ($unit->orderItems()->exists() || $unit->inventoryMovements()->exists() || \App\Models\CycleCountItem::where('product_unit_id', $unit->id)->exists()) {
                 throw ValidationException::withMessages(['units' => "The {$unit->name} unit has history and cannot be removed. Deactivate it instead."]);
             }
             $unit->delete();

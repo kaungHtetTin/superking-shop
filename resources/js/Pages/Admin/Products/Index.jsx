@@ -197,7 +197,7 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                                 productRows.map((product) => {
                                     const stock = getTotalStock(product);
                                     const prices = unitPriceRows(product);
-                                    const hasHistory = Boolean(product.has_inventory_history || product.has_sales_history);
+                                    const hasHistory = Boolean(product.has_inventory_history || product.has_sales_history || product.has_count_history);
                                     const status = product.status === 'active' ? 'success' : product.status === 'draft' ? 'warning' : 'neutral';
 
                                     return (

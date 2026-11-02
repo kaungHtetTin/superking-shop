@@ -17145,3 +17145,133 @@ html[data-theme='dark'] .app-root .receipt-spreadsheet tbody th {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Warehouse cycle counts reuse the inventory form and table primitives. */
+.app-root .cycle-count-panel { min-width: 0; }
+.app-root .cycle-count-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-block: 12px; }
+.app-root .cycle-count-filters .form-field { flex: 1 1 180px; }
+.app-root .cycle-count-table { max-width: 100%; overflow-x: auto; }
+.app-root .cycle-count-table table { width: max-content; min-width: 100%; table-layout: auto; }
+.app-root .cycle-count-table th, .app-root .cycle-count-table td { width: auto; white-space: nowrap; padding: 8px 10px; }
+.app-root .cycle-count-table td:first-child { max-width: 320px; white-space: normal; overflow-wrap: anywhere; }
+.app-root .cycle-count-quantity { width: 130px; }
+.app-root .cycle-count-note { width: 220px; }
+.app-root .cycle-count-summary { display: flex; flex-wrap: wrap; gap: 10px 20px; padding-block: 12px; font-variant-numeric: tabular-nums; }
+.app-root .cycle-count-actions { margin-top: 12px; flex-wrap: wrap; }
+.app-root .cycle-count-selection { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.app-root .cycle-count-table:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .app-root .cycle-count-filters { align-items: stretch; }
+  .app-root .cycle-count-filters .form-field { flex-basis: 100%; }
+  .app-root .cycle-count-actions .btn { min-height: 40px; }
+}
+
+/* Cycle count product picker: aligned controls and a compact selection summary. */
+.app-root .cycle-count-picker-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) auto;
+  align-items: end;
+  gap: 10px;
+  margin-block: 14px;
+}
+.app-root .cycle-count-picker-toolbar .form-field { min-width: 0; gap: 4px; }
+.app-root .cycle-count-picker-toolbar .search-box { min-width: 0; }
+.app-root .cycle-count-picker-toolbar .search-box input { border: 0; background: transparent; min-width: 0; padding: 0; }
+.app-root .cycle-count-picker-toolbar .btn { min-height: var(--admin-control-height); white-space: nowrap; }
+.app-root .cycle-count-picker-table table { width: 100%; min-width: 640px; table-layout: fixed; }
+.app-root .cycle-count-picker-check { width: 64px; }
+.app-root .cycle-count-picker-unit { width: 110px; }
+.app-root .cycle-count-picker-stock { width: 150px; }
+.app-root .cycle-count-picker-table td:nth-child(2),
+.app-root .cycle-count-picker-table td:nth-child(2) strong,
+.app-root .cycle-count-picker-table td:nth-child(2) small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.app-root .cycle-count-picker-table th:last-child,
+.app-root .cycle-count-picker-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.app-root .cycle-count-picker-checkbox { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; cursor: pointer; }
+.app-root .cycle-count-picker-checkbox input { accent-color: var(--color-primary); }
+.app-root .cycle-count-picker-table tr.is-selected { background: var(--color-primary-soft); }
+.app-root .cycle-count-selected { margin-block: 14px; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-soft); }
+.app-root .cycle-count-selected-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.app-root .cycle-count-selected-heading h3 { margin: 0 0 3px; font-size: var(--admin-font-body); }
+.app-root .cycle-count-selected-heading .muted { font-size: var(--admin-font-meta); }
+.app-root .cycle-count-selected-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 8px; max-height: 260px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.app-root .cycle-count-selected-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.app-root .cycle-count-selected-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--radius-sm); color: var(--color-primary); background: var(--color-primary-soft); }
+.app-root .cycle-count-selected-info { flex: 1; min-width: 0; }
+.app-root .cycle-count-selected-info strong { display: block; font-size: var(--admin-font-body); overflow-wrap: anywhere; }
+.app-root .cycle-count-selected-info small { display: block; margin-top: 3px; color: var(--color-muted); overflow-wrap: anywhere; }
+.app-root .cycle-count-selected-item .icon-btn { flex: 0 0 auto; }
+.app-root .cycle-count-selected-empty { margin: 0; padding: 12px; border: 1px dashed var(--color-border); border-radius: var(--radius-sm); }
+@media (max-width: 760px) {
+  .app-root .cycle-count-picker-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .app-root .cycle-count-picker-search { grid-column: 1 / -1; }
+  .app-root .cycle-count-picker-toolbar .btn { min-height: 40px; }
+  .app-root .cycle-count-picker-checkbox { min-width: 40px; min-height: 40px; }
+  .app-root .cycle-count-selected-list { grid-template-columns: minmax(0, 1fr); }
+  .app-root .cycle-count-selected-item .icon-btn { min-width: 40px; min-height: 40px; }
+}
+
+/* Spreadsheet entry for warehouse cycle counts. */
+.app-root .cycle-count-sheet-help { margin: 0 0 8px; font-size: var(--admin-font-meta); }
+.app-root .table-wrap.cycle-count-sheet { max-height: min(65vh, 650px); overflow-x: hidden; overflow-y: auto; scrollbar-gutter: auto; border-radius: 0; margin-bottom: 0; }
+.app-root .cycle-count-sheet table { width: 100%; min-width: 1264px; table-layout: fixed; border-collapse: separate; border-spacing: 0; margin-bottom: 0; }
+.app-root .count-sheet-row-number { width: 44px; }
+.app-root .count-sheet-product { width: 290px; }
+.app-root .count-sheet-unit { width: 90px; }
+.app-root .count-sheet-system { width: 120px; }
+.app-root .count-sheet-physical { width: 120px; }
+.app-root .count-sheet-difference { width: 100px; }
+.app-root .count-sheet-cost { width: 140px; }
+.app-root .count-sheet-value { width: 140px; }
+.app-root .count-sheet-notes { width: 220px; }
+.app-root .cycle-count-sheet th, .app-root .cycle-count-sheet td { padding: 6px 9px; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.app-root .cycle-count-sheet thead th { position: sticky; top: 0; z-index: 4; height: 32px; background: var(--color-soft); }
+.app-root .cycle-count-sheet .count-sheet-editable-heading { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary-soft) 65%, var(--color-surface)); }
+.app-root .cycle-count-sheet .count-sheet-row-index { position: sticky; left: 0; top: auto; z-index: 2; color: var(--color-muted); background: var(--color-soft); text-align: center; font-size: var(--admin-font-meta); }
+.app-root .cycle-count-sheet .count-sheet-identity { position: sticky; left: 44px; z-index: 2; background: var(--color-surface); white-space: normal; overflow-wrap: anywhere; box-shadow: 1px 0 var(--color-border); }
+.app-root .cycle-count-sheet thead th:first-child { left: 0; z-index: 5; }
+.app-root .cycle-count-sheet thead th:nth-child(2) { left: 44px; z-index: 5; }
+.app-root .cycle-count-sheet .count-sheet-calculated { background: color-mix(in srgb, var(--color-soft) 40%, var(--color-surface)); }
+.app-root .cycle-count-sheet td.count-sheet-input-cell { padding: 0; background: var(--color-surface); }
+.app-root .cycle-count-sheet td.count-sheet-input-cell.is-counted { background: color-mix(in srgb, var(--color-primary-soft) 30%, var(--color-surface)); }
+.app-root .cycle-count-sheet .count-sheet-input { display: block; width: 100%; min-width: 0; height: 100%; min-height: 40px; padding: 8px 9px; border: 0; border-radius: 0; box-shadow: none; outline: none; background: transparent; color: var(--color-text); font: inherit; font-variant-numeric: tabular-nums; }
+.app-root .cycle-count-sheet .count-sheet-count { text-align: right !important; appearance: textfield; -moz-appearance: textfield; }
+.app-root .count-sheet-count::-webkit-inner-spin-button, .app-root .count-sheet-count::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.app-root .cycle-count-sheet .count-sheet-input:focus { outline: 2px solid var(--color-primary); outline-offset: -2px; background: var(--color-surface); box-shadow: none; }
+.app-root .cycle-count-sheet tr:focus-within .count-sheet-row-index,
+.app-root .cycle-count-sheet tr:focus-within .count-sheet-identity { background: color-mix(in srgb, var(--color-primary-soft) 70%, var(--color-surface)); }
+.app-root .cycle-count-sheet .count-sheet-readonly { display: block; padding: 8px 9px; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .app-root .cycle-count-sheet .count-sheet-identity,
+  .app-root .cycle-count-sheet thead th:nth-child(2) { position: static; }
+}
+
+/* Keep the count sheet's horizontal scrollbar outside the editable rows. */
+.app-root .cycle-count-sheet-scrollbar {
+  max-width: 100%;
+  height: 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: auto;
+  background: var(--color-soft);
+  margin: 4px 0 12px;
+}
+.app-root .cycle-count-sheet-scrollbar:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.app-root .cycle-count-sheet-scrollbar { scrollbar-color: var(--color-muted) var(--color-soft); }
+.app-root .cycle-count-sheet-scrollbar::-webkit-scrollbar { height: 14px; }
+.app-root .cycle-count-sheet-scrollbar::-webkit-scrollbar-track { background: var(--color-soft); }
+.app-root .cycle-count-sheet-scrollbar::-webkit-scrollbar-thumb { background: var(--color-muted); border: 3px solid var(--color-soft); border-radius: 8px; }
+.app-root .cycle-count-sheet-scrollbar[hidden] + .form-field { margin-top: 12px; }
+
+.app-root .cycle-count-post-controls { margin-top: 12px; }
+.app-root .cycle-count-post-hint { margin: 0 0 8px; color: var(--color-muted); font-size: var(--admin-font-meta); }
+.app-root .cycle-count-post-controls .cycle-count-actions { margin-top: 0; }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Head, router, useForm, usePage } from '@/spa/router';
+import { Head, Link, router, useForm, usePage } from '@/spa/router';
 import AdminLayout from '@/Layouts/AdminLayout';
 import Icon from '@/Components/Admin/icons';
 import { AdminFlash } from '@/Components/Admin/AdminFlash';
@@ -19,7 +19,7 @@ const emptyLocation = {
     staff_ids: [],
 };
 
-export default function LocationsIndex({ locations, staff, canManage }) {
+export default function LocationsIndex({ locations, staff, canManage, canCycleCount = false }) {
     const { app_base, flash } = usePage().props;
     const t = usePhraseTranslation();
     const [open, setOpen] = useState(false);
@@ -108,7 +108,7 @@ export default function LocationsIndex({ locations, staff, canManage }) {
                                 <th>{t('Inventory')}</th>
                                 <th>{t('Assigned staff')}</th>
                                 <th>{t('Status')}</th>
-                                {canManage && <th aria-label={t('Actions')} />}
+                                {(canManage || canCycleCount) && <th aria-label={t('Actions')} />}
                             </tr>
                         </thead>
                         <tbody>
@@ -149,13 +149,14 @@ export default function LocationsIndex({ locations, staff, canManage }) {
                                             label={location.is_active ? t('Active') : t('Inactive')}
                                         />
                                     </td>
-                                    {canManage && (
-                                        <td>
+                                    {(canManage || canCycleCount) && (
+                                        <td className="table-actions-column">
                                             <div className="inline-actions">
-                                                <button type="button" className="icon-btn small" onClick={() => openEdit(location)} aria-label={`${t('Edit')} ${location.name}`}>
+                                                {canCycleCount && <Link className="btn secondary" href={routeWithBase(`/admin/inventory/cycle-counts?location_id=${location.id}`, app_base)}>{t('Cycle Counting')}</Link>}
+                                                {canManage && <button type="button" className="icon-btn small" onClick={() => openEdit(location)} aria-label={`${t('Edit')} ${location.name}`}>
                                                     <Icon name="edit" size={13} />
-                                                </button>
-                                                {!location.is_system && (
+                                                </button>}
+                                                {canManage && !location.is_system && (
                                                     <button type="button" className="icon-btn small danger" onClick={() => removeLocation(location)} aria-label={`${t('Delete')} ${location.name}`}>
                                                         <Icon name="trash" size={13} />
                                                     </button>

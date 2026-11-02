@@ -39,6 +39,7 @@ export default function InventoryIndex({ balances, locations, categories, filter
             eyebrow={t('Stock control')}
             action={
                 <div className="inline-actions">
+                    {can.cycleCount && <Link className="btn secondary" href={routeWithBase(`/admin/inventory/cycle-counts${filters.location && filters.location !== 'all' ? `?location_id=${filters.location}` : ''}`, app_base)}>{t('Cycle Counting')}</Link>}
                     {can.transfer && <Link className="btn secondary" href={routeWithBase('/admin/inventory/transfers/create', app_base)}><Icon name="truck" size={14} /> {t('Transfer')}</Link>}
                     {can.receive && <Link className="btn primary" href={routeWithBase('/admin/inventory/receipts/create', app_base)}><Icon name="plus" size={14} /> {t('Receive')}</Link>}
                 </div>

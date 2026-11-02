@@ -70,6 +70,7 @@ class LocationController extends Controller
             'locations' => $locations,
             'staff' => $staff,
             'canManage' => $canManage,
+            'canCycleCount' => $request->user()->hasAdminPermission('inventory.view') || $request->user()->hasAdminPermission('inventory.adjust.create') || $request->user()->hasAdminPermission('inventory.adjust.approve'),
         ]);
     }
 

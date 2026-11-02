@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\LocationController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\StockAdjustmentController;
+use App\Http\Controllers\Admin\CycleCountController;
 use App\Http\Controllers\Admin\StockReceiptController;
 use App\Http\Controllers\Admin\StockTransferController;
 use App\Http\Controllers\Admin\ChatController;
@@ -312,6 +313,19 @@ Route::middleware(['auth', 'admin'])->group(function () {
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.update');
     Route::delete('/inventory/receipts/{receipt}', [StockReceiptController::class, 'destroy'])
         ->middleware('admin.permission:inventory.receive')->name('inventory.receipts.destroy');
+
+    Route::prefix('inventory/cycle-counts')->name('inventory.cycle-counts.')->group(function () {
+        Route::get('/', [CycleCountController::class, 'index'])->middleware('admin.any_permission:inventory.view,inventory.adjust.create,inventory.adjust.approve')->name('index');
+        Route::get('/create', [CycleCountController::class, 'create'])->middleware('admin.permission:inventory.adjust.create')->name('create');
+        Route::post('/', [CycleCountController::class, 'store'])->middleware('admin.permission:inventory.adjust.create')->name('store');
+        Route::get('/{cycleCount}', [CycleCountController::class, 'show'])->middleware('admin.any_permission:inventory.view,inventory.adjust.create,inventory.adjust.approve')->name('show');
+        Route::get('/{cycleCount}/export', [CycleCountController::class, 'export'])->middleware('admin.any_permission:inventory.view,inventory.adjust.create,inventory.adjust.approve')->name('export');
+        Route::put('/{cycleCount}', [CycleCountController::class, 'update'])->middleware('admin.permission:inventory.adjust.create')->name('update');
+        Route::post('/{cycleCount}/refresh', [CycleCountController::class, 'refresh'])->middleware('admin.permission:inventory.adjust.create')->name('refresh');
+        Route::post('/{cycleCount}/post', [CycleCountController::class, 'post'])->middleware('admin.permission:inventory.adjust.approve')->name('post');
+        Route::post('/{cycleCount}/save-and-post', [CycleCountController::class, 'saveAndPost'])->middleware('admin.permission:inventory.adjust.approve')->name('save-and-post');
+        Route::post('/{cycleCount}/cancel', [CycleCountController::class, 'cancel'])->middleware('admin.permission:inventory.adjust.create')->name('cancel');
+    });
 
     Route::get('/inventory/adjustments', [StockAdjustmentController::class, 'index'])
         ->middleware('admin.any_permission:inventory.adjust.create,inventory.adjust.approve')->name('inventory.adjustments.index');

@@ -58,6 +58,11 @@ class Product extends Model
         });
     }
 
+    public function cycleCountItems()
+    {
+        return $this->hasMany(CycleCountItem::class);
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);

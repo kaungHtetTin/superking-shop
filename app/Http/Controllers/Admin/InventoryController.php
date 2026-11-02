@@ -68,7 +68,7 @@ class InventoryController extends Controller
             'locations' => $locations,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'filters' => ['location' => $request->string('location')->toString() ?: 'all', 'category' => $request->string('category')->toString() ?: 'all', 'q' => $request->string('q')->toString(), 'out_of_stock' => $request->boolean('out_of_stock')],
-            'can' => ['history' => $request->user()->hasAdminPermission('inventory.history'), 'receive' => $request->user()->hasAdminPermission('inventory.receive'), 'adjust' => $request->user()->hasAdminPermission('inventory.adjust.create'), 'transfer' => $request->user()->hasAdminPermission('inventory.transfer.create'), 'realtimeAll' => $request->user()->isSuperAdmin()],
+            'can' => ['cycleCount' => $request->user()->hasAdminPermission('inventory.view') || $request->user()->hasAdminPermission('inventory.adjust.approve'), 'history' => $request->user()->hasAdminPermission('inventory.history'), 'receive' => $request->user()->hasAdminPermission('inventory.receive'), 'adjust' => $request->user()->hasAdminPermission('inventory.adjust.create'), 'transfer' => $request->user()->hasAdminPermission('inventory.transfer.create'), 'realtimeAll' => $request->user()->isSuperAdmin()],
             'lastUpdated' => now()->toIso8601String(),
             'pollIntervalMs' => 20000,
         ]);

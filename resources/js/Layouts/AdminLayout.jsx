@@ -311,7 +311,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                       },
                   ]
                 : []),
-            ...(['locations.view', 'inventory.view', 'inventory.receive', 'inventory.adjust.create', 'inventory.transfer.create'].some(can)
+            ...(['locations.view', 'inventory.view', 'inventory.receive', 'inventory.adjust.create', 'inventory.adjust.approve', 'inventory.transfer.create'].some(can)
                 ? [
                       {
                           title: t('admin.sections.inventory', 'Inventory'),
@@ -325,6 +325,7 @@ function AdminChrome({ children, mainClassName = '' }) {
                                             excludeActivePaths: [
                                                 routeWithBase('/admin/inventory/receipts', app_base),
                                                 routeWithBase('/admin/inventory/adjustments', app_base),
+                                                routeWithBase('/admin/inventory/cycle-counts', app_base),
                                                 routeWithBase('/admin/inventory/transfers', app_base),
                                             ],
                                         },
@@ -335,6 +336,9 @@ function AdminChrome({ children, mainClassName = '' }) {
                                   : []),
                               ...(can('inventory.adjust.create')
                                   ? [{ label: t('admin.items.adjustments', 'Adjustments'), href: routeWithBase('/admin/inventory/adjustments', app_base), icon: 'edit' }]
+                                  : []),
+                              ...(['inventory.view', 'inventory.adjust.create', 'inventory.adjust.approve'].some(can)
+                                  ? [{ label: t('admin.items.cycle_counts', 'Cycle Counting'), href: routeWithBase('/admin/inventory/cycle-counts', app_base), icon: 'check' }]
                                   : []),
                               ...(can('inventory.transfer.create')
                                   ? [{ label: t('admin.items.transfers', 'Transfers'), href: routeWithBase('/admin/inventory/transfers', app_base), icon: 'truck' }]
