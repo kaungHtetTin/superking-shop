@@ -26,6 +26,33 @@ class ProductCrudTest extends TestCase
             ->assertDontSee('Unrelated Item');
     }
 
+    public function test_product_index_includes_current_cost_and_all_unit_prices(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $category = Category::create(['name' => 'Prices', 'slug' => 'prices', 'is_active' => true]);
+        $product = Product::create(['category_id' => $category->id, 'name' => 'Multi unit product',
+            'slug' => 'multi-unit-product', 'original_price' => 12.5, 'status' => 'active', 'is_active' => true]);
+        $piece = $product->units()->create(['name' => 'Piece', 'code' => 'PC', 'conversion_factor' => 1,
+            'is_base' => true, 'is_default_selling' => true, 'is_active' => true]);
+        $box = $product->units()->create(['name' => 'Box', 'code' => 'BOX', 'conversion_factor' => 12, 'is_active' => true]);
+        $retail = $product->priceTypes()->create(['name' => 'retail', 'is_default' => true]);
+        $wholesale = $product->priceTypes()->create(['name' => 'wholesale']);
+        $piece->prices()->create(['product_price_type_id' => $retail->id, 'price' => 20, 'is_manual' => true]);
+        $piece->prices()->create(['product_price_type_id' => $wholesale->id, 'price' => 18, 'is_manual' => true]);
+        $box->prices()->create(['product_price_type_id' => $retail->id, 'price' => 240, 'is_manual' => true]);
+
+        $response = $this->actingAs($admin)->getJson('/admin/products?q=Multi')->assertOk();
+        $row = $response->json('props.products.data.0');
+        $this->assertEquals(12.5, $row['original_price']);
+        $this->assertSame('Piece', $row['base_unit']['name']);
+        $units = collect($row['units'])->keyBy('id');
+        $this->assertCount(2, $units[$piece->id]['prices']);
+        $this->assertSame('retail', $units[$piece->id]['prices'][0]['price_type']);
+        $this->assertEquals(20, $units[$piece->id]['prices'][0]['price']);
+        $this->assertSame('wholesale', $units[$piece->id]['prices'][1]['price_type']);
+        $this->assertEquals(240, $units[$box->id]['prices'][0]['price']);
+    }
+
     public function test_optional_sku_can_be_saved_and_must_be_unique(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);

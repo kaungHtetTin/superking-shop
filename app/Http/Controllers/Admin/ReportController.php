@@ -28,7 +28,7 @@ class ReportController extends Controller
         }
         $this->authorizeView($user, $view);
         $filters = $request->validate([
-            'view' => ['nullable', 'string', 'in:sales,product-sales,inventory,pos,health'],
+            'view' => ['nullable', 'string', 'in:sales,product-sales,product-cash-flow,inventory,pos,health'],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -44,6 +44,16 @@ class ReportController extends Controller
         $filters['to'] = $filters['to'] ?? now('Asia/Bangkok')->toDateString();
         $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : null;
         $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : null;
+        if ($view === 'product-cash-flow') {
+            return Spa::render('Admin/Reports/Index', [
+                'view' => $view,
+                'filters' => $filters,
+                'locations' => Location::query()->whereIn('id', $accessibleLocationIds)->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'type']),
+                'canViewSales' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.sales'),
+                'canViewInventory' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.inventory'),
+                'productCashFlowReport' => app(\App\Services\ProductCashFlowReportService::class)->report($locationIds, $filters),
+            ]);
+        }
         $paidOrders = Order::query()
             ->recognizedSale()
             ->whereIn('location_id', $locationIds)
@@ -348,13 +358,13 @@ class ReportController extends Controller
     public function export(Request $request, OperationsReportService $operations, ExcelExportService $excel)
     {
         $view = $request->string('view')->toString();
-        if (! in_array($view, ['sales', 'product-sales', 'inventory', 'pos'], true)) {
-            throw ValidationException::withMessages(['view' => 'Choose sales, product sales, inventory, or POS for XLSX export.']);
+        if (! in_array($view, ['sales', 'product-sales', 'product-cash-flow', 'inventory', 'pos'], true)) {
+            throw ValidationException::withMessages(['view' => 'Choose sales, product sales, product cash flow, inventory, or POS for XLSX export.']);
         }
 
         $this->authorizeView($request->user(), $view);
         $filters = $request->validate([
-            'view' => ['required', 'string', 'in:sales,product-sales,inventory,pos'],
+            'view' => ['required', 'string', 'in:sales,product-sales,product-cash-flow,inventory,pos'],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -371,6 +381,12 @@ class ReportController extends Controller
         $locationIds = $locationId ? [$locationId] : $accessibleIds;
 
         $filename = $view.'-report-'.now()->format('Ymd-His').'.xlsx';
+        if ($view === 'product-cash-flow') {
+            $rows = app(\App\Services\ProductCashFlowReportService::class)->query($locationIds, $filters)->orderBy('products.name')->orderBy('products.id')->cursor();
+            $data = $rows->map(fn ($row) => [$row->product_name, $row->product_code, $row->purchases, $row->sales, $row->discounts, $row->profit, $row->stock_quantity, $row->base_unit_name, $row->current_unit_cost, $row->current_unit_price, $row->stock_value, $row->stock_sale_value]);
+            $path = $excel->create('Product Cash Flow', ['Product', 'Code', 'Total purchased', 'Total sales', 'Total discount', 'Profit (sales - purchases - discount)', 'Current stock (base)', 'Base unit', 'Current unit cost (base)', 'Current retail price (base)', 'Current stock value (cost)', 'Stock value after sale (retail)'], $data);
+            return response()->download($path, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])->deleteFileAfterSend(true);
+        }
         if ($view === 'product-sales') {
             $from = ! empty($filters['from']) ? \Illuminate\Support\Carbon::parse($filters['from'])->startOfDay() : now()->startOfMonth();
             $to = ! empty($filters['to']) ? \Illuminate\Support\Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
@@ -428,7 +444,7 @@ class ReportController extends Controller
     private function authorizeView(User $user, string $view): void
     {
         $allowed = match ($view) {
-            'sales', 'product-sales', 'pos' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.sales'),
+            'sales', 'product-sales', 'product-cash-flow', 'pos' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.sales'),
             'inventory', 'health' => $user->hasAdminPermission('view_reports') || $user->hasAdminPermission('reports.inventory'),
             default => false,
         };

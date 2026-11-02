@@ -33,7 +33,7 @@ class ProductController extends Controller
             ->whereColumn('product_id', 'products.id');
 
         $products = Product::query()
-            ->with(['category', 'primaryImage', 'baseUnit', 'units', 'defaultSellingUnit.prices'])
+            ->with(['category', 'primaryImage', 'baseUnit', 'units.prices', 'defaultSellingUnit.prices'])
             ->withExists(['inventoryMovements as has_inventory_history', 'orderItems as has_sales_history'])
             ->withSum('inventoryBalances as total_on_hand', 'on_hand_qty')
             ->when($filters['q'] ?? null, function ($query, $search) {
@@ -68,6 +68,7 @@ class ProductController extends Controller
             'products' => $products,
             'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'filters' => $filters,
+            'canViewStockMovements' => $request->user()->hasAdminPermission('inventory.history'),
         ]);
     }
 

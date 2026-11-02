@@ -164,7 +164,7 @@ function InsightCard({ label, value, caption }) {
 function ReportTabs({ view, canViewSales, canViewInventory, appBase }) {
     const t = usePhraseTranslation();
     const tabs = [
-        ...(canViewSales ? [{ key: 'sales', label: 'Sales' }, { key: 'product-sales', label: 'Product sales' }, { key: 'pos', label: 'POS' }] : []),
+        ...(canViewSales ? [{ key: 'sales', label: 'Sales' }, { key: 'product-sales', label: 'Product sales' }, { key: 'product-cash-flow', label: 'Product Cash Flow' }, { key: 'pos', label: 'POS' }] : []),
         ...(canViewInventory ? [{ key: 'inventory', label: 'Inventory' }, { key: 'health', label: 'Health' }] : []),
     ];
 
@@ -200,7 +200,7 @@ function ReportFilters({ view, filters, locations, appBase, showDates = false, s
         to: Boolean(filters?.to),
         stock_status: Boolean(filters?.stock_status),
     });
-    const canExport = ['sales', 'inventory', 'pos'].includes(view);
+    const canExport = ['sales', 'product-cash-flow', 'inventory', 'pos'].includes(view);
     const activeFilterCount = [
         filterState.location_id,
         ...(showDates ? [filterState.from, filterState.to] : []),
@@ -365,6 +365,47 @@ function ProductSalesReport({ report, filters, locations, appBase }) {
     );
 }
 
+function ProductCashFlowReport({ report, filters, locations, appBase }) {
+    const t = usePhraseTranslation();
+    const summary = report.summary || {};
+    return (
+        <div className="reports-view-stack product-cash-flow-report">
+            <ReportFilters view="product-cash-flow" filters={filters} locations={locations} appBase={appBase} showDates showSearch />
+            <div className="metrics-grid compact-kpi-strip">
+                <MetricCard label="Total purchased" value={money(summary.purchases)} icon="box" />
+                <MetricCard label="Total sales" value={money(summary.sales)} hint="Before order discounts" icon="chart" />
+                <MetricCard label="Total discount" value={money(summary.discounts)} icon="receipt" />
+                <MetricCard label="Total profit" value={money(summary.profit)} hint="Sales - purchases - discounts" icon="wallet" tone={Number(summary.profit) < 0 ? 'danger' : 'success'} />
+                <MetricCard label="Current stock value" value={money(summary.stock_value)} hint="Current on-hand stock at cost" icon="box" />
+            </div>
+            <section className="panel glass">
+                <PanelHeading eyebrow={t('Product Cash Flow')} title={t('Product summary')} />
+                <p className="muted">{t('Purchases and sales use the selected date range. Sales include credit sales. Current stock value uses current stock and cost in the selected warehouses. Unit cost and retail price are current values per base unit. Stock value after sale is current stock multiplied by the current retail price, before discounts.')}</p>
+                <div className="table-wrap report-products-table product-cash-flow-table" role="region" aria-label={t('Product Cash Flow table, scroll horizontally for more columns')} tabIndex={0}>
+                    <table>
+                        <thead><tr>{['Product', 'Total purchased', 'Total sales', 'Total discount', 'Total profit', 'Current stock (base)', 'Current unit cost (base)', 'Current retail price (base)', 'Current stock value (cost)', 'Stock value after sale'].map((label) => <th key={label}>{t(label)}</th>)}</tr></thead>
+                        <tbody>
+                            {(report.rows?.data || []).length === 0 ? <tr><td colSpan={10}><span className="muted">{t('No products match these filters.')}</span></td></tr> : report.rows.data.map((row) => (
+                                <tr key={row.product_id}>
+                                    <td><strong>{row.product_name}</strong><small>{row.product_code}</small></td>
+                                    <td>{money(row.purchases)}</td><td>{money(row.sales)}</td><td>{money(row.discounts)}</td>
+                                    <td><strong>{money(row.profit)}</strong></td>
+                                    <td>{Number(row.stock_quantity || 0).toLocaleString()}{row.base_unit_name && <> <span className="muted">{row.base_unit_name}</span></>}</td>
+                                    <td>{money(row.current_unit_cost)}</td>
+                                    <td>{row.current_unit_price == null ? '\u2014' : money(row.current_unit_price)}</td>
+                                    <td>{money(row.stock_value)}</td>
+                                    <td>{row.stock_sale_value == null ? '\u2014' : money(row.stock_sale_value)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <AdminPagination paginator={report.rows} label={t('products')} preserveState />
+            </section>
+        </div>
+    );
+}
+
 function InventoryReport({ report, filters, locations, appBase }) {
     const t = usePhraseTranslation();
     const summary = report.summary || {};
@@ -478,7 +519,7 @@ function HealthReport({ report }) {
     );
 }
 
-export default function ReportsIndex({ view = 'sales', filters = {}, locations = [], canViewSales = false, canViewInventory = false, inventoryReport = null, posReport = null, healthReport = null, productSalesReport = null, summary = {}, topProducts = [], salesByDay = [], categoryPerformance = [], purchaseSegments = [], productPairs = [], couponPerformance = [], flashSalePerformance = [] }) {
+export default function ReportsIndex({ view = 'sales', filters = {}, locations = [], canViewSales = false, canViewInventory = false, inventoryReport = null, posReport = null, healthReport = null, productSalesReport = null, productCashFlowReport = null, summary = {}, topProducts = [], salesByDay = [], categoryPerformance = [], purchaseSegments = [], productPairs = [], couponPerformance = [], flashSalePerformance = [] }) {
     const t = usePhraseTranslation();
     const { app_base } = usePage().props;
     const topRevenue = Math.max(...topProducts.map((product) => Number(product.revenue || 0)), 1);
@@ -729,6 +770,7 @@ export default function ReportsIndex({ view = 'sales', filters = {}, locations =
 
             {view === 'inventory' && inventoryReport && <InventoryReport report={inventoryReport} filters={filters} locations={locations} appBase={app_base} />}
             {view === 'product-sales' && productSalesReport && <ProductSalesReport report={productSalesReport} filters={filters} locations={locations} appBase={app_base} />}
+            {view === 'product-cash-flow' && productCashFlowReport && <ProductCashFlowReport report={productCashFlowReport} filters={filters} locations={locations} appBase={app_base} />}
             {view === 'pos' && posReport && <PosReport report={posReport} filters={filters} locations={locations} appBase={app_base} />}
             {view === 'health' && healthReport && <HealthReport report={healthReport} />}
         </AdminLayout>

@@ -77,6 +77,12 @@ class InventoryController extends Controller
     public function show(Request $request, Product $product)
     {
         abort_unless($request->user()->hasAdminPermission('inventory.history'), 403);
+        $returnTo = $request->query('return_to');
+        $returnParts = is_string($returnTo) && strlen($returnTo) <= 2000 ? parse_url($returnTo) : false;
+        $returnToProducts = $returnParts
+            && ! isset($returnParts['scheme']) && ! isset($returnParts['host'])
+            && ($returnParts['path'] ?? '') === route('admin.products.index', [], false)
+                ? $returnTo : null;
         $locationIds = $request->user()->accessibleLocationIds();
         $product->load(['baseUnit', 'defaultSellingUnit', 'units.prices']);
         $movements = InventoryMovement::query()->where('product_id', $product->id)->whereIn('location_id', $locationIds)->with(['location:id,code,name,type', 'creator:id,name', 'unit:id,name,code']);
@@ -102,7 +108,8 @@ class InventoryController extends Controller
             'movements' => $movements->latest('occurred_at')->paginate(30)->withQueryString()->through(fn (InventoryMovement $movement) => array_merge($movement->toArray(), ['document' => $this->movementDocument($movement)])),
             'locations' => Location::query()->whereIn('id', $locationIds)->orderBy('name')->get(['id', 'code', 'name']),
             'types' => InventoryMovement::query()->where('product_id', $product->id)->distinct()->orderBy('type')->pluck('type'),
-            'filters' => $request->only(['location', 'type', 'from', 'to']),
+            'filters' => array_merge($request->only(['location', 'type', 'from', 'to']), $returnToProducts ? ['return_to' => $returnToProducts] : []),
+            'returnToProducts' => $returnToProducts,
             'realtime' => ['locationIds' => $locationIds, 'canAll' => $request->user()->isSuperAdmin()],
             'lastUpdated' => now()->toIso8601String(),
             'pollIntervalMs' => 20000,

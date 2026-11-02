@@ -10,14 +10,15 @@ import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatMoney } from '@/Utils/pricing';
 import { formatCompoundQuantity } from '@/Utils/unitLabel';
 
-export default function Index({ products, categories = [], filters = {}, app_base }) {
+export default function Index({ products, categories = [], filters = {}, app_base, canViewStockMovements = false }) {
     const { app_url, flash, errors: pageErrors } = usePage().props;
+    const { url: productsUrl } = usePage();
     const { delete: destroy, patch } = useForm({});
     const serverProductRows = products.data || products;
     const [productRows, setProductRows] = useState(serverProductRows);
     const [deleteNotice, setDeleteNotice] = useState('');
     const t = usePhraseTranslation();
-    const [visibleColumns, setVisibleColumns] = useState({ category: true, stock: true, status: true });
+    const [visibleColumns, setVisibleColumns] = useState({ category: true, unit_cost: true, stock: true, status: true });
     const [filterDraft, setFilterDraft] = useState({
         q: filters.q || '',
         category_id: String(filters.category_id || ''),
@@ -84,7 +85,14 @@ export default function Index({ products, categories = [], filters = {}, app_bas
         }
     };
 
-    const defaultRetailPrice = (product) => product.default_selling_unit?.prices?.find((price) => price.price_type === 'retail')?.price;
+    const unitPriceRows = (product) => (product.units || [])
+        .filter((unit) => unit.is_active !== false && unit.is_active !== 0)
+        .flatMap((unit) => (unit.prices || []).map((price) => ({
+            key: `${unit.id}-${price.id}`,
+            unit: unit.name,
+            type: price.price_type || price.type_definition?.name || '',
+            price: !price.is_manual && price.calculation_status === 'cost_required' && Number(price.price) <= 0 ? null : price.price,
+        })));
 
     const getTotalStock = (product) => product.total_on_hand ?? 0;
 
@@ -117,7 +125,7 @@ export default function Index({ products, categories = [], filters = {}, app_bas
             <AdminFlash flash={flash} errors={pageErrors} />
             {deleteNotice && <div className="flash success">{deleteNotice}</div>}
 
-            <section className="panel glass">
+            <section className="panel glass products-list-panel">
                 <PanelHeading
                     eyebrow={t('Inventory')}
                     title={t('Shop products')}
@@ -126,7 +134,8 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                             columns={[
                                 { key: 'product', label: 'Product', locked: true },
                                 { key: 'category', label: 'Category' },
-                                { key: 'price', label: 'Price', locked: true },
+                                { key: 'unit_cost', label: 'Current unit cost' },
+                                { key: 'price', label: 'Unit prices', locked: true },
                                 { key: 'stock', label: 'Stock' },
                                 { key: 'status', label: 'Status' },
                             ]}
@@ -164,16 +173,17 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                     <button type="submit" className="icon-btn" aria-label={t('Search')} title={t('Search')}><Icon name="search" size={15} /></button>
                     <button type="button" className="icon-btn" onClick={resetFilters} aria-label={t('Reset filters')} title={t('Reset filters')}><Icon name="close" size={15} /></button>
                 </form>
-                <div className="table-wrap">
+                <div className="table-wrap products-table-scroll" role="region" aria-label={t('Products table, scroll horizontally for more columns')} tabIndex={0}>
                     <table className="products-table">
                         <thead>
                             <tr>
                                 <th>{t('Product')}</th>
                                 {visibleColumns.category !== false && <th>{t('Category')}</th>}
-                                <th className="numeric-cell">{t('Price')}</th>
+                                {visibleColumns.unit_cost !== false && <th className="numeric-cell">{t('Current unit cost')}</th>}
+                                <th className="numeric-cell">{t('Unit prices')}</th>
                                 {visibleColumns.stock !== false && <th className="numeric-cell">{t('Stock')}</th>}
                                 {visibleColumns.status !== false && <th>{t('Status')}</th>}
-                                <th className="table-actions-column" />
+                                <th className="table-actions-column"><span className="sr-only">{t('Actions')}</span></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -186,6 +196,7 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                             ) : (
                                 productRows.map((product) => {
                                     const stock = getTotalStock(product);
+                                    const prices = unitPriceRows(product);
                                     const hasHistory = Boolean(product.has_inventory_history || product.has_sales_history);
                                     const status = product.status === 'active' ? 'success' : product.status === 'draft' ? 'warning' : 'neutral';
 
@@ -216,8 +227,17 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                                                 </div>
                                             </td>
                                             {visibleColumns.category !== false && <td>{product.category?.name || '-'}</td>}
-                                            <td className="numeric-cell">
-                                                <strong>{defaultRetailPrice(product) != null ? formatMoney(defaultRetailPrice(product)) : '-'}</strong>
+                                            {visibleColumns.unit_cost !== false && <td className="numeric-cell products-unit-cost">
+                                                <strong>{formatMoney(product.original_price)}</strong>
+                                                <small>{product.base_unit?.name || t('Base unit')}</small>
+                                            </td>}
+                                            <td className="numeric-cell products-unit-prices">
+                                                {prices.length === 0 ? <span className="muted">-</span> : prices.map((price) => (
+                                                    <div className="products-unit-price" key={price.key}>
+                                                        <span className="muted">{price.unit} / {t(price.type)}</span>
+                                                        <strong>{price.price == null ? '-' : formatMoney(price.price)}</strong>
+                                                    </div>
+                                                ))}
                                             </td>
                                             {visibleColumns.stock !== false && <td className="numeric-cell">
                                                 <strong style={{ color: stock <= Number(product.min_quantity || 0) ? '#ce4444' : undefined }}>
@@ -232,6 +252,16 @@ export default function Index({ products, categories = [], filters = {}, app_bas
                                             </td>}
                                             <td className="table-actions-column">
                                                 <div className="inline-actions">
+                                                    {canViewStockMovements && (
+                                                        <Link
+                                                            href={`${routeWithBase(`/admin/inventory/products/${product.id}`, app_base)}?return_to=${encodeURIComponent(productsUrl)}`}
+                                                            className="icon-btn small"
+                                                            aria-label={t('View stock movements')}
+                                                            title={t('View stock movements')}
+                                                        >
+                                                            <Icon name="history" size={13} />
+                                                        </Link>
+                                                    )}
                                                     <Link
                                                         href={`${routeWithBase(`/admin/products/${product.id}/edit`, app_base)}?return_page=${products.current_page || 1}`}
                                                         className="icon-btn small"

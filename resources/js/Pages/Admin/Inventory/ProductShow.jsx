@@ -8,7 +8,7 @@ import useInventoryRealtime from '@/Utils/useInventoryRealtime';
 import { usePhraseTranslation } from '@/Utils/i18n';
 import { formatCompoundQuantity, formatSelectedUnitQuantity } from '@/Utils/unitLabel';
 
-export default function ProductShow({ product, balances, movements, locations, types, filters, realtime, lastUpdated, pollIntervalMs = 20000 }) {
+export default function ProductShow({ product, balances, movements, locations, types, filters, realtime, lastUpdated, returnToProducts, pollIntervalMs = 20000 }) {
     const { app_base } = usePage().props;
     const t = usePhraseTranslation();
     const { state: realtimeState, lastEventAt } = useInventoryRealtime({ locationIds: realtime?.locationIds || balances.map((balance) => balance.location_id), includeAll: realtime?.canAll, productId: product.id, only: ['balances', 'movements', 'types', 'lastUpdated'], pollIntervalMs, listenBalance: true, listenTransfers: false });
@@ -17,7 +17,7 @@ export default function ProductShow({ product, balances, movements, locations, t
     return (
         <AdminLayout title={product.product_code} eyebrow={t('Inventory history')} action={<a className="btn secondary" href={routeWithBase(`/admin/inventory/products/${product.id}/export`, app_base)}><Icon name="download" size={14} />{t('Export')}</a>}>
             <Head title={t(':value Inventory', { value: product.product_code })} />
-            <div className="sticky-toolbar"><Link className="back-link" href={routeWithBase('/admin/inventory', app_base)}><Icon name="navigation" size={14} style={{ transform: 'rotate(180deg)' }} />{t('Back to inventory')}</Link></div>
+            <div className="sticky-toolbar"><Link className="back-link" href={returnToProducts || routeWithBase('/admin/inventory', app_base)}><Icon name="navigation" size={14} style={{ transform: 'rotate(180deg)' }} />{t(returnToProducts ? 'Back to products' : 'Back to inventory')}</Link></div>
             <section className="product-balance-strip">
                 <div className="product-identity"><span>{product.name}</span><strong>{product.product_code}</strong><small>{product.barcode || t('No barcode')} · {product.base_unit?.name || t('Base unit')}</small></div>
                 {balances.map((balance) => <div key={balance.id}><span>{balance.location.name}</span><strong>{formatCompoundQuantity(balance.available_qty, product.units)}</strong><small>{t(':onHand on hand / :reserved reserved', { onHand: formatCompoundQuantity(balance.on_hand_qty, product.units), reserved: formatCompoundQuantity(balance.reserved_qty, product.units) })}</small></div>)}

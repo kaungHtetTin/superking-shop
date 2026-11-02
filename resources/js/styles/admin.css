@@ -17028,3 +17028,120 @@ html[data-theme='dark'] .app-root .receipt-spreadsheet tbody th {
     .pricing-panel .btn, .pricing-panel input, .pricing-panel select { min-height: 44px; }
     .pricing-rule-form .crud-grid { grid-template-columns: 1fr; }
 }
+
+/* Keep the cash-flow columns readable and contain horizontal scrolling. */
+.app-root .product-cash-flow-report,
+.app-root .product-cash-flow-report > .panel {
+  min-width: 0;
+}
+
+.app-root .table-wrap.product-cash-flow-table {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.app-root .table-wrap.product-cash-flow-table table {
+  width: max-content;
+  min-width: 0;
+  table-layout: auto;
+}
+
+.app-root .table-wrap.product-cash-flow-table th,
+.app-root .table-wrap.product-cash-flow-table td {
+  width: auto;
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.app-root .table-wrap.product-cash-flow-table th:first-child,
+.app-root .table-wrap.product-cash-flow-table td:first-child {
+  width: auto;
+  min-width: 0;
+  max-width: 320px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.app-root .table-wrap.product-cash-flow-table th:not(:first-child),
+.app-root .table-wrap.product-cash-flow-table td:not(:first-child) {
+  width: auto;
+}
+
+.app-root .product-cash-flow-table:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Product catalog: content-sized columns with pinned row actions. */
+.app-root .products-list-panel {
+  min-width: 0;
+}
+
+.app-root .table-wrap.products-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.app-root .products-table-scroll .products-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.app-root .products-table-scroll .products-table th,
+.app-root .products-table-scroll .products-table td {
+  width: auto;
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.app-root .products-table-scroll .products-table th:first-child,
+.app-root .products-table-scroll .products-table td:first-child {
+  max-width: 340px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.app-root .products-table .products-unit-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-root .products-table .products-unit-price + .products-unit-price {
+  margin-top: 4px;
+}
+
+.app-root .products-table-scroll .products-table .table-actions-column {
+  position: sticky;
+  right: 0;
+  width: 1%;
+  z-index: 3;
+  background: var(--color-surface);
+  box-shadow: -1px 0 var(--color-border);
+}
+
+.app-root .products-table-scroll .products-table th.table-actions-column {
+  z-index: 4;
+  background: var(--color-soft);
+}
+
+.app-root .products-table-scroll .products-table tr:hover td.table-actions-column {
+  background: color-mix(in srgb, var(--color-primary-soft) 88%, var(--color-surface));
+}
+
+.app-root .products-table .table-actions-column .inline-actions {
+  flex-wrap: nowrap;
+}
+
+.app-root .products-table-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
