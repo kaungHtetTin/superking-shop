@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Category, Location, Permission, Product, Role, User};
+use App\Models\{Category, Location, Order, Permission, Product, Role, StockReceipt, User};
 use App\Services\Inventory\InventoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -65,6 +65,98 @@ class ProductStockMovementsTest extends TestCase
                 ->assertOk()->assertJsonPath('props.returnToProducts', null)->assertJsonMissingPath('props.filters.return_to');
         }
         $this->actingAs($admin)->getJson('/admin/inventory/products/'.$product->id)->assertOk()->assertJsonPath('props.returnToProducts', null);
+    }
+
+    public function test_movement_detail_includes_unit_conversion_factors_for_entered_quantities(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $product = $this->product();
+        $piece = $product->units()->firstOrFail();
+        $box = $product->units()->create(['name' => 'Box', 'code' => 'BOX', 'conversion_factor' => 12, 'is_active' => true]);
+        $location = Location::create(['code' => 'UNIT-HISTORY', 'name' => 'Unit history', 'type' => 'warehouse', 'is_active' => true]);
+        $inventory = app(InventoryService::class);
+        $pieceMovement = $inventory->receive($location, $product, 1, unit: $piece, unitQuantity: 1);
+        $boxMovement = $inventory->receive($location, $product, 24, unit: $box, unitQuantity: 2);
+
+        $response = $this->actingAs($admin)->getJson('/admin/inventory/products/'.$product->id)->assertOk();
+        $movements = collect($response->json('props.movements.data'))->keyBy('id');
+
+        foreach ([[$pieceMovement, 1.0, 1.0], [$boxMovement, 2.0, 12.0]] as [$movement, $quantity, $factor]) {
+            $row = $movements->get($movement->id);
+            $this->assertSame($quantity, (float) $row['unit_quantity']);
+            $this->assertArrayHasKey('conversion_factor', $row['unit']);
+            $this->assertSame($factor, (float) $row['unit']['conversion_factor']);
+            $this->assertSame((float) $row['quantity_delta'], (float) $row['unit_quantity'] * (float) $row['unit']['conversion_factor']);
+        }
+    }
+
+    public function test_movement_receipt_link_opens_the_matching_receipt_detail(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $product = $this->product();
+        $location = Location::create(['code' => 'RECEIPT-HISTORY', 'name' => 'Receipt history', 'type' => 'warehouse', 'is_active' => true]);
+        $receipt = StockReceipt::create(['receipt_number' => 'REC-HISTORY-DETAIL', 'location_id' => $location->id, 'status' => 'posted', 'created_by' => $admin->id]);
+        app(InventoryService::class)->receive($location, $product, 1, reference: $receipt);
+
+        $response = $this->actingAs($admin)->getJson('/admin/inventory/products/'.$product->id.'?'.http_build_query(['location' => $location->id, 'type' => 'receipt']))
+            ->assertOk()
+            ->assertJsonPath('props.movements.data.0.document.label', $receipt->receipt_number)
+            ->assertJsonPath('props.movements.data.0.document.href', route('admin.inventory.receipts.show', $receipt));
+
+        $this->getJson($response->json('props.movements.data.0.document.href'))
+            ->assertOk()
+            ->assertJsonPath('component', 'Admin/Inventory/Receipts/Show')
+            ->assertJsonPath('props.receipt.id', $receipt->id)
+            ->assertJsonPath('props.receipt.receipt_number', $receipt->receipt_number);
+    }
+
+    public function test_sale_movements_show_the_sale_number_and_link_to_the_matching_detail(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $product = $this->product();
+        $unit = $product->units()->firstOrFail();
+        $location = Location::create(['code' => 'SALE-HISTORY', 'name' => 'Sale history', 'type' => 'warehouse', 'is_active' => true]);
+        $inventory = app(InventoryService::class);
+        $inventory->receive($location, $product, 2);
+
+        foreach (['pos', 'online'] as $channel) {
+            $order = Order::create([
+                'order_number' => strtoupper($channel).'-HISTORY-DETAIL',
+                'sales_channel' => $channel,
+                'location_id' => $location->id,
+                'total_amount' => 10,
+                'final_amount' => 10,
+                'status' => 'delivered',
+                'payment_status' => 'paid',
+                'receiver_name' => 'History customer',
+            ]);
+            $movement = $inventory->completeSale($location, $product, 1, reference: $order, unit: $unit, unitQuantity: 1);
+            $response = $this->actingAs($admin)->getJson('/admin/inventory/products/'.$product->id.'?'.http_build_query(['location' => $location->id, 'type' => 'sale']))->assertOk();
+            $row = collect($response->json('props.movements.data'))->firstWhere('id', $movement->id);
+
+            $this->assertSame($order->order_number, $row['document']['label']);
+            $this->assertSame(route('admin.orders.show', $order), $row['document']['href']);
+            $this->getJson($row['document']['href'])
+                ->assertOk()
+                ->assertJsonPath('component', 'Admin/Orders/Show')
+                ->assertJsonPath('props.order.id', $order->id)
+                ->assertJsonPath('props.order.order_number', $order->order_number);
+        }
+    }
+
+    public function test_sale_movement_without_a_reference_has_no_document_link(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'status' => 'active']);
+        $product = $this->product();
+        $location = Location::create(['code' => 'UNLINKED-SALE', 'name' => 'Unlinked sale', 'type' => 'warehouse', 'is_active' => true]);
+        $inventory = app(InventoryService::class);
+        $inventory->receive($location, $product, 1);
+        $inventory->completeSale($location, $product, 1);
+
+        $this->actingAs($admin)->getJson('/admin/inventory/products/'.$product->id.'?type=sale')
+            ->assertOk()
+            ->assertJsonCount(1, 'props.movements.data')
+            ->assertJsonPath('props.movements.data.0.document', null);
     }
 
     public function test_movement_detail_only_shows_assigned_locations_and_requested_product(): void

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\InventoryBalance;
 use App\Models\InventoryMovement;
 use App\Models\Location;
+use App\Models\Order;
 use App\Models\Product;
 use App\Services\ExcelExportService;
 use App\Models\ProductUnit;
@@ -85,7 +86,7 @@ class InventoryController extends Controller
                 ? $returnTo : null;
         $locationIds = $request->user()->accessibleLocationIds();
         $product->load(['baseUnit', 'defaultSellingUnit', 'units.prices']);
-        $movements = InventoryMovement::query()->where('product_id', $product->id)->whereIn('location_id', $locationIds)->with(['location:id,code,name,type', 'creator:id,name', 'unit:id,name,code']);
+        $movements = InventoryMovement::query()->where('product_id', $product->id)->whereIn('location_id', $locationIds)->with(['location:id,code,name,type', 'creator:id,name', 'unit:id,name,code,conversion_factor']);
         if ($request->filled('location')) {
             $movements->where('location_id', (int) $request->location);
         }
@@ -361,7 +362,8 @@ class InventoryController extends Controller
         }
 
         return match ($movement->reference_type) {
-            StockReceipt::class => ($model = StockReceipt::query()->find($movement->reference_id)) ? ['label' => $model->receipt_number, 'href' => route('admin.inventory.receipts.index')] : null,
+            Order::class => ($model = Order::query()->find($movement->reference_id)) ? ['label' => $model->order_number, 'href' => route('admin.orders.show', $model)] : null,
+            StockReceipt::class => ($model = StockReceipt::query()->find($movement->reference_id)) ? ['label' => $model->receipt_number, 'href' => route('admin.inventory.receipts.show', $model)] : null,
             StockAdjustment::class => ($model = StockAdjustment::query()->find($movement->reference_id)) ? ['label' => $model->adjustment_number, 'href' => route('admin.inventory.adjustments.index')] : null,
             StockTransfer::class => ($model = StockTransfer::query()->find($movement->reference_id)) ? ['label' => $model->transfer_number, 'href' => route('admin.inventory.transfers.show', $model)] : null,
             default => null,
